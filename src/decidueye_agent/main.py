@@ -83,6 +83,96 @@ def _reset_turn_state() -> None:
     plan = DecidPlan()
 
 
+# ==================== ユーティリティ ====================
+def get_card(obs: Observation, area: AreaType, index: int, player_index: int):
+    """指定ゾーンからカードを安全に取得する"""
+    ps = obs.current.players[player_index]
+    match area:
+        case AreaType.DECK:
+            return obs.select.deck[index]
+        case AreaType.HAND:
+            return ps.hand[index]
+        case AreaType.DISCARD:
+            return ps.discard[index]
+        case AreaType.ACTIVE:
+            return ps.active[index]
+        case AreaType.BENCH:
+            return ps.bench[index]
+        case AreaType.PRIZE:
+            return ps.prize[index]
+        case AreaType.STADIUM:
+            return obs.current.stadium[index]
+        case AreaType.LOOKING:
+            return obs.current.looking[index]
+        case _:
+            return None
+
+
+def prize_count(pokemon: Pokemon) -> int:
+    """KO 時に相手が取るプライズ枚数を返す"""
+    data = card_table[pokemon.id]
+    count = 2 if data.ex else 1
+    for card in pokemon.energyCards:
+        if card.id == 12:  # Legacy Energy
+            count -= 1
+    return max(0, count)
+
+
+def pokemon_score(pokemon: Pokemon) -> int:
+    """対象ポケモンの戦術的価値をヒューリスティックに評価する"""
+    data  = card_table[pokemon.id]
+    score = prize_count(pokemon) * 1000
+    score += len(pokemon.energies) * 150
+    score += len(pokemon.tools) * 100
+    if data.stage2:
+        score += 250
+    elif data.stage1:
+        score += 130
+    score += pokemon.hp
+    return score
+
+
+def energy_score(pokemon: Pokemon) -> int:
+    """エネルギー付与先ポケモンの優先度スコアを返す"""
+    score        = 8000
+    energy_count = len(pokemon.energies)
+    if pokemon.id == Decidueye_ex:
+        score += 500
+        if energy_count < 2:
+            score += 200
+        else:
+            score -= 300
+    elif pokemon.id in (Rowlet, Dartrix):
+        score += 50
+    elif pokemon.id == Teal_Mask_Ogerpon_ex:
+        score -= 200
+    return score
+
+
+# ==================== フィールド状態 ====================
+def _collect_field_state(my_state) -> tuple:
+    """バトル場・ベンチ・手札・捨て山のカウントと Decidueye ex 準備状況を返す"""
+    field_counts    = defaultdict(int)
+    hand_counts     = defaultdict(int)
+    discard_counts  = defaultdict(int)
+    decidueye_ready = False
+
+    for card in my_state.active + my_state.bench:
+        if card is None:
+            continue
+        field_counts[card.id] += 1
+        if card.id == Decidueye_ex and len(card.energies) >= 1:
+            decidueye_ready = True
+
+    for card in my_state.hand:
+        hand_counts[card.id] += 1
+
+    for card in my_state.discard:
+        discard_counts[card.id] += 1
+
+    return field_counts, hand_counts, discard_counts, decidueye_ready
+
+
 # ==================== メインエージェント（スタブ）====================
 def agent(obs_dict: dict) -> list[int]:
     # ジュナイパーexコントロールエージェントのメインエントリーポイント

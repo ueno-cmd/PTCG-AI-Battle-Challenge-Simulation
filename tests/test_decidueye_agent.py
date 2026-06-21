@@ -1,8 +1,9 @@
 import pytest
 from dataclasses import dataclass
-from cg.api import CardType, EnergyType
+from cg.api import CardType, EnergyType, Card
 import decidueye_agent.main as dm
 from unittest.mock import patch
+from tests.conftest import make_pokemon, make_player_state
 
 
 @dataclass
@@ -50,6 +51,63 @@ def mock_card_table(monkeypatch):
     }
     monkeypatch.setattr(dm, "card_table", table)
     return table
+
+
+class TestPrizeCount:
+    def test_regular_pokemon_yields_1(self):
+        p = make_pokemon(id=dm.Rowlet)
+        assert dm.prize_count(p) == 1
+
+    def test_ex_pokemon_yields_2(self):
+        p = make_pokemon(id=dm.Decidueye_ex)
+        assert dm.prize_count(p) == 2
+
+    def test_legacy_energy_reduces_count(self):
+        p = make_pokemon(id=dm.Decidueye_ex)
+        legacy = Card(id=12, serial=12, playerIndex=0)
+        object.__setattr__(p, "energyCards", [legacy])
+        assert dm.prize_count(p) == 1
+
+
+class TestPokemonScore:
+    def test_ex_scores_higher_than_regular(self):
+        ex  = make_pokemon(id=dm.Decidueye_ex, hp=320)
+        reg = make_pokemon(id=dm.Rowlet, hp=60)
+        assert dm.pokemon_score(ex) > dm.pokemon_score(reg)
+
+    def test_more_energies_yields_higher_score(self):
+        no_e  = make_pokemon(id=dm.Decidueye_ex, energies=[])
+        two_e = make_pokemon(id=dm.Decidueye_ex, energies=[1, 1])
+        assert dm.pokemon_score(two_e) > dm.pokemon_score(no_e)
+
+
+class TestEnergyScore:
+    def test_decidueye_ex_prioritised(self):
+        """Decidueye ex はその他ポケモンより高いエネルギー付与優先度"""
+        decidueye = make_pokemon(id=dm.Decidueye_ex, energies=[])
+        rowlet    = make_pokemon(id=dm.Rowlet, energies=[])
+        assert dm.energy_score(decidueye) > dm.energy_score(rowlet)
+
+    def test_decidueye_deprioritised_when_full(self):
+        """Decidueye ex に 2 枚以上エネルギーがある場合は優先度を下げる"""
+        low_e  = make_pokemon(id=dm.Decidueye_ex, energies=[1])
+        full_e = make_pokemon(id=dm.Decidueye_ex, energies=[1, 1, 1])
+        assert dm.energy_score(low_e) > dm.energy_score(full_e)
+
+
+class TestCollectFieldState:
+    def test_counts_decidueye_ex_in_field(self):
+        dec = make_pokemon(id=dm.Decidueye_ex)
+        ps  = make_player_state(active_pokemon=dec)
+        fc, _, _, ready = dm._collect_field_state(ps)
+        assert fc[dm.Decidueye_ex] == 1
+        assert ready is False  # エネルギーなし
+
+    def test_decidueye_ready_when_has_energy(self):
+        dec = make_pokemon(id=dm.Decidueye_ex, energies=[1])
+        ps  = make_player_state(active_pokemon=dec)
+        _, _, _, ready = dm._collect_field_state(ps)
+        assert ready is True
 
 
 class TestAgentInit:
