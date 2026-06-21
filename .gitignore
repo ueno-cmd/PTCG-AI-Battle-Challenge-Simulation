@@ -47,3 +47,6 @@ htmlcov/
 
 # コンペ配布データ（再配布不可）
 data/
+
+# 提出用 deck.csv 一時出力先
+output/
