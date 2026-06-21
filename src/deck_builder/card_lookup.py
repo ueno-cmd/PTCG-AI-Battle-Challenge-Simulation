@@ -3,11 +3,23 @@ from pathlib import Path
 
 
 def build_card_dict(csv_path: Path) -> dict[str, int]:
-    """EN_Card_Data.csv を読み込み「カード名 → Card ID」辞書を返す"""
+    """EN_Card_Data.csv を読み込み「カード名 → Card ID」辞書を返す。
+    同名カードが複数ある場合は最初のエントリを使用し警告を出力する。
+    """
     card_dict: dict[str, int] = {}
+    duplicates: dict[str, list[int]] = {}
     with open(csv_path, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
-            card_dict[row["Card Name"]] = int(row["Card ID"])
+            name = row["Card Name"]
+            card_id = int(row["Card ID"])
+            if name in card_dict:
+                if name not in duplicates:
+                    duplicates[name] = [card_dict[name]]
+                duplicates[name].append(card_id)
+            else:
+                card_dict[name] = card_id
+    for name, ids in duplicates.items():
+        print(f"⚠ 重複カード名 \"{name}\": ID {ids} → 最初の {ids[0]} を使用。別IDが必要な場合はデッキ定義で整数IDを直接指定してください")
     return card_dict
 
 

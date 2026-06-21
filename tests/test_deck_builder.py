@@ -82,3 +82,22 @@ def test_write_deck_csv_filename_has_timestamp(tmp_path: Path) -> None:
     path = write_deck_csv([1], tmp_path)
     assert path.name.startswith("deck_")
     assert path.suffix == ".csv"
+
+
+def test_build_card_dict_keeps_first_on_duplicate(tmp_path: Path) -> None:
+    """同名カードが複数ある場合、最初のエントリのIDを保持する"""
+    p = tmp_path / "dup.csv"
+    with open(p, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["Card ID", "Card Name", "Expansion", "Collection No.",
+                        "Stage (Pokémon)/Type (Energy and Trainer)", "Rule",
+                        "Category", "Previous stage", "HP", "Type", "Weakness",
+                        "Resistance (Type)", "Retreat", "Move Name", "Cost",
+                        "Damage", "Effect Explanation"],
+        )
+        writer.writeheader()
+        writer.writerow({"Card ID": "333", "Card Name": "Riolu", **{k: "" for k in ["Expansion", "Collection No.", "Stage (Pokémon)/Type (Energy and Trainer)", "Rule", "Category", "Previous stage", "HP", "Type", "Weakness", "Resistance (Type)", "Retreat", "Move Name", "Cost", "Damage", "Effect Explanation"]}})
+        writer.writerow({"Card ID": "677", "Card Name": "Riolu", **{k: "" for k in ["Expansion", "Collection No.", "Stage (Pokémon)/Type (Energy and Trainer)", "Rule", "Category", "Previous stage", "HP", "Type", "Weakness", "Resistance (Type)", "Retreat", "Move Name", "Cost", "Damage", "Effect Explanation"]}})
+    result = build_card_dict(p)
+    assert result["Riolu"] == 333  # 最初のエントリを保持

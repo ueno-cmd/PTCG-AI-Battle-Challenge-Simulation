@@ -40,7 +40,13 @@ def main() -> None:
     card_ids: list[int] = []
     errors: list[str] = []
 
-    for card_name, count in deck_def:
+    for entry in deck_def:
+        card_name, count = entry[0], entry[1]
+        # 整数IDが直接指定された場合は名前解決をスキップ
+        if isinstance(card_name, int):
+            card_ids.extend([card_name] * count)
+            print(f"✓ (ID: {card_name:<6}) × {count}  [ID直接指定]")
+            continue
         card_id, candidates = find_card_id(card_name, card_dict)
         if card_id is not None:
             card_ids.extend([card_id] * count)
@@ -52,7 +58,7 @@ def main() -> None:
                 print(f"  候補: {hint}")
             else:
                 print(f'✗ "{card_name}" → 一致なし（候補もなし）')
-            errors.append(card_name)
+            errors.append(str(card_name))
 
     if errors:
         print(f"\nエラー: {len(errors)} 件のカードが見つかりませんでした。")

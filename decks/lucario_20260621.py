@@ -7,7 +7,7 @@ DECK = [
     ("Hariyama", 2),
     ("Lunatone", 2),
     ("Solrock", 3),
-    ("Riolu", 3),
+    (677, 3),  # Riolu (MEG-076) - 同名カードが複数セットに存在するためIDで直接指定
     ("Mega Lucario ex", 4),
     ("Dusk Ball", 4),
     ("Switch", 2),
