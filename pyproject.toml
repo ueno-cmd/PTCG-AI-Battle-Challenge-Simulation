@@ -1,0 +1,16 @@
+[project]
+name = "mascarnage-agent"
+version = "0.1.0"
+requires-python = "==3.12.13"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [
+    "src",
+    "data/sample_submission",
+]
