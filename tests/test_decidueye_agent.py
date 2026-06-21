@@ -110,6 +110,39 @@ class TestCollectFieldState:
         assert ready is True
 
 
+class TestCalcAttackPlan:
+    def test_attacks_when_sniper_active_and_energy_ready(self):
+        """Sniper's Eye 発動中 + Decidueye ex にエネルギー 1 枚 → 攻撃プランを立てる"""
+        dec = make_pokemon(id=dm.Decidueye_ex, energies=[1])
+        ps  = make_player_state(active_pokemon=dec)
+        result = dm.calc_attack_plan(ps, sniper_active=True, can_switch=False)
+        assert result.attacker     == 0
+        assert result.attack_index == 0
+        assert result.sniper_active is True
+
+    def test_no_attack_without_sniper(self):
+        """op_hand != 4（Sniper's Eye 未発動）→ 攻撃しない"""
+        dec = make_pokemon(id=dm.Decidueye_ex, energies=[1])
+        ps  = make_player_state(active_pokemon=dec)
+        result = dm.calc_attack_plan(ps, sniper_active=False, can_switch=False)
+        assert result.attacker == -1
+
+    def test_no_attack_without_energy(self):
+        """Sniper's Eye 発動中でもエネルギー 0 枚 → 攻撃しない"""
+        dec = make_pokemon(id=dm.Decidueye_ex, energies=[])
+        ps  = make_player_state(active_pokemon=dec)
+        result = dm.calc_attack_plan(ps, sniper_active=True, can_switch=False)
+        assert result.attacker == -1
+
+    def test_attacks_from_bench_when_can_switch(self):
+        """ベンチの Decidueye ex + can_switch=True → 攻撃プランを立てる"""
+        rowlet = make_pokemon(id=dm.Rowlet)
+        dec    = make_pokemon(id=dm.Decidueye_ex, energies=[1])
+        ps     = make_player_state(active_pokemon=rowlet, bench=[dec])
+        result = dm.calc_attack_plan(ps, sniper_active=True, can_switch=True)
+        assert result.attacker == 1  # ベンチ index 0 → 全体 index 1
+
+
 class TestAgentInit:
     def test_returns_deck_when_select_is_none(self):
         """select が None のとき my_deck を返す"""

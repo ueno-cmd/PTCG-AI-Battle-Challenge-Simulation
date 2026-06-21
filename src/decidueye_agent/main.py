@@ -173,6 +173,31 @@ def _collect_field_state(my_state) -> tuple:
     return field_counts, hand_counts, discard_counts, decidueye_ready
 
 
+# ==================== 攻撃プラン計算 ====================
+def calc_attack_plan(my_state, sniper_active: bool, can_switch: bool) -> DecidPlan:
+    """Sniper's Eye が発動しているときのみ Crushing Arrow プランを立てる"""
+    new_plan = DecidPlan()
+
+    if not sniper_active:
+        return new_plan
+
+    # バトル場 → ベンチの順に Decidueye ex を探す
+    my_cards = list(my_state.active) + list(my_state.bench)
+    for i, pokemon in enumerate(my_cards):
+        if pokemon is None:
+            continue
+        if i != 0 and not can_switch:
+            break
+        if pokemon.id == Decidueye_ex and len(pokemon.energies) >= 1:
+            new_plan.attacker     = i
+            new_plan.attack_index = 0   # Crushing Arrow（唯一の技）
+            new_plan.target       = 0   # 相手アクティブを狙う
+            new_plan.sniper_active = True
+            break
+
+    return new_plan
+
+
 # ==================== メインエージェント（スタブ）====================
 def agent(obs_dict: dict) -> list[int]:
     # ジュナイパーexコントロールエージェントのメインエントリーポイント
