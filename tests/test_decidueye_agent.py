@@ -1,9 +1,9 @@
 import pytest
 from dataclasses import dataclass
-from cg.api import CardType, EnergyType, Card
+from cg.api import CardType, EnergyType, Card, Option, OptionType
 import decidueye_agent.main as dm
 from unittest.mock import patch
-from tests.conftest import make_pokemon, make_player_state
+from tests.conftest import make_pokemon, make_player_state, make_main_obs
 
 
 @dataclass
@@ -150,3 +150,56 @@ class TestAgentInit:
         with patch.object(dm, "my_deck", [1] * 60):
             result = dm.agent(obs_dict)
         assert result == [1] * 60
+
+
+class TestAgent:
+    def test_returns_valid_indices(self):
+        """返り値が option の範囲内で重複なし"""
+        options = [
+            Option(type=OptionType.ATTACK, attackId=100),
+            Option(type=OptionType.END),
+        ]
+        obs_dict = make_main_obs(options=options)
+        result = dm.agent(obs_dict)
+        assert all(0 <= i < len(options) for i in result)
+        assert len(result) == len(set(result))
+
+    def test_attacks_when_sniper_active(self):
+        """Sniper's Eye 発動中（op_hand=4）は ATTACK を END より優先する"""
+        dec = make_pokemon(id=dm.Decidueye_ex, energies=[1])
+        my_ps = make_player_state(active_pokemon=dec)
+        op_ps = make_player_state(
+            active_pokemon=make_pokemon(id=1, hp=200),
+            hand_count=4,   # Sniper's Eye 発動条件
+        )
+        options = [
+            Option(type=OptionType.END),
+            Option(type=OptionType.ATTACK, attackId=999),
+        ]
+        obs_dict = make_main_obs(my_state=my_ps, op_state=op_ps, options=options, turn=3)
+        result = dm.agent(obs_dict)
+        assert options[result[0]].type == OptionType.ATTACK
+
+    def test_no_attack_when_sniper_inactive(self):
+        """Sniper's Eye 未発動（op_hand=7）は ATTACK を END より低優先にする"""
+        dec = make_pokemon(id=dm.Decidueye_ex, energies=[1])
+        my_ps = make_player_state(active_pokemon=dec)
+        op_ps = make_player_state(
+            active_pokemon=make_pokemon(id=1, hp=200),
+            hand_count=7,   # Sniper's Eye 未発動
+        )
+        options = [
+            Option(type=OptionType.END),
+            Option(type=OptionType.ATTACK, attackId=999),
+        ]
+        obs_dict = make_main_obs(my_state=my_ps, op_state=op_ps, options=options, turn=3)
+        result = dm.agent(obs_dict)
+        assert options[result[0]].type == OptionType.END
+
+    def test_resets_plan_on_new_turn(self):
+        """ターンが変わったら plan がリセットされる"""
+        dm.pre_turn = 5
+        dm.plan     = dm.DecidPlan(attacker=1, target=0, attack_index=0, sniper_active=True)
+        obs_dict    = make_main_obs(options=[Option(type=OptionType.END)], turn=6)
+        dm.agent(obs_dict)
+        assert dm.plan.attacker == -1
