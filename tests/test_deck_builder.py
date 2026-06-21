@@ -57,3 +57,28 @@ def test_find_card_id_no_match_returns_empty_candidates(card_csv: Path) -> None:
     card_id, candidates = find_card_id("Pikachu", card_dict)
     assert card_id is None
     assert candidates == []
+
+
+from deck_builder.deck_loader import load_deck_def
+from deck_builder.builder import CardNotFoundError, DeckSizeError, write_deck_csv
+
+
+def test_load_deck_def_returns_list(tmp_path: Path) -> None:
+    deck_file = tmp_path / "deck.py"
+    deck_file.write_text('DECK = [("Lucario ex", 2), ("Basic {F} Energy", 58)]')
+    result = load_deck_def(deck_file)
+    assert result == [("Lucario ex", 2), ("Basic {F} Energy", 58)]
+
+
+def test_write_deck_csv_creates_file(tmp_path: Path) -> None:
+    out_dir = tmp_path / "output"
+    path = write_deck_csv([673, 6, 6], out_dir)
+    assert path.exists()
+    lines = path.read_text().strip().split("\n")
+    assert lines == ["673", "6", "6"]
+
+
+def test_write_deck_csv_filename_has_timestamp(tmp_path: Path) -> None:
+    path = write_deck_csv([1], tmp_path)
+    assert path.name.startswith("deck_")
+    assert path.suffix == ".csv"
