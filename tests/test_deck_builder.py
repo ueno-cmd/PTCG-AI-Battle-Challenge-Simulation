@@ -33,28 +33,30 @@ def test_build_card_dict_maps_name_to_id(card_csv: Path) -> None:
 
 def test_find_card_id_exact_match(card_csv: Path) -> None:
     card_dict = build_card_dict(card_csv)
-    card_id, candidates = find_card_id("Lucario ex", card_dict)
+    card_id, candidates, fuzzy_match = find_card_id("Lucario ex", card_dict)
     assert card_id == 673
     assert candidates == []
+    assert fuzzy_match == False
 
 
 def test_find_card_id_case_insensitive(card_csv: Path) -> None:
     card_dict = build_card_dict(card_csv)
-    card_id, candidates = find_card_id("lucario EX", card_dict)
+    card_id, candidates, fuzzy_match = find_card_id("lucario EX", card_dict)
     assert card_id == 673
     assert candidates == []
+    assert fuzzy_match == True
 
 
 def test_find_card_id_partial_match_returns_candidates(card_csv: Path) -> None:
     card_dict = build_card_dict(card_csv)
-    card_id, candidates = find_card_id("Lucario", card_dict)
+    card_id, candidates, fuzzy_match = find_card_id("Lucario", card_dict)
     assert card_id is None
     assert "Lucario ex" in candidates
 
 
 def test_find_card_id_no_match_returns_empty_candidates(card_csv: Path) -> None:
     card_dict = build_card_dict(card_csv)
-    card_id, candidates = find_card_id("Pikachu", card_dict)
+    card_id, candidates, fuzzy_match = find_card_id("Pikachu", card_dict)
     assert card_id is None
     assert candidates == []
 

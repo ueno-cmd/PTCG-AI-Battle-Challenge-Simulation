@@ -11,7 +11,7 @@ from pathlib import Path
 # src/ をモジュール検索パスに追加（uv run 実行前提）
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from deck_builder.builder import CardNotFoundError, DeckSizeError, write_deck_csv
+from deck_builder.builder import write_deck_csv
 from deck_builder.card_lookup import build_card_dict, find_card_id
 from deck_builder.deck_loader import load_deck_def
 
@@ -47,10 +47,13 @@ def main() -> None:
             card_ids.extend([card_name] * count)
             print(f"✓ (ID: {card_name:<6}) × {count}  [ID直接指定]")
             continue
-        card_id, candidates = find_card_id(card_name, card_dict)
+        card_id, candidates, fuzzy_match = find_card_id(card_name, card_dict)
         if card_id is not None:
             card_ids.extend([card_id] * count)
-            print(f"✓ {card_name:<40} (ID: {card_id}) × {count}")
+            if fuzzy_match:
+                print(f"⚠ {card_name:<40} (ID: {card_id}) × {count}  [表記ゆれ：処理継続]")
+            else:
+                print(f"✓ {card_name:<40} (ID: {card_id}) × {count}")
         else:
             if candidates:
                 hint = ", ".join(f'{c} (ID: {card_dict[c]})' for c in candidates[:3])
