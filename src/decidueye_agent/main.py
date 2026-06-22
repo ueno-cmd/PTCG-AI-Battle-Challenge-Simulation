@@ -190,7 +190,7 @@ def calc_attack_plan(my_state, sniper_active: bool, can_switch: bool) -> DecidPl
             break
         if pokemon.id == Decidueye_ex and len(pokemon.energies) >= 1:
             new_plan.attacker     = i
-            new_plan.attack_index = 0   # Crushing Arrow（唯一の技）
+            new_plan.attack_index = 0   # Crushing Arrow（唯一の技。index=0固定）
             new_plan.target       = 0   # 相手アクティブを狙う
             new_plan.sniper_active = True
             break
@@ -350,4 +350,4 @@ def agent(obs_dict: dict) -> list[int]:
         for o in select.option
     ]
 
-    return sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+    return sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:select.maxCount]
