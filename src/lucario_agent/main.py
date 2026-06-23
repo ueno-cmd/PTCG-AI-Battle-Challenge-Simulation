@@ -272,7 +272,7 @@ def calc_attack_plan(
                 else:
                     energy_required = 2
                     base_damage     = 270
-                if my_prize in (2, 3):
+                if a == 1 and my_prize in (2, 3):
                     base_score -= 500
             elif a == 1:
                 break
