@@ -61,7 +61,8 @@ def test_parse_creates_summary_csv(bronze_json: Path, tmp_path: Path) -> None:
 def test_parse_summary_content(bronze_json: Path, tmp_path: Path) -> None:
     catalog_dir = tmp_path / "unity-catalog"
     summary_path, _ = parse_to_silver(bronze_json, catalog_dir)
-    rows = list(csv.DictReader(summary_path.open(encoding="utf-8")))
+    with summary_path.open(encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
     assert len(rows) == 1
     assert rows[0]["episode_id"] == "12345"
     assert rows[0]["player0_name"] == "Alice"
@@ -81,14 +82,16 @@ def test_parse_creates_turns_csv(bronze_json: Path, tmp_path: Path) -> None:
 def test_parse_turns_row_count(bronze_json: Path, tmp_path: Path) -> None:
     catalog_dir = tmp_path / "unity-catalog"
     _, turns_path = parse_to_silver(bronze_json, catalog_dir)
-    rows = list(csv.DictReader(turns_path.open(encoding="utf-8")))
+    with turns_path.open(encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
     assert len(rows) == 4  # 2ステップ × 2エージェント
 
 
 def test_parse_turns_content(bronze_json: Path, tmp_path: Path) -> None:
     catalog_dir = tmp_path / "unity-catalog"
     _, turns_path = parse_to_silver(bronze_json, catalog_dir)
-    rows = list(csv.DictReader(turns_path.open(encoding="utf-8")))
+    with turns_path.open(encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
     # 3行目（step=1, agent=0）を確認
     assert rows[2]["step"] == "1"
     assert rows[2]["agent_index"] == "0"

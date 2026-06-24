@@ -18,7 +18,7 @@ def main() -> None:
         print(f"エラー: {src_path} が見つかりません")
         sys.exit(1)
 
-    catalog_dir = Path("data/unity-catalog")
+    catalog_dir = Path(__file__).parent.parent / "data" / "unity-catalog"
 
     bronze_path = copy_to_bronze(src_path, catalog_dir)
     print(f"Bronze: {bronze_path}")
