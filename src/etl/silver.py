@@ -51,11 +51,13 @@ def parse_to_silver(bronze_path: Path, catalog_dir: Path) -> tuple[Path, Path]:
             ],
         )
         writer.writeheader()
-        for step_list in steps:
+        for step_idx, step_list in enumerate(steps):
             for agent_index, agent_step in enumerate(step_list):
+                # observation に step キーがない場合は、step_idx を使用
+                step_val = agent_step["observation"].get("step", step_idx)
                 writer.writerow({
                     "episode_id": episode_id,
-                    "step": agent_step["observation"]["step"],
+                    "step": step_val,
                     "agent_index": agent_index,
                     "action": json.dumps(agent_step["action"]),
                     "reward": agent_step["reward"],
