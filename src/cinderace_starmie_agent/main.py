@@ -178,6 +178,171 @@ def _collect_field_state(my_state, op_state) -> FieldState:
     )
 
 
+# ==================== スコアリング ====================
+def _score_play(card_id: int, fs: FieldState, prize_count: int) -> int:
+    """PLAY コンテキスト：手札からカードを使う際のスコア"""
+    if card_id == Lillie_Determination:
+        return 10000 if prize_count == 6 else 3000
+    if card_id == Buddy_Buddy_Poffin:
+        needs_scorbunny = fs.field_counts[Scorbunny] + fs.hand_counts[Scorbunny] == 0
+        needs_staryu    = fs.field_counts[Staryu]    + fs.hand_counts[Staryu]    == 0
+        return 8000 if (needs_scorbunny or needs_staryu) else 2000
+    if card_id == Salvatore:
+        has_staryu    = fs.field_counts[Staryu] >= 1
+        needs_starmie = (
+            fs.field_counts[Mega_Starmie_ex] + fs.hand_counts[Mega_Starmie_ex] == 0
+        )
+        return 7000 if (has_staryu and needs_starmie) else 2000
+    if card_id == Wallys_Compassion:
+        return 6500 if fs.starmie_active_damage > 0 else -1
+    if card_id == Hilda:
+        needs_cinderace = fs.field_counts[Cinderace] + fs.hand_counts[Cinderace] == 0
+        needs_starmie   = (
+            fs.field_counts[Mega_Starmie_ex] + fs.hand_counts[Mega_Starmie_ex] == 0
+        )
+        return 5000 if (needs_cinderace or needs_starmie) else 2000
+    if card_id == Mega_Signal:
+        return 4500 if fs.field_counts[Mega_Starmie_ex] == 0 else 1000
+    if card_id == Pokegear_30:
+        has_supporter = any(
+            fs.hand_counts[c] >= 1
+            for c in (Salvatore, Hilda, Lillie_Determination, Wallys_Compassion)
+        )
+        return 4000 if not has_supporter else 1500
+    if card_id == Ultra_Ball:
+        needs_any = (
+            fs.field_counts[Cinderace]       + fs.hand_counts[Cinderace]       == 0
+            or fs.field_counts[Mega_Starmie_ex] + fs.hand_counts[Mega_Starmie_ex] == 0
+        )
+        return 3000 if needs_any else -1
+    if card_id == Night_Stretcher:
+        useful = (
+            fs.discard_counts[Staryu] >= 1
+            or fs.discard_counts[Basic_Water_Energy] >= 1
+            or fs.discard_counts[Cinderace] >= 1
+        )
+        return 2000 if useful else 500
+    if card_id == Crushing_Hammer:
+        return 1000
+    return 2000
+
+
+def _score_attach(pokemon: "Pokemon", area: AreaType, card_id: int, fs: FieldState) -> int:
+    """ATTACH コンテキスト：エネルギー/ツールの付与先スコア"""
+    energy_count = len(pokemon.energies)
+    if card_id == Ignition_Energy:
+        # Cinderaceへのみ・0エネのときだけ（Turbo Flare 起動用）
+        if pokemon.id == Cinderace and energy_count == 0:
+            return 9000
+        return -1
+    if card_id == Heros_Cape:
+        # Mega Starmie ex への Hero's Cape 装着を最優先
+        return 8500 if pokemon.id == Mega_Starmie_ex else -1
+    if card_id == Basic_Water_Energy:
+        if pokemon.id == Mega_Starmie_ex:
+            if area == AreaType.BENCH and energy_count <= 2:
+                return 8000 + (3 - energy_count) * 100
+            if area == AreaType.ACTIVE and energy_count == 0:
+                return 7500
+        if pokemon.id == Cinderace and energy_count == 0:
+            return 7000
+        return -1
+    return 5000
+
+
+def _score_attack(attack_id: int, fs: FieldState) -> int:
+    """ATTACK コンテキスト：ワザ選択スコア"""
+    if attack_id == Turbo_Flare_ID:
+        return 1000
+    if attack_id == Jetting_Blow_ID:
+        # 相手HP ≤ 170 なら Jetting Blow + ベンチ50 でちょうど倒せる圏内
+        return 1200 if fs.op_active_hp <= 170 else 800
+    if attack_id == Nebula_Beam_ID:
+        return 1200 if fs.op_active_hp > 170 else 800
+    return 1000
+
+
+def _score_card_option(
+    obs: Observation,
+    o,
+    context,
+    my_index: int,
+    fs: FieldState,
+    discard_hand_counts: defaultdict,
+) -> int:
+    """OptionType.CARD のコンテキスト別スコア"""
+    card = get_card(obs, o.area, o.index, o.playerIndex)
+    if card is None:
+        return 0
+
+    match context:
+        case SelectContext.SETUP_ACTIVE_POKEMON:
+            if card.id == Cinderace:
+                return 100   # Explosiveness 特性でバトル場スタート最優先
+            if card.id == Scorbunny:
+                return 50
+            if card.id == Staryu:
+                return 30
+            return 10
+
+        case SelectContext.SWITCH | SelectContext.TO_ACTIVE:
+            if o.playerIndex != my_index:
+                return 0
+            if not isinstance(card, Pokemon):
+                return 0
+            energy_count = len(card.energies)
+            score = energy_count * 2
+            if card.id == Mega_Starmie_ex:
+                score += 50
+                if fs.switch_to_starmie and o.index == fs.starmie_bench_idx:
+                    score += 100
+            elif card.id == Cinderace:
+                score += 20
+            elif card.id == Scorbunny:
+                score += 5
+            return score
+
+        case SelectContext.TO_BENCH | SelectContext.TO_HAND:
+            if not isinstance(card, Pokemon):
+                return 10
+            if card.id == Mega_Starmie_ex:
+                return 100 if fs.field_counts[Mega_Starmie_ex] == 0 else 10
+            if card.id == Cinderace:
+                return 80
+            if card.id == Staryu:
+                return 60 if (
+                    fs.field_counts[Staryu] + fs.field_counts[Mega_Starmie_ex] < 2
+                ) else 20
+            if card.id == Scorbunny:
+                return 40 if (
+                    fs.field_counts[Scorbunny] + fs.field_counts[Cinderace] < 2
+                ) else 10
+            return 10
+
+        case SelectContext.DISCARD:
+            card_id = card.id if isinstance(card, Card) else card.id
+            score = 5
+            if card_id in (Mega_Starmie_ex, Cinderace):
+                score = -50
+            elif card_id == Ignition_Energy:
+                score = 80   # ターン終了で消えるため惜しくない
+            elif card_id == Wallys_Compassion:
+                score = -100
+            elif card_id in (Salvatore, Hilda):
+                score = 20 if discard_hand_counts[card_id] >= 2 else -20
+            elif card_id == Basic_Water_Energy:
+                score = 30
+            elif card_id in (Staryu, Scorbunny):
+                score = 10
+            if discard_hand_counts[card_id] >= 2:
+                score += 100  # 重複カードは積極トラッシュ
+            discard_hand_counts[card_id] -= 1
+            return score
+
+        case _:
+            return 0
+
+
 def agent(obs_dict: dict) -> list[int]:
     """暫定実装（Task 4 で完成させる）"""
     obs = to_observation_class(obs_dict)

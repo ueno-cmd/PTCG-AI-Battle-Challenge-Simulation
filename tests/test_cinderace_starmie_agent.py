@@ -2,7 +2,7 @@
 import pytest
 from dataclasses import dataclass, field
 from collections import defaultdict
-from cg.api import CardType, Card
+from cg.api import CardType, Card, AreaType
 
 import cinderace_starmie_agent.main as cm
 from tests.conftest import make_pokemon, make_player_state
@@ -114,3 +114,138 @@ class TestCollectFieldState:
         op_ps = make_player_state(active_pokemon=make_pokemon(id=1, hp=200))
         fs = cm._collect_field_state(my_ps, op_ps)
         assert fs.starmie_active_damage == 130  # 330 - 200
+
+
+# ==================== _score_play ====================
+class TestScorePlay:
+    def _make_fs(self, **kwargs):
+        defaults = dict(
+            field_counts=defaultdict(int),
+            hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int),
+            cinderace_active=False,
+            starmie_bench_idx=-1,
+            starmie_bench_energy=0,
+            starmie_active_damage=0,
+            op_active_hp=200,
+            wally_in_hand=False,
+            switch_to_starmie=False,
+        )
+        defaults.update(kwargs)
+        return cm.FieldState(**defaults)
+
+    def test_lillie_determination_first_turn(self):
+        fs = self._make_fs()
+        assert cm._score_play(cm.Lillie_Determination, fs, prize_count=6) == 10000
+
+    def test_lillie_determination_normal_turn(self):
+        fs = self._make_fs()
+        assert cm._score_play(cm.Lillie_Determination, fs, prize_count=4) == 3000
+
+    def test_buddy_buddy_poffin_high_when_lines_missing(self):
+        fs = self._make_fs()  # field_counts と hand_counts は空
+        score = cm._score_play(cm.Buddy_Buddy_Poffin, fs, prize_count=6)
+        assert score == 8000
+
+    def test_salvatore_high_when_staryu_present_starmie_absent(self):
+        fc = defaultdict(int, {cm.Staryu: 1})
+        fs = self._make_fs(field_counts=fc)
+        score = cm._score_play(cm.Salvatore, fs, prize_count=6)
+        assert score == 7000
+
+    def test_wally_compassion_high_when_starmie_damaged(self):
+        fs = self._make_fs(starmie_active_damage=100)
+        score = cm._score_play(cm.Wallys_Compassion, fs, prize_count=6)
+        assert score == 6500
+
+    def test_wally_compassion_minus1_when_no_damage(self):
+        fs = self._make_fs(starmie_active_damage=0)
+        score = cm._score_play(cm.Wallys_Compassion, fs, prize_count=6)
+        assert score == -1
+
+    def test_mega_signal_high_when_starmie_absent(self):
+        fs = self._make_fs()
+        score = cm._score_play(cm.Mega_Signal, fs, prize_count=6)
+        assert score == 4500
+
+    def test_mega_signal_low_when_starmie_present(self):
+        fc = defaultdict(int, {cm.Mega_Starmie_ex: 1})
+        fs = self._make_fs(field_counts=fc)
+        score = cm._score_play(cm.Mega_Signal, fs, prize_count=6)
+        assert score == 1000
+
+
+# ==================== _score_attach ====================
+class TestScoreAttach:
+    def _make_fs(self, **kwargs):
+        defaults = dict(
+            field_counts=defaultdict(int),
+            hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int),
+            cinderace_active=False,
+            starmie_bench_idx=0,
+            starmie_bench_energy=0,
+            starmie_active_damage=0,
+            op_active_hp=200,
+            wally_in_hand=False,
+            switch_to_starmie=False,
+        )
+        defaults.update(kwargs)
+        return cm.FieldState(**defaults)
+
+    def test_ignition_to_cinderace_with_0_energy(self):
+        cinderace = make_pokemon(id=cm.Cinderace, energies=[])
+        fs = self._make_fs()
+        score = cm._score_attach(cinderace, AreaType.ACTIVE, cm.Ignition_Energy, fs)
+        assert score == 9000
+
+    def test_ignition_to_cinderace_with_existing_energy_is_minus1(self):
+        cinderace = make_pokemon(id=cm.Cinderace, energies=[17])
+        fs = self._make_fs()
+        score = cm._score_attach(cinderace, AreaType.ACTIVE, cm.Ignition_Energy, fs)
+        assert score == -1
+
+    def test_ignition_to_non_cinderace_is_minus1(self):
+        starmie = make_pokemon(id=cm.Mega_Starmie_ex, energies=[])
+        fs = self._make_fs()
+        score = cm._score_attach(starmie, AreaType.BENCH, cm.Ignition_Energy, fs)
+        assert score == -1
+
+    def test_water_to_bench_starmie_low_energy_preferred(self):
+        starmie_low  = make_pokemon(id=cm.Mega_Starmie_ex, energies=[])
+        starmie_full = make_pokemon(id=cm.Mega_Starmie_ex, energies=[3, 3, 3])
+        fs = self._make_fs()
+        score_low  = cm._score_attach(starmie_low,  AreaType.BENCH, cm.Basic_Water_Energy, fs)
+        score_full = cm._score_attach(starmie_full, AreaType.BENCH, cm.Basic_Water_Energy, fs)
+        assert score_low > score_full
+
+
+# ==================== _score_attack ====================
+class TestScoreAttack:
+    def _make_fs(self, op_hp=200, **kwargs):
+        defaults = dict(
+            field_counts=defaultdict(int),
+            hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int),
+            cinderace_active=False,
+            starmie_bench_idx=-1,
+            starmie_bench_energy=0,
+            starmie_active_damage=0,
+            op_active_hp=op_hp,
+            wally_in_hand=False,
+            switch_to_starmie=False,
+        )
+        defaults.update(kwargs)
+        return cm.FieldState(**defaults)
+
+    def test_turbo_flare_always_scores_1000(self):
+        fs = self._make_fs(op_hp=300)
+        assert cm._score_attack(9001, fs) == 1000
+
+    def test_nebula_beam_preferred_when_hp_high(self):
+        fs = self._make_fs(op_hp=300)
+        assert cm._score_attack(9003, fs) > cm._score_attack(9002, fs)
+
+    def test_jetting_blow_preferred_when_hp_low(self):
+        fs = self._make_fs(op_hp=100)
+        assert cm._score_attack(9002, fs) > cm._score_attack(9003, fs)
