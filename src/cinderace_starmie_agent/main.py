@@ -143,9 +143,13 @@ def _collect_field_state(my_state, op_state) -> FieldState:
             starmie_bench_energy = len(card.energies)
 
     for card in my_state.hand:
+        if card is None:
+            continue
         hand_counts[card.id] += 1
 
     for card in my_state.discard:
+        if card is None:
+            continue
         discard_counts[card.id] += 1
 
     op_active_hp = 0
