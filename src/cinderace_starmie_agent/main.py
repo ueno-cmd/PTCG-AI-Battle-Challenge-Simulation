@@ -227,7 +227,7 @@ def _score_play(card_id: int, fs: FieldState, prize_count: int) -> int:
     return 2000
 
 
-def _score_attach(pokemon: "Pokemon", area: AreaType, card_id: int, fs: FieldState) -> int:
+def _score_attach(pokemon: Pokemon, area: AreaType, card_id: int, fs: FieldState) -> int:
     """ATTACH コンテキスト：エネルギー/ツールの付与先スコア"""
     energy_count = len(pokemon.energies)
     if card_id == Ignition_Energy:
@@ -320,7 +320,7 @@ def _score_card_option(
             return 10
 
         case SelectContext.DISCARD:
-            card_id = card.id if isinstance(card, Card) else card.id
+            card_id = card.id
             score = 5
             if card_id in (Mega_Starmie_ex, Cinderace):
                 score = -50
@@ -344,9 +344,64 @@ def _score_card_option(
 
 
 def agent(obs_dict: dict) -> list[int]:
-    """暫定実装（Task 4 で完成させる）"""
+    """Pokémon TCG エージェント（Cinderace + Mega Starmie ex）
+
+    Returns:
+        list[int]: 選択するオプションのインデックスリスト
+    """
     obs = to_observation_class(obs_dict)
     if obs.select is None:
         _load_deck()
         return my_deck
-    return [0]
+
+    _build_card_table()
+
+    state    = obs.current
+    select   = obs.select
+    context  = select.context
+    my_index = state.yourIndex
+    my_state = state.players[my_index]
+    op_state = state.players[1 - my_index]
+    prize_count = len(my_state.prize)
+
+    fs = _collect_field_state(my_state, op_state)
+
+    # DISCARD コンテキスト用に手札カウントのコピーを保持（段階的な選択を追跡）
+    discard_hand_counts = defaultdict(int, fs.hand_counts)
+
+    scores = []
+    for o in select.option:
+        match o.type:
+            case OptionType.NUMBER:
+                score = o.number
+            case OptionType.YES:
+                score = 1
+            case OptionType.CARD:
+                score = _score_card_option(
+                    obs, o, context, my_index, fs, discard_hand_counts
+                )
+            case OptionType.PLAY:
+                card  = get_card(obs, AreaType.HAND, o.index, my_index)
+                score = _score_play(card.id, fs, prize_count)
+            case OptionType.ATTACH:
+                card    = get_card(obs, AreaType.HAND, o.index, my_index)
+                pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
+                score   = _score_attach(pokemon, o.inPlayArea, card.id, fs)
+            case OptionType.EVOLVE:
+                pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
+                score   = 10000 + len(pokemon.energies)
+            case OptionType.RETREAT:
+                if fs.wally_in_hand and fs.starmie_active_damage > 0:
+                    score = 3000  # Wally's Compassion ループ準備
+                elif fs.switch_to_starmie:
+                    score = 2000
+                else:
+                    score = -1
+            case OptionType.ATTACK:
+                score = _score_attack(o.attackId, fs)
+            case _:
+                score = 0
+        scores.append(score)
+
+    desc_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+    return desc_indices[:select.maxCount]

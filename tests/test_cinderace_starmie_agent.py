@@ -249,3 +249,36 @@ class TestScoreAttack:
     def test_jetting_blow_preferred_when_hp_low(self):
         fs = self._make_fs(op_hp=100)
         assert cm._score_attack(9002, fs) > cm._score_attack(9003, fs)
+
+
+# ==================== agent() 統合テスト ====================
+from unittest.mock import patch
+from cg.api import Option, OptionType
+from tests.conftest import make_main_obs
+
+
+class TestAgent:
+    def test_returns_deck_when_select_is_none(self):
+        obs_dict = {"select": None, "logs": [], "current": None, "search_begin_input": None}
+        with patch.object(cm, "my_deck", [1] * 60):
+            result = cm.agent(obs_dict)
+        assert result == [1] * 60
+
+    def test_returns_valid_indices(self):
+        options = [
+            Option(type=OptionType.ATTACK, attackId=9001),
+            Option(type=OptionType.END),
+        ]
+        obs_dict = make_main_obs(options=options)
+        result = cm.agent(obs_dict)
+        assert all(0 <= i < len(options) for i in result)
+        assert len(result) == len(set(result))
+
+    def test_prefers_attack_over_end(self):
+        options = [
+            Option(type=OptionType.END),
+            Option(type=OptionType.ATTACK, attackId=9001),
+        ]
+        obs_dict = make_main_obs(options=options)
+        result = cm.agent(obs_dict)
+        assert options[result[0]].type == OptionType.ATTACK
