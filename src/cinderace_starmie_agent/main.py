@@ -382,18 +382,24 @@ def agent(obs_dict: dict) -> list[int]:
                 )
             case OptionType.PLAY:
                 card  = get_card(obs, AreaType.HAND, o.index, my_index)
-                score = _score_play(card.id, fs, prize_count)
+                if card is None:
+                    score = 0
+                else:
+                    score = _score_play(card.id, fs, prize_count)
             case OptionType.ATTACH:
                 card    = get_card(obs, AreaType.HAND, o.index, my_index)
                 pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
-                score   = _score_attach(pokemon, o.inPlayArea, card.id, fs)
+                if card is None or pokemon is None:
+                    score = 0
+                else:
+                    score = _score_attach(pokemon, o.inPlayArea, card.id, fs)
             case OptionType.EVOLVE:
                 pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
                 score   = 10000 + len(pokemon.energies)
             case OptionType.RETREAT:
                 if fs.wally_in_hand and fs.starmie_active_damage > 0:
                     score = 3000  # Wally's Compassion ループ準備
-                elif fs.switch_to_starmie:
+                elif fs.starmie_bench_energy >= 3:
                     score = 2000
                 else:
                     score = -1
