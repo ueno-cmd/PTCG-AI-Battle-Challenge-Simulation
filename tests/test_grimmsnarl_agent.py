@@ -483,3 +483,47 @@ class TestAgent:
         obs_dict = make_main_obs(my_state=my_ps, options=options)
         result = gm.agent(obs_dict)
         assert options[result[0]].type == OptionType.END
+
+    def test_play_option_with_none_card_does_not_crash(self):
+        """PLAY オプションで get_card() が None を返す場合、AttributeError でクラッシュしないこと"""
+        # make_main_obs で基本的な obs_dict を生成してから手札を None で置き換える
+        options = [
+            Option(type=OptionType.PLAY, index=0),
+            Option(type=OptionType.END),
+        ]
+        obs_dict = make_main_obs(options=options)
+
+        # obs_dict 内の手札を None エントリを含む形式に変更
+        # hand が通常は [] で、agent は None で get_card() が返すことを想定
+        obs_dict["current"]["players"][0]["hand"] = [None]
+        obs_dict["current"]["players"][0]["handCount"] = 1
+
+        # agent() を呼び出してもクラッシュしないこと
+        # (AttributeError: 'NoneType' object has no attribute 'id' が発生しないこと)
+        result = gm.agent(obs_dict)
+        assert isinstance(result, list)
+        assert len(result) > 0
+        # 有効なインデックスリストが返ること
+        assert all(0 <= i < len(options) for i in result)
+
+    def test_attach_option_with_none_card_does_not_crash(self):
+        """ATTACH オプションで card が None の場合、AttributeError でクラッシュしないこと"""
+        # make_main_obs で基本的な obs_dict を生成
+        options = [
+            Option(type=OptionType.ATTACH, area=AreaType.HAND, index=0, inPlayArea=AreaType.ACTIVE, inPlayIndex=0),
+            Option(type=OptionType.END),
+        ]
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex, energies=[7]))
+        obs_dict = make_main_obs(my_state=my_ps, options=options)
+
+        # obs_dict 内の手札を None エントリを含む形式に変更
+        obs_dict["current"]["players"][0]["hand"] = [None]
+        obs_dict["current"]["players"][0]["handCount"] = 1
+
+        # agent() を呼び出してもクラッシュしないこと
+        # (AttributeError: 'NoneType' object has no attribute 'id' が発生しないこと)
+        result = gm.agent(obs_dict)
+        assert isinstance(result, list)
+        assert len(result) > 0
+        # 有効なインデックスリストが返ること
+        assert all(0 <= i < len(options) for i in result)
