@@ -251,6 +251,16 @@ def _score_attack(attack_id: int, fs: FieldState) -> int:
     return 1000
 
 
+def _score_own_switch_target(card: "Pokemon") -> int:
+    """自分のポケモンをバトル場に出す際の優先スコア（SWITCH/TO_ACTIVE共通）"""
+    score = len(card.energies) * 2
+    if card.id == Grimmsnarl_ex:
+        score += 100
+    elif card.id == Morpeko:
+        score += 30
+    return score
+
+
 def _score_card_option(
     obs: Observation,
     o,
@@ -272,15 +282,19 @@ def _score_card_option(
                 return 50
             return 10
 
-        case SelectContext.SWITCH | SelectContext.TO_ACTIVE:
+        case SelectContext.SWITCH:
             if o.playerIndex != my_index or not isinstance(card, Pokemon):
                 return 0
-            score = len(card.energies) * 2
-            if card.id == Grimmsnarl_ex:
-                score += 100
-            elif card.id == Morpeko:
-                score += 30
-            return score
+            return _score_own_switch_target(card)
+
+        case SelectContext.TO_ACTIVE:
+            if not isinstance(card, Pokemon):
+                return 0
+            if o.playerIndex != my_index:
+                # ボスの指令等で相手ベンチを強制的にバトル場に出す場合：
+                # 最もHPが低い（KOに近い）ポケモンを狙う
+                return 100000 - card.hp
+            return _score_own_switch_target(card)
 
         case SelectContext.TO_BENCH | SelectContext.TO_HAND:
             if not isinstance(card, Pokemon):

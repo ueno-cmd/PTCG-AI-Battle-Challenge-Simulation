@@ -368,6 +368,43 @@ class TestScoreCardOption:
         score_morpeko    = gm._score_card_option(obs, o_morpeko, SelectContext.SWITCH, 0, fs, defaultdict(int))
         assert score_grimmsnarl > score_morpeko
 
+    # ---------- TO_ACTIVE（相手ベンチを強制的にバトル場へ出す場合の対象選択） ----------
+    def test_to_active_opponent_bench_targets_lowest_hp(self):
+        low_hp  = make_pokemon(id=1, hp=40)
+        high_hp = make_pokemon(id=2, hp=180)
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex))
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=3, hp=200), bench=[low_hp, high_hp])
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+        o_low  = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=1)
+        o_high = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=1)
+        score_low  = gm._score_card_option(obs, o_low, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        score_high = gm._score_card_option(obs, o_high, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        assert score_low > score_high  # HPが低いほど（KOに近いほど）スコアが高い
+
+    def test_to_active_own_pokemon_still_prefers_grimmsnarl(self):
+        grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, energies=[7, 7])
+        morpeko    = make_pokemon(id=gm.Morpeko, energies=[])
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[grimmsnarl, morpeko])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+        o_grimmsnarl = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        o_morpeko    = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
+        score_grimmsnarl = gm._score_card_option(obs, o_grimmsnarl, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        score_morpeko    = gm._score_card_option(obs, o_morpeko, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        assert score_grimmsnarl > score_morpeko
+
+    def test_to_active_non_pokemon_returns_zero(self):
+        non_pokemon_card = Card(id=gm.Basic_D_Energy, serial=1, playerIndex=1)
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1))
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200), bench=[non_pokemon_card])
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+        o = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=1)
+        score = gm._score_card_option(obs, o, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        assert score == 0
+
     # ---------- TO_BENCH / TO_HAND ----------
     def test_to_bench_grimmsnarl_high_when_none_in_play(self):
         grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex)
