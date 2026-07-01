@@ -1,6 +1,7 @@
 from decks.grimmsnarl_20260701 import DECK
 
 ENERGY_IDS = {7}  # Basic {D} Energy
+ACE_SPEC_IDS = {1159}  # Hero's Cape（data/EN_Card_Data.csv で Rule: ACE SPEC）
 
 
 def test_deck_has_60_cards():
@@ -26,7 +27,13 @@ def test_key_pokemon_present():
 
 def test_energy_count():
     darkness = sum(c for i, c in DECK if i == 7)
-    assert darkness == 10
+    assert darkness == 12
+
+
+def test_ace_spec_does_not_exceed_1_copy():
+    for card_id, count in DECK:
+        if card_id in ACE_SPEC_IDS:
+            assert count <= 1, f"ACE SPECカード {card_id} が {count} 枚（上限1枚）"
 
 
 def test_no_duplicate_card_id_entries():
