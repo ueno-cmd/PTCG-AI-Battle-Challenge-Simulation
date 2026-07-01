@@ -230,9 +230,21 @@ class TestScoreAttack:
             my_active_hp=200, op_active_hp=op_hp, op_bench_hp=op_bench_hp or [],
         )
 
-    def test_shadow_bullet_always_top_priority(self):
+    def test_shadow_bullet_non_lethal_score(self):
         fs = self._make_fs(op_hp=300)
-        assert gm._score_attack(9102, fs) == 2000  # Shadow_Bullet_ID (mocked)
+        assert gm._score_attack(9102, fs) == 2000  # Shadow_Bullet_ID (mocked)、確定KOでない場合
+
+    def test_shadow_bullet_lethal_scores_higher_than_non_lethal(self):
+        """相手バトルポケモンのHPが180以下（確定KO）なら、非確定KO時よりスコアが高くなること"""
+        fs_lethal     = self._make_fs(op_hp=150)
+        fs_non_lethal = self._make_fs(op_hp=300)
+        assert gm._score_attack(9102, fs_lethal) > gm._score_attack(9102, fs_non_lethal)
+
+    def test_shadow_bullet_lethal_outranks_retreat_score(self):
+        """確定KO時のShadow Bulletスコア（5000）はRETREATのスコア（3000）を上回ること"""
+        fs = self._make_fs(op_hp=150)
+        assert gm._score_attack(9102, fs) == 5000
+        assert gm._score_attack(9102, fs) > 3000  # RETREATのスコア（agent()内でインライン計算）
 
     def test_unknown_attack_returns_default(self):
         fs = self._make_fs()
@@ -484,6 +496,39 @@ class TestAgent:
         result = gm.agent(obs_dict)
         assert options[result[0]].type == OptionType.END
 
+    def test_attacks_for_lethal_instead_of_retreating(self):
+        """Grimmsnarl exが瀕死でも、相手をワザ一撃で確実にきぜつさせられる（確定KO）なら
+        撤退せず攻撃を選ぶこと（エネルギー投資を無駄にしないための挙動保証）"""
+        low_hp_grimmsnarl = make_pokemon(
+            id=gm.Grimmsnarl_ex, hp=100, max_hp=320, energies=[7, 7],
+        )
+        my_ps = make_player_state(active_pokemon=low_hp_grimmsnarl)
+        # 相手バトルポケモンのHPを180以下（Shadow Bulletで確定KO）に設定
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=150))
+        options = [
+            Option(type=OptionType.RETREAT),
+            Option(type=OptionType.ATTACK, attackId=9102),  # Shadow_Bullet_ID (mocked)
+            Option(type=OptionType.END),
+        ]
+        obs_dict = make_main_obs(my_state=my_ps, op_state=op_ps, options=options)
+        result = gm.agent(obs_dict)
+        assert options[result[0]].type == OptionType.ATTACK
+
+    def test_ability_fires_before_non_lethal_attack(self):
+        """アビリティ（Munkidori）は無償で使えるため、確定KOでない攻撃より優先して
+        毎ターン使用されること（Adrena-Brainの仕様意図の挙動保証）"""
+        munkidori = make_pokemon(id=gm.Munkidori, energies=[7])
+        grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, hp=300, max_hp=320, energies=[7, 7])
+        my_ps = make_player_state(active_pokemon=grimmsnarl, bench=[munkidori])
+        # op_state を指定しない場合、make_main_obs のデフォルトは hp=200（>180、非確定KO）
+        options = [
+            Option(type=OptionType.ABILITY, area=AreaType.BENCH, index=0),
+            Option(type=OptionType.ATTACK, attackId=9102),  # Shadow_Bullet_ID (mocked)、非確定KO
+        ]
+        obs_dict = make_main_obs(my_state=my_ps, options=options)
+        result = gm.agent(obs_dict)
+        assert options[result[0]].type == OptionType.ABILITY
+
     def test_play_option_with_none_card_does_not_crash(self):
         """PLAY オプションで get_card() が None を返す場合、AttributeError でクラッシュしないこと"""
         # make_main_obs で基本的な obs_dict を生成してから手札を None で置き換える
@@ -497,6 +542,25 @@ class TestAgent:
         # hand が通常は [] で、agent は None で get_card() が返すことを想定
         obs_dict["current"]["players"][0]["hand"] = [None]
         obs_dict["current"]["players"][0]["handCount"] = 1
+
+        # agent() を呼び出してもクラッシュしないこと
+        # (AttributeError: 'NoneType' object has no attribute 'id' が発生しないこと)
+        result = gm.agent(obs_dict)
+        assert isinstance(result, list)
+        assert len(result) > 0
+        # 有効なインデックスリストが返ること
+        assert all(0 <= i < len(options) for i in result)
+
+    def test_ability_option_with_none_card_does_not_crash(self):
+        """ABILITY オプションで get_card() が None を返す場合、AttributeError でクラッシュしないこと"""
+        options = [
+            Option(type=OptionType.ABILITY, area=AreaType.ACTIVE, index=0),
+            Option(type=OptionType.END),
+        ]
+        obs_dict = make_main_obs(options=options)
+
+        # obs_dict 内のバトル場を None エントリを含む形式に変更
+        obs_dict["current"]["players"][0]["active"] = [None]
 
         # agent() を呼び出してもクラッシュしないこと
         # (AttributeError: 'NoneType' object has no attribute 'id' が発生しないこと)

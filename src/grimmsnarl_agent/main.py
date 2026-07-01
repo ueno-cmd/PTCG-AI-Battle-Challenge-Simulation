@@ -221,7 +221,9 @@ def _score_attach(pokemon: "Pokemon", area: AreaType, card_id: int, fs: FieldSta
 def _score_attack(attack_id: int, fs: FieldState) -> int:
     """ATTACK コンテキスト：ワザ選択スコア"""
     if attack_id == Shadow_Bullet_ID:
-        return 2000
+        # 相手バトルポケモンのHPが180以下ならShadow Bulletで確実にKOできる
+        # （きぜつ確定）ので、RETREATの3000点より高くして撤退より攻撃を優先する
+        return 5000 if fs.op_active_hp <= 180 else 2000
     if attack_id == Spiky_Wheel_ID:
         return 1500
     return 1000
@@ -345,7 +347,12 @@ def agent(obs_dict: dict) -> list[int]:
                 score   = 10000 + len(pokemon.energies)
             case OptionType.ABILITY:
                 card = get_card(obs, o.area, o.index, my_index)
-                score = 500 if card.id == Munkidori else 300
+                if card is None:
+                    score = 0
+                else:
+                    # アビリティは無償（ターンを消費しない）ため、非確定KOの攻撃（2000点）より
+                    # 優先して毎ターン使用する。ただしEVOLVE（10000+）や確定KO攻撃（5000）は上回らない
+                    score = 2500 if card.id == Munkidori else 1200
             case OptionType.RETREAT:
                 # Grimmsnarl exが瀕死（想定される大技の一撃=180ダメ以下しか耐えられない）なら逃げる
                 if fs.grimmsnarl_active and fs.my_active_hp <= 180:
