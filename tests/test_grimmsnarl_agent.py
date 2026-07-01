@@ -105,3 +105,27 @@ class TestCollectFieldState:
         op_ps = make_player_state(active_pokemon=make_pokemon(id=1, hp=200), bench=op_bench)
         fs = gm._collect_field_state(my_ps, op_ps)
         assert fs.op_bench_hp == [30, 90]
+
+    def test_hand_with_none_entry_does_not_crash(self):
+        """手札にNoneが含まれていても_collect_field_stateがクラッシュしないこと"""
+        real_card = Card(id=gm.Rare_Candy, serial=1, playerIndex=0)
+        my_ps = make_player_state(
+            active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex),
+            hand=[None, real_card],  # Noneと実カードが混在
+        )
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=1, hp=200))
+        fs = gm._collect_field_state(my_ps, op_ps)
+        # クラッシュしないこと、および実カードがカウントされることを確認
+        assert fs.hand_counts[gm.Rare_Candy] == 1
+
+    def test_discard_with_none_entry_does_not_crash(self):
+        """トラッシュにNoneが含まれていても_collect_field_stateがクラッシュしないこと"""
+        real_card = Card(id=gm.Basic_D_Energy, serial=1, playerIndex=0)
+        my_ps = make_player_state(
+            active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex),
+            discard=[None, real_card],  # Noneと実カードが混在
+        )
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=1, hp=200))
+        fs = gm._collect_field_state(my_ps, op_ps)
+        # クラッシュしないこと、および実カードがカウントされることを確認
+        assert fs.discard_counts[gm.Basic_D_Energy] == 1
