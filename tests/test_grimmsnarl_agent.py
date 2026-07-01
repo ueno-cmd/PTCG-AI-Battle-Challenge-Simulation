@@ -428,3 +428,58 @@ class TestScoreCardOption:
         o = Option(type=OptionType.CARD, area=AreaType.HAND, index=0, playerIndex=0)
         score = gm._score_card_option(obs, o, SelectContext.MAIN, 0, fs, defaultdict(int))
         assert score == 0
+
+
+# ==================== agent() 統合テスト ====================
+from unittest.mock import patch
+from cg.api import Option, OptionType
+from tests.conftest import make_main_obs
+
+
+class TestAgent:
+    def test_returns_deck_when_select_is_none(self):
+        obs_dict = {"select": None, "logs": [], "current": None, "search_begin_input": None}
+        with patch.object(gm, "my_deck", [1] * 60):
+            result = gm.agent(obs_dict)
+        assert result == [1] * 60
+
+    def test_returns_valid_indices(self):
+        options = [
+            Option(type=OptionType.ATTACK, attackId=9102),
+            Option(type=OptionType.END),
+        ]
+        obs_dict = make_main_obs(options=options)
+        result = gm.agent(obs_dict)
+        assert all(0 <= i < len(options) for i in result)
+        assert len(result) == len(set(result))
+
+    def test_prefers_attack_over_end(self):
+        options = [
+            Option(type=OptionType.END),
+            Option(type=OptionType.ATTACK, attackId=9102),
+        ]
+        obs_dict = make_main_obs(options=options)
+        result = gm.agent(obs_dict)
+        assert options[result[0]].type == OptionType.ATTACK
+
+    def test_retreats_when_grimmsnarl_low_hp(self):
+        low_hp_grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, hp=100, max_hp=320)
+        my_ps = make_player_state(active_pokemon=low_hp_grimmsnarl)
+        options = [
+            Option(type=OptionType.RETREAT),
+            Option(type=OptionType.END),
+        ]
+        obs_dict = make_main_obs(my_state=my_ps, options=options)
+        result = gm.agent(obs_dict)
+        assert options[result[0]].type == OptionType.RETREAT
+
+    def test_does_not_retreat_when_grimmsnarl_healthy(self):
+        healthy_grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, hp=300, max_hp=320)
+        my_ps = make_player_state(active_pokemon=healthy_grimmsnarl)
+        options = [
+            Option(type=OptionType.RETREAT),
+            Option(type=OptionType.END),
+        ]
+        obs_dict = make_main_obs(my_state=my_ps, options=options)
+        result = gm.agent(obs_dict)
+        assert options[result[0]].type == OptionType.END
