@@ -188,6 +188,37 @@ class TestScorePlay:
         fs = self._make_fs()
         assert gm._score_play(gm.Energy_Recycler, fs, prize_count=4) == 1000
 
+    def test_boss_orders_high_when_ko_target_exists(self):
+        fs = self._make_fs(op_bench_hp=[150, 300])
+        assert gm._score_play(gm.Boss_Orders, fs, prize_count=4) == 8800
+
+    def test_boss_orders_holds_when_no_ko_target_and_rng_above_epsilon(self):
+        fs = self._make_fs(op_bench_hp=[300])
+
+        class StubRng:
+            def random(self):
+                return 0.9  # >= EPSILON(0.28) なので温存
+
+        assert gm._score_play(gm.Boss_Orders, fs, prize_count=4, rng=StubRng()) == -1
+
+    def test_boss_orders_explores_when_rng_below_epsilon(self):
+        fs = self._make_fs(op_bench_hp=[300])
+
+        class StubRng:
+            def random(self):
+                return 0.1  # < EPSILON(0.28) なので探索的先出し
+
+        assert gm._score_play(gm.Boss_Orders, fs, prize_count=4, rng=StubRng()) == 6000
+
+    def test_boss_orders_holds_when_bench_empty_even_if_rng_favors_explore(self):
+        fs = self._make_fs(op_bench_hp=[])
+
+        class StubRng:
+            def random(self):
+                return 0.0  # 最も探索されやすい値でも対象不在なら温存
+
+        assert gm._score_play(gm.Boss_Orders, fs, prize_count=4, rng=StubRng()) == -1
+
 
 # ==================== _score_attach ====================
 class TestScoreAttach:

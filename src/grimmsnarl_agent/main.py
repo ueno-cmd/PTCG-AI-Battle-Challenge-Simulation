@@ -1,4 +1,5 @@
 import os
+import random
 from collections import defaultdict
 from dataclasses import dataclass
 
@@ -26,8 +27,14 @@ Xerosics_Machinations  = 1197
 Energy_Recycler        = 1139
 Spikemuth_Gym          = 1259
 Heros_Cape             = 1159
+Boss_Orders            = 1182
 
 Basic_D_Energy = 7
+
+# ==================== ボスの指令：即使用/温存の判断用定数 ====================
+SHADOW_BULLET_DAMAGE = 180  # Shadow Bulletの与ダメージ（_score_attackと共通の閾値）
+EPSILON              = 0.28  # 温存判断時に探索的先出しをする確率
+_rng                  = random.Random()  # 本番用の実乱数。テストではスタブを注入する
 
 # ==================== アタックID（_build_card_table で設定）====================
 Shadow_Bullet_ID: int = 0
@@ -177,7 +184,12 @@ def _collect_field_state(my_state, op_state) -> FieldState:
 
 
 # ==================== スコアリング ====================
-def _score_play(card_id: int, fs: FieldState, prize_count: int) -> int:
+def _score_play(
+    card_id: int,
+    fs: FieldState,
+    prize_count: int,
+    rng: "random.Random | None" = None,
+) -> int:
     """PLAY コンテキスト：手札からカードを使う際のスコア"""
     if card_id == Rare_Candy:
         has_impidimp     = fs.field_counts[Impidimp] >= 1
@@ -201,6 +213,16 @@ def _score_play(card_id: int, fs: FieldState, prize_count: int) -> int:
         return 4000
     if card_id == Night_Stretcher:
         return 2000
+    if card_id == Boss_Orders:
+        if not fs.op_bench_hp:
+            return -1  # 対象不在なら温存
+        has_ko_target = any(hp <= SHADOW_BULLET_DAMAGE for hp in fs.op_bench_hp)
+        if has_ko_target:
+            return 8800  # 即使用（KO確定）
+        active_rng = rng if rng is not None else _rng
+        if active_rng.random() < EPSILON:
+            return 6000  # 探索的先出し（KO確定ではないがキーポケモンを引きずり出す）
+        return -1  # 温存
     return 1000
 
 
@@ -221,9 +243,9 @@ def _score_attach(pokemon: "Pokemon", area: AreaType, card_id: int, fs: FieldSta
 def _score_attack(attack_id: int, fs: FieldState) -> int:
     """ATTACK コンテキスト：ワザ選択スコア"""
     if attack_id == Shadow_Bullet_ID:
-        # 相手バトルポケモンのHPが180以下ならShadow Bulletで確実にKOできる
+        # 相手バトルポケモンのHPがSHADOW_BULLET_DAMAGE以下ならShadow Bulletで確実にKOできる
         # （きぜつ確定）ので、RETREATの3000点より高くして撤退より攻撃を優先する
-        return 5000 if fs.op_active_hp <= 180 else 2000
+        return 5000 if fs.op_active_hp <= SHADOW_BULLET_DAMAGE else 2000
     if attack_id == Spiky_Wheel_ID:
         return 1500
     return 1000
@@ -334,7 +356,7 @@ def agent(obs_dict: dict) -> list[int]:
                 if card is None:
                     score = 0
                 else:
-                    score = _score_play(card.id, fs, prize_count)
+                    score = _score_play(card.id, fs, prize_count, _rng)
             case OptionType.ATTACH:
                 card    = get_card(obs, AreaType.HAND, o.index, my_index)
                 pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
