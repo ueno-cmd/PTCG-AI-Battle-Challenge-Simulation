@@ -16,7 +16,8 @@ DECK = [
     (1152, 4),   # Poké Pad（ポケモンサーチ）
     (1097, 4),   # Night Stretcher（トラッシュ回収）
     (1197, 4),   # Xerosic's Machinations（相手ハンド圧縮）
-    (1139, 4),   # Energy Recycler（エネルギー再利用）
+    (1139, 2),   # Energy Recycler（エネルギー再利用・Night Stretcherと機能重複のため2枚に削減）
+    (1182, 2),   # Boss's Orders（ベンチの弱ったポケモンを強制的にバトル場へ・KOを補助）
     (1259, 3),   # Spikemuth Gym（毎ターンMarnie's系サーチ）
     (1159, 1),   # Hero's Cape（Grimmsnarl exにHP+100・ACE SPECにつき1枚まで）
     (7,   12),   # Basic {D} Energy

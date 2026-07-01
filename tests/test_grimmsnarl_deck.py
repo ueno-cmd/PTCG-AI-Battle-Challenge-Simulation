@@ -39,3 +39,13 @@ def test_ace_spec_does_not_exceed_1_copy():
 def test_no_duplicate_card_id_entries():
     ids = [card_id for card_id, _ in DECK]
     assert len(ids) == len(set(ids)), "同じcard_idが複数タプルに分かれている"
+
+
+def test_boss_orders_count():
+    count = sum(c for i, c in DECK if i == 1182)
+    assert count == 2
+
+
+def test_energy_recycler_reduced_to_2():
+    count = sum(c for i, c in DECK if i == 1139)
+    assert count == 2
