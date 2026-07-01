@@ -102,7 +102,7 @@ uv run pytest tests/test_grimmsnarl_deck.py -v
 # 設計書: docs/superpowers/specs/2026-07-01-grimmsnarl-agent-design.md
 
 DECK = [
-    (646,  3),   # Marnie's Impidimp（進化元・Filchで初動ドロー・70HP）
+    (646,  4),   # Marnie's Impidimp（進化元・Filchで初動ドロー・70HP）
     (647,  1),   # Marnie's Morgrem（進化中継・Rare Candy未引き時の保険）
     (648,  2),   # Marnie's Grimmsnarl ex（メインアタッカー）
     (649,  2),   # Marnie's Morpeko（初動アタッカー・ベンチ要員）

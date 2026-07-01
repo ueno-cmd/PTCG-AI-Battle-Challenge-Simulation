@@ -18,7 +18,7 @@
 
 | カード | Card ID | 枚数 | 役割 |
 |---|---|---|---|
-| Marnie's Impidimp | 646 | 3 | 進化元・Filchで初動ドロー・Buddy-Buddy Poffin対象（70HP） |
+| Marnie's Impidimp | 646 | 4 | 進化元・Filchで初動ドロー・Buddy-Buddy Poffin対象（70HP） |
 | Marnie's Morgrem | 647 | 1 | 進化中継（Rare Candyがない場合の保険） |
 | Marnie's Grimmsnarl ex | 648 | 2 | **メインアタッカー**（Shadow Bullet 180+ベンチ30） |
 | Marnie's Morpeko | 649 | 2 | 初動アタッカー・ベンチ要員 |
