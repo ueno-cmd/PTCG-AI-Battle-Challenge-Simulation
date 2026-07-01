@@ -176,6 +176,121 @@ def _collect_field_state(my_state, op_state) -> FieldState:
     )
 
 
+# ==================== スコアリング ====================
+def _score_play(card_id: int, fs: FieldState, prize_count: int) -> int:
+    """PLAY コンテキスト：手札からカードを使う際のスコア"""
+    if card_id == Rare_Candy:
+        has_impidimp     = fs.field_counts[Impidimp] >= 1
+        grimmsnarl_ready = fs.hand_counts[Grimmsnarl_ex] >= 1
+        return 9000 if (has_impidimp and grimmsnarl_ready) else -1
+    if card_id == Buddy_Buddy_Poffin:
+        needs_bench = fs.impidimp_bench_idx == -1 or fs.munkidori_bench_idx == -1
+        return 8000 if needs_bench else 2000
+    if card_id == Dawn:
+        line_in_hand = (
+            fs.hand_counts[Impidimp] >= 1
+            and fs.hand_counts[Morgrem] >= 1
+            and fs.hand_counts[Grimmsnarl_ex] >= 1
+        )
+        return 2500 if line_in_hand else 7000
+    if card_id == Lillie_Determination:
+        return 5000 if prize_count == 6 else 3500
+    if card_id == Xerosics_Machinations:
+        return 3000
+    if card_id == Poke_Pad:
+        return 4000
+    if card_id == Night_Stretcher:
+        return 2000
+    return 1000
+
+
+def _score_attach(pokemon: "Pokemon", area: AreaType, card_id: int, fs: FieldState) -> int:
+    """ATTACH コンテキスト：エネルギー/ツールの付与先スコア"""
+    energy_count = len(pokemon.energies)
+    if card_id == Heros_Cape:
+        return 8500 if pokemon.id == Grimmsnarl_ex else -1
+    if card_id == Basic_D_Energy:
+        if pokemon.id == Grimmsnarl_ex:
+            return 9000 - energy_count * 1000
+        if pokemon.id == Morpeko:
+            return 4000
+        return -1
+    return 3000
+
+
+def _score_attack(attack_id: int, fs: FieldState) -> int:
+    """ATTACK コンテキスト：ワザ選択スコア"""
+    if attack_id == Shadow_Bullet_ID:
+        return 2000
+    if attack_id == Spiky_Wheel_ID:
+        return 1500
+    return 1000
+
+
+def _score_card_option(
+    obs: Observation,
+    o,
+    context,
+    my_index: int,
+    fs: FieldState,
+    discard_hand_counts: defaultdict,
+) -> int:
+    """OptionType.CARD のコンテキスト別スコア"""
+    card = get_card(obs, o.area, o.index, o.playerIndex)
+    if card is None:
+        return 0
+
+    match context:
+        case SelectContext.SETUP_ACTIVE_POKEMON:
+            if card.id == Impidimp:
+                return 100
+            if card.id == Morpeko:
+                return 50
+            return 10
+
+        case SelectContext.SWITCH | SelectContext.TO_ACTIVE:
+            if o.playerIndex != my_index or not isinstance(card, Pokemon):
+                return 0
+            score = len(card.energies) * 2
+            if card.id == Grimmsnarl_ex:
+                score += 100
+            elif card.id == Morpeko:
+                score += 30
+            return score
+
+        case SelectContext.TO_BENCH | SelectContext.TO_HAND:
+            if not isinstance(card, Pokemon):
+                return 10
+            if card.id == Grimmsnarl_ex:
+                return 100 if fs.field_counts[Grimmsnarl_ex] == 0 else 10
+            if card.id == Impidimp:
+                return 60 if fs.field_counts[Impidimp] < 2 else 20
+            if card.id == Munkidori:
+                return 40 if fs.munkidori_bench_idx == -1 else 10
+            return 10
+
+        case SelectContext.DAMAGE_COUNTER:
+            # Shadow Bulletのベンチ30ダメ対象：最もKOに近い（HPが低い）相手ベンチを狙う
+            if not isinstance(card, Pokemon):
+                return 0
+            return 100000 - card.hp
+
+        case SelectContext.DISCARD:
+            card_id = card.id
+            score = 5
+            if card_id in (Grimmsnarl_ex, Impidimp, Morgrem):
+                score = -50
+            elif card_id == Basic_D_Energy:
+                score = 30
+            if discard_hand_counts[card_id] >= 2:
+                score += 100
+            discard_hand_counts[card_id] -= 1
+            return score
+
+        case _:
+            return 0
+
+
 def agent(obs_dict: dict) -> list[int]:
     """暫定実装（Task 4 で完成させる）"""
     obs = to_observation_class(obs_dict)
