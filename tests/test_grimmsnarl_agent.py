@@ -597,6 +597,49 @@ class TestAgent:
         result = gm.agent(obs_dict)
         assert options[result[0]].type == OptionType.ABILITY
 
+    def test_prefers_boss_orders_when_ko_target_available(self):
+        """相手ベンチにKO可能な対象がいる場合、ボスの指令(PLAY)がENDより優先されること"""
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex))
+        op_bench = [make_pokemon(id=2, hp=150)]  # 180以下 → KO可能
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=3, hp=300), bench=op_bench)
+        options = [
+            Option(type=OptionType.PLAY, index=0),
+            Option(type=OptionType.END),
+        ]
+        obs_dict = make_main_obs(my_state=my_ps, op_state=op_ps, options=options)
+        obs_dict["current"]["players"][0]["hand"] = [
+            {"id": gm.Boss_Orders, "serial": 1, "playerIndex": 0}
+        ]
+        obs_dict["current"]["players"][0]["handCount"] = 1
+
+        result = gm.agent(obs_dict)
+        assert options[result[0]].type == OptionType.PLAY
+
+    def test_holds_boss_orders_when_no_ko_target(self):
+        """相手ベンチにKO可能な対象がいない場合、探索が発生しない限りボスの指令(PLAY)より
+        ENDが優先されること（_rngの実乱数を使うため、EPSILON=0.28よりかなり大きい閾値になる
+        乱数値が出ても温存側に倒れることをrandomのシードで固定して検証する）"""
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex))
+        op_bench = [make_pokemon(id=2, hp=300)]  # 180超 → KO不可
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=3, hp=300), bench=op_bench)
+        options = [
+            Option(type=OptionType.PLAY, index=0),
+            Option(type=OptionType.END),
+        ]
+        obs_dict = make_main_obs(my_state=my_ps, op_state=op_ps, options=options)
+        obs_dict["current"]["players"][0]["hand"] = [
+            {"id": gm.Boss_Orders, "serial": 1, "playerIndex": 0}
+        ]
+        obs_dict["current"]["players"][0]["handCount"] = 1
+
+        original_random = gm._rng.random
+        gm._rng.random = lambda: 0.9  # EPSILON(0.28)を超える値に固定 → 温存
+        try:
+            result = gm.agent(obs_dict)
+        finally:
+            gm._rng.random = original_random
+        assert options[result[0]].type == OptionType.END
+
     def test_play_option_with_none_card_does_not_crash(self):
         """PLAY オプションで get_card() が None を返す場合、AttributeError でクラッシュしないこと"""
         # make_main_obs で基本的な obs_dict を生成してから手札を None で置き換える
