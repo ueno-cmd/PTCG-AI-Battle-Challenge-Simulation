@@ -1,7 +1,9 @@
 import pytest
 from dataclasses import dataclass, field
 from collections import defaultdict
-from cg.api import CardType, Card, AreaType
+from cg.api import (
+    CardType, Card, AreaType, Observation, State, Option, OptionType, SelectContext,
+)
 
 import grimmsnarl_agent.main as gm
 from tests.conftest import make_pokemon, make_player_state
@@ -235,3 +237,194 @@ class TestScoreAttack:
     def test_unknown_attack_returns_default(self):
         fs = self._make_fs()
         assert gm._score_attack(9999, fs) == 1000
+
+
+# ==================== _score_card_option ====================
+class TestScoreCardOption:
+    """OptionType.CARD のコンテキスト別スコアリングを検証する"""
+
+    def _make_fs(self, **kwargs):
+        defaults = dict(
+            field_counts=defaultdict(int),
+            hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int),
+            grimmsnarl_active=False,
+            grimmsnarl_energy_count=0,
+            impidimp_bench_idx=-1,
+            munkidori_bench_idx=-1,
+            rare_candy_in_hand=False,
+            my_active_hp=200,
+            op_active_hp=200,
+            op_bench_hp=[],
+        )
+        defaults.update(kwargs)
+        return gm.FieldState(**defaults)
+
+    def _make_obs(self, my_ps, op_ps):
+        """playerIndex=0がmy_ps、playerIndex=1がop_psとなるObservationを生成する"""
+        return Observation(
+            select=None,
+            logs=[],
+            current=State(
+                turn=1, turnActionCount=0, yourIndex=0, firstPlayer=0,
+                supporterPlayed=False, stadiumPlayed=False, energyAttached=False,
+                retreated=False, result=-1, stadium=[], looking=None,
+                players=[my_ps, op_ps],
+            ),
+        )
+
+    # ---------- SETUP_ACTIVE_POKEMON ----------
+    def test_setup_active_pokemon_priority_order(self):
+        impidimp = make_pokemon(id=gm.Impidimp)
+        morpeko  = make_pokemon(id=gm.Morpeko)
+        other    = make_pokemon(id=999, hp=100)
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), hand=[impidimp, morpeko, other])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+
+        def score(idx):
+            o = Option(type=OptionType.CARD, area=AreaType.HAND, index=idx, playerIndex=0)
+            return gm._score_card_option(obs, o, SelectContext.SETUP_ACTIVE_POKEMON, 0, fs, defaultdict(int))
+
+        assert score(0) > score(1) > score(2)  # Impidimp > Morpeko > その他
+
+    # ---------- SWITCH / TO_ACTIVE ----------
+    def test_switch_returns_zero_when_not_my_card(self):
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1))
+        op_ps = make_player_state(
+            active_pokemon=make_pokemon(id=2, hp=200),
+            bench=[make_pokemon(id=gm.Grimmsnarl_ex, energies=[7, 7])],
+        )
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+        o = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=1)  # 相手のカード
+        score = gm._score_card_option(obs, o, SelectContext.SWITCH, 0, fs, defaultdict(int))
+        assert score == 0
+
+    def test_switch_returns_zero_when_not_pokemon(self):
+        non_pokemon_card = Card(id=gm.Basic_D_Energy, serial=1, playerIndex=0)
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[non_pokemon_card])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+        o = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        score = gm._score_card_option(obs, o, SelectContext.SWITCH, 0, fs, defaultdict(int))
+        assert score == 0
+
+    def test_switch_grimmsnarl_scores_higher_than_morpeko(self):
+        grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, energies=[7, 7])
+        morpeko    = make_pokemon(id=gm.Morpeko, energies=[])
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[grimmsnarl, morpeko])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+        o_grimmsnarl = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        o_morpeko    = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
+        score_grimmsnarl = gm._score_card_option(obs, o_grimmsnarl, SelectContext.SWITCH, 0, fs, defaultdict(int))
+        score_morpeko    = gm._score_card_option(obs, o_morpeko, SelectContext.SWITCH, 0, fs, defaultdict(int))
+        assert score_grimmsnarl > score_morpeko
+
+    # ---------- TO_BENCH / TO_HAND ----------
+    def test_to_bench_grimmsnarl_high_when_none_in_play(self):
+        grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex)
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), hand=[grimmsnarl])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs(field_counts=defaultdict(int, {gm.Grimmsnarl_ex: 0}))
+        o = Option(type=OptionType.CARD, area=AreaType.HAND, index=0, playerIndex=0)
+        score = gm._score_card_option(obs, o, SelectContext.TO_BENCH, 0, fs, defaultdict(int))
+        assert score == 100
+
+    def test_to_bench_grimmsnarl_low_when_already_in_play(self):
+        grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex)
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), hand=[grimmsnarl])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs(field_counts=defaultdict(int, {gm.Grimmsnarl_ex: 1}))
+        o = Option(type=OptionType.CARD, area=AreaType.HAND, index=0, playerIndex=0)
+        score = gm._score_card_option(obs, o, SelectContext.TO_BENCH, 0, fs, defaultdict(int))
+        assert score == 10
+
+    # ---------- DAMAGE_COUNTER ----------
+    def test_damage_counter_targets_lowest_hp(self):
+        low_hp  = make_pokemon(id=1, hp=50)
+        high_hp = make_pokemon(id=2, hp=150)
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex))
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=3, hp=200), bench=[low_hp, high_hp])
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+        o_low  = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=1)
+        o_high = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=1)
+        score_low  = gm._score_card_option(obs, o_low, SelectContext.DAMAGE_COUNTER, 0, fs, defaultdict(int))
+        score_high = gm._score_card_option(obs, o_high, SelectContext.DAMAGE_COUNTER, 0, fs, defaultdict(int))
+        assert score_low > score_high  # HPが低いほど（KOに近いほど）スコアが高い
+
+    def test_damage_counter_non_pokemon_returns_zero(self):
+        non_pokemon_card = Card(id=gm.Basic_D_Energy, serial=1, playerIndex=1)
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex))
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=3, hp=200), bench=[non_pokemon_card])
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+        o = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=1)
+        score = gm._score_card_option(obs, o, SelectContext.DAMAGE_COUNTER, 0, fs, defaultdict(int))
+        assert score == 0
+
+    # ---------- DISCARD ----------
+    def test_discard_key_cards_score_lower_than_basic_energy(self):
+        grimmsnarl_card = Card(id=gm.Grimmsnarl_ex, serial=1, playerIndex=0)
+        energy_card     = Card(id=gm.Basic_D_Energy, serial=2, playerIndex=0)
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), discard=[grimmsnarl_card, energy_card])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+        o_grimmsnarl = Option(type=OptionType.CARD, area=AreaType.DISCARD, index=0, playerIndex=0)
+        o_energy     = Option(type=OptionType.CARD, area=AreaType.DISCARD, index=1, playerIndex=0)
+        score_grimmsnarl = gm._score_card_option(obs, o_grimmsnarl, SelectContext.DISCARD, 0, fs, defaultdict(int))
+        score_energy     = gm._score_card_option(obs, o_energy, SelectContext.DISCARD, 0, fs, defaultdict(int))
+        assert score_grimmsnarl < score_energy  # 主力カードは温存したいので低スコア
+
+    def test_discard_bonus_and_count_decrement_side_effect(self):
+        """discard_hand_counts>=2のボーナスと、呼び出し後のデクリメント副作用を検証する"""
+        energy_card = Card(id=gm.Basic_D_Energy, serial=1, playerIndex=0)
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), discard=[energy_card])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+        o = Option(type=OptionType.CARD, area=AreaType.DISCARD, index=0, playerIndex=0)
+        dhc = defaultdict(int, {gm.Basic_D_Energy: 2})
+
+        score_first = gm._score_card_option(obs, o, SelectContext.DISCARD, 0, fs, dhc)
+        assert score_first == 130  # base(30) + ">=2"ボーナス(100)
+        assert dhc[gm.Basic_D_Energy] == 1  # 呼び出し後にデクリメントされている
+
+        score_second = gm._score_card_option(obs, o, SelectContext.DISCARD, 0, fs, dhc)
+        assert score_second == 30  # 残数1になりボーナス対象外に戻る
+        assert dhc[gm.Basic_D_Energy] == 0
+
+    # ---------- card is None ----------
+    def test_card_none_returns_zero_regardless_of_context(self):
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1))
+        my_ps.active = [None]  # 裏向き等でカードが取得できない状態を表現
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+        o = Option(type=OptionType.CARD, area=AreaType.ACTIVE, index=0, playerIndex=0)
+        for context in (
+            SelectContext.SETUP_ACTIVE_POKEMON,
+            SelectContext.SWITCH,
+            SelectContext.DISCARD,
+            SelectContext.MAIN,
+        ):
+            assert gm._score_card_option(obs, o, context, 0, fs, defaultdict(int)) == 0
+
+    # ---------- default/未対応コンテキスト ----------
+    def test_unhandled_context_returns_zero(self):
+        pokemon = make_pokemon(id=gm.Impidimp)
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), hand=[pokemon])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+        o = Option(type=OptionType.CARD, area=AreaType.HAND, index=0, playerIndex=0)
+        score = gm._score_card_option(obs, o, SelectContext.MAIN, 0, fs, defaultdict(int))
+        assert score == 0
