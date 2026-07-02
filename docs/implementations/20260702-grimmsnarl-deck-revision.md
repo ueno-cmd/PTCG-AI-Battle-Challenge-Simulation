@@ -37,6 +37,25 @@ LBスコアが700から500へ下落し連勝できない状態だった。負け
 - `tests/test_grimmsnarl_deck.py`: 10件全てPASS
 - リポジトリ全体のテストスイート: 全件PASS（既存の他デッキ・エージェントへの影響なし）
 
+## 追記（同日）：エージェントロジックの追従修正
+
+最終ブランチレビューで、`src/grimmsnarl_agent/main.py`が削除カードへの死んだ参照を
+残しており、新規採用カードは専用ロジックが無いため汎用デフォルトスコアに頼っている
+ことが指摘された。ユーザーと相談の上、以下の最低限スコープで追従修正した。
+
+- 削除カード（Morpeko/Dudunsparce/Dunsparce/Dawn/Xerosic's Machinations/
+  Energy Recycler/Hero's Cape）への参照（定数・分岐・`Spiky_Wheel_ID`）を全て除去
+- 新規採用のTeam Rocket's Petrelにのみスコアリングを追加（Dawnの後継として
+  進化ライン探索の要を担うため、Dawn相当の優先度7000を付与）
+- それ以外の新規トールボックスカード（Froslass/Snorunt/Budew/Shaymin/Tatsugiri/
+  Yveltal/Psyduck/Secret Box/Energy Switch/Air Balloon）は専用ロジック無しの
+  まま（汎用デフォルトスコアで動作はする。次回持ち越し）
+- `tests/test_grimmsnarl_agent.py`のモックカードテーブル・関連テストを追従更新
+  （削除2件・追加2件、正味54件中変化なしで全PASS）
+
+**コミット：** `5314b00`
+**テスト結果：** `tests/test_grimmsnarl_agent.py` 54件PASS、リポジトリ全体170件PASS
+
 ## 未対応・次回持ち越し
 
 - Kaggle再提出後のスコア変化確認（本改修のスコープ外）
@@ -44,3 +63,6 @@ LBスコアが700から500へ下落し連勝できない状態だった。負け
   （デッキ構成のみでは解決しきれない範囲と判断）
 - 「15-30-15」比率から外れたトールボックス構成による事故率増加リスクは
   ユーザー確認済みの既知のトレードオフ
+- 新規トールボックスカード（Froslass/Snorunt/Budew/Shaymin/Tatsugiri/Yveltal/
+  Psyduck/Secret Box/Energy Switch/Air Balloon）への専用スコアリングロジック追加
+  （現状は汎用デフォルトスコアで機能はするが最適化されていない）
