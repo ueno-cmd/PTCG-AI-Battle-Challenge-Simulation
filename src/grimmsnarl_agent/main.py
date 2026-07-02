@@ -9,25 +9,22 @@ from cg.api import (
 )
 
 # ==================== カードID定数 ====================
+# 20260702改修：Morpeko/Dudunsparce/Dunsparce/Dawn/Xerosic's Machinations/
+# Energy Recycler/Hero's Capeはデッキから削除済みのため定数ごと削除。
+# 代わりにTeam Rocket's Petrelを追加（docs/superpowers/specs/2026-07-02-grimmsnarl-deck-revision-design.md）
 Impidimp      = 646
 Morgrem       = 647
 Grimmsnarl_ex = 648
-Morpeko       = 649
 Munkidori     = 112
-Dudunsparce   = 66
-Dunsparce     = 305
 
-Dawn                   = 1231
 Rare_Candy             = 1079
 Buddy_Buddy_Poffin     = 1086
 Lillie_Determination   = 1227
 Poke_Pad               = 1152
 Night_Stretcher        = 1097
-Xerosics_Machinations  = 1197
-Energy_Recycler        = 1139
 Spikemuth_Gym          = 1259
-Heros_Cape             = 1159
 Boss_Orders            = 1182
+Team_Rocket_Petrel     = 1219
 
 Basic_D_Energy = 7
 
@@ -38,7 +35,6 @@ _rng                  = random.Random()  # 本番用の実乱数。テストで�
 
 # ==================== アタックID（_build_card_table で設定）====================
 Shadow_Bullet_ID: int = 0
-Spiky_Wheel_ID:   int = 0
 
 # ==================== カードメタデータ（遅延初期化）====================
 card_table: dict = {}
@@ -46,13 +42,11 @@ card_table: dict = {}
 
 def _build_card_table() -> dict:
     """card_table を初回のみ構築し、攻撃IDも設定する"""
-    global card_table, Shadow_Bullet_ID, Spiky_Wheel_ID
+    global card_table, Shadow_Bullet_ID
     if not card_table:
         card_table       = {c.cardId: c for c in all_card_data()}
         grimmsnarl_data  = card_table[Grimmsnarl_ex]
-        morpeko_data     = card_table[Morpeko]
         Shadow_Bullet_ID = grimmsnarl_data.attacks[0]  # Shadow Bullet
-        Spiky_Wheel_ID   = morpeko_data.attacks[0]     # Spiky Wheel
     return card_table
 
 
@@ -198,17 +192,11 @@ def _score_play(
     if card_id == Buddy_Buddy_Poffin:
         needs_bench = fs.impidimp_bench_idx == -1 or fs.munkidori_bench_idx == -1
         return 8000 if needs_bench else 2000
-    if card_id == Dawn:
-        line_in_hand = (
-            fs.hand_counts[Impidimp] >= 1
-            and fs.hand_counts[Morgrem] >= 1
-            and fs.hand_counts[Grimmsnarl_ex] >= 1
-        )
-        return 2500 if line_in_hand else 7000
+    if card_id == Team_Rocket_Petrel:
+        # Dawnの後継：進化ライン（特にRare Candy）を狙ってサーチする役割
+        return 7000
     if card_id == Lillie_Determination:
         return 5000 if prize_count == 6 else 3500
-    if card_id == Xerosics_Machinations:
-        return 3000
     if card_id == Poke_Pad:
         return 4000
     if card_id == Night_Stretcher:
@@ -229,13 +217,9 @@ def _score_play(
 def _score_attach(pokemon: "Pokemon", area: AreaType, card_id: int, fs: FieldState) -> int:
     """ATTACH コンテキスト：エネルギー/ツールの付与先スコア"""
     energy_count = len(pokemon.energies)
-    if card_id == Heros_Cape:
-        return 8500 if pokemon.id == Grimmsnarl_ex else -1
     if card_id == Basic_D_Energy:
         if pokemon.id == Grimmsnarl_ex:
             return 9000 - energy_count * 1000
-        if pokemon.id == Morpeko:
-            return 4000
         return -1
     return 3000
 
@@ -246,8 +230,6 @@ def _score_attack(attack_id: int, fs: FieldState) -> int:
         # 相手バトルポケモンのHPがSHADOW_BULLET_DAMAGE以下ならShadow Bulletで確実にKOできる
         # （きぜつ確定）ので、RETREATの3000点より高くして撤退より攻撃を優先する
         return 5000 if fs.op_active_hp <= SHADOW_BULLET_DAMAGE else 2000
-    if attack_id == Spiky_Wheel_ID:
-        return 1500
     return 1000
 
 
@@ -256,8 +238,6 @@ def _score_own_switch_target(card: "Pokemon") -> int:
     score = len(card.energies) * 2
     if card.id == Grimmsnarl_ex:
         score += 100
-    elif card.id == Morpeko:
-        score += 30
     return score
 
 
@@ -278,8 +258,6 @@ def _score_card_option(
         case SelectContext.SETUP_ACTIVE_POKEMON:
             if card.id == Impidimp:
                 return 100
-            if card.id == Morpeko:
-                return 50
             return 10
 
         case SelectContext.SWITCH:

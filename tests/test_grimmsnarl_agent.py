@@ -26,19 +26,15 @@ def mock_card_table(monkeypatch):
         gm.Impidimp:        MockCardData(cardId=gm.Impidimp, attacks=[9101]),
         gm.Morgrem:         MockCardData(cardId=gm.Morgrem, stage1=True, attacks=[9101]),
         gm.Grimmsnarl_ex:   MockCardData(cardId=gm.Grimmsnarl_ex, stage2=True, ex=True, attacks=[9102]),
-        gm.Morpeko:         MockCardData(cardId=gm.Morpeko, attacks=[9103]),
         gm.Munkidori:       MockCardData(cardId=gm.Munkidori, attacks=[9104]),
-        gm.Dudunsparce:     MockCardData(cardId=gm.Dudunsparce, stage1=True, attacks=[9105]),
-        gm.Dunsparce:       MockCardData(cardId=gm.Dunsparce, attacks=[9106]),
         gm.Rare_Candy:      MockCardData(cardId=gm.Rare_Candy, cardType=CardType.ITEM),
         gm.Buddy_Buddy_Poffin: MockCardData(cardId=gm.Buddy_Buddy_Poffin, cardType=CardType.ITEM),
-        gm.Dawn:            MockCardData(cardId=gm.Dawn, cardType=CardType.SUPPORTER),
         gm.Lillie_Determination: MockCardData(cardId=gm.Lillie_Determination, cardType=CardType.SUPPORTER),
+        gm.Team_Rocket_Petrel: MockCardData(cardId=gm.Team_Rocket_Petrel, cardType=CardType.SUPPORTER),
         gm.Basic_D_Energy:  MockCardData(cardId=gm.Basic_D_Energy, cardType=CardType.BASIC_ENERGY),
     }
     monkeypatch.setattr(gm, "card_table", table)
     monkeypatch.setattr(gm, "Shadow_Bullet_ID", 9102)
-    monkeypatch.setattr(gm, "Spiky_Wheel_ID", 9103)
     return table
 
 
@@ -62,7 +58,7 @@ class TestCollectFieldState:
     def test_impidimp_bench_detected(self):
         impidimp = make_pokemon(id=gm.Impidimp)
         my_ps = make_player_state(
-            active_pokemon=make_pokemon(id=gm.Morpeko),
+            active_pokemon=make_pokemon(id=999),
             bench=[impidimp],
         )
         op_ps = make_player_state(active_pokemon=make_pokemon(id=1, hp=200))
@@ -70,7 +66,7 @@ class TestCollectFieldState:
         assert fs.impidimp_bench_idx == 0
 
     def test_impidimp_bench_absent_returns_minus1(self):
-        my_ps = make_player_state(active_pokemon=make_pokemon(id=gm.Morpeko))
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=999))
         op_ps = make_player_state(active_pokemon=make_pokemon(id=1, hp=200))
         fs = gm._collect_field_state(my_ps, op_ps)
         assert fs.impidimp_bench_idx == -1
@@ -172,21 +168,18 @@ class TestScorePlay:
         fs = self._make_fs(impidimp_bench_idx=0, munkidori_bench_idx=1)
         assert gm._score_play(gm.Buddy_Buddy_Poffin, fs, prize_count=6) == 2000
 
-    def test_dawn_high_when_line_missing_from_hand(self):
+    def test_team_rocket_petrel_score(self):
+        """Team Rocket's PetrelはDawnの後継として進化ライン探索を担うため高優先度"""
         fs = self._make_fs()
-        assert gm._score_play(gm.Dawn, fs, prize_count=6) == 7000
+        assert gm._score_play(gm.Team_Rocket_Petrel, fs, prize_count=6) == 7000
 
     def test_lillie_determination_first_turn(self):
         fs = self._make_fs()
         assert gm._score_play(gm.Lillie_Determination, fs, prize_count=6) == 5000
 
-    def test_xerosics_machinations_default_score(self):
-        fs = self._make_fs()
-        assert gm._score_play(gm.Xerosics_Machinations, fs, prize_count=4) == 3000
-
     def test_unhandled_card_returns_default(self):
         fs = self._make_fs()
-        assert gm._score_play(gm.Energy_Recycler, fs, prize_count=4) == 1000
+        assert gm._score_play(9999, fs, prize_count=4) == 1000
 
     def test_boss_orders_high_when_ko_target_exists(self):
         fs = self._make_fs(op_bench_hp=[150, 300])
@@ -236,9 +229,9 @@ class TestScoreAttach:
         score_full = gm._score_attach(grimmsnarl_full, AreaType.ACTIVE, gm.Basic_D_Energy, fs)
         assert score_low > score_full
 
-    def test_heros_cape_only_for_grimmsnarl(self):
+    def test_unhandled_attach_card_returns_default(self):
+        """Basic_D_Energy以外のATTACH対象カード（例：Air Balloon等）はデフォルトスコアになる"""
         grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex)
-        morpeko    = make_pokemon(id=gm.Morpeko)
         fs = gm.FieldState(
             field_counts=defaultdict(int), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), grimmsnarl_active=True,
@@ -246,8 +239,7 @@ class TestScoreAttach:
             munkidori_bench_idx=-1, rare_candy_in_hand=False,
             my_active_hp=200, op_active_hp=200, op_bench_hp=[],
         )
-        assert gm._score_attach(grimmsnarl, AreaType.ACTIVE, gm.Heros_Cape, fs) == 8500
-        assert gm._score_attach(morpeko,    AreaType.BENCH,  gm.Heros_Cape, fs) == -1
+        assert gm._score_attach(grimmsnarl, AreaType.ACTIVE, 9999, fs) == 3000
 
 
 # ==================== _score_attack ====================
@@ -319,9 +311,8 @@ class TestScoreCardOption:
     # ---------- SETUP_ACTIVE_POKEMON ----------
     def test_setup_active_pokemon_priority_order(self):
         impidimp = make_pokemon(id=gm.Impidimp)
-        morpeko  = make_pokemon(id=gm.Morpeko)
         other    = make_pokemon(id=999, hp=100)
-        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), hand=[impidimp, morpeko, other])
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), hand=[impidimp, other])
         op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
         obs = self._make_obs(my_ps, op_ps)
         fs = self._make_fs()
@@ -330,7 +321,7 @@ class TestScoreCardOption:
             o = Option(type=OptionType.CARD, area=AreaType.HAND, index=idx, playerIndex=0)
             return gm._score_card_option(obs, o, SelectContext.SETUP_ACTIVE_POKEMON, 0, fs, defaultdict(int))
 
-        assert score(0) > score(1) > score(2)  # Impidimp > Morpeko > その他
+        assert score(0) > score(1)  # Impidimp > その他
 
     # ---------- SWITCH / TO_ACTIVE ----------
     def test_switch_returns_zero_when_not_my_card(self):
@@ -355,18 +346,18 @@ class TestScoreCardOption:
         score = gm._score_card_option(obs, o, SelectContext.SWITCH, 0, fs, defaultdict(int))
         assert score == 0
 
-    def test_switch_grimmsnarl_scores_higher_than_morpeko(self):
+    def test_switch_grimmsnarl_scores_higher_than_other_pokemon(self):
         grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, energies=[7, 7])
-        morpeko    = make_pokemon(id=gm.Morpeko, energies=[])
-        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[grimmsnarl, morpeko])
+        other      = make_pokemon(id=999, energies=[])
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[grimmsnarl, other])
         op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
         obs = self._make_obs(my_ps, op_ps)
         fs = self._make_fs()
         o_grimmsnarl = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
-        o_morpeko    = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
+        o_other      = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
         score_grimmsnarl = gm._score_card_option(obs, o_grimmsnarl, SelectContext.SWITCH, 0, fs, defaultdict(int))
-        score_morpeko    = gm._score_card_option(obs, o_morpeko, SelectContext.SWITCH, 0, fs, defaultdict(int))
-        assert score_grimmsnarl > score_morpeko
+        score_other      = gm._score_card_option(obs, o_other, SelectContext.SWITCH, 0, fs, defaultdict(int))
+        assert score_grimmsnarl > score_other
 
     # ---------- TO_ACTIVE（相手ベンチを強制的にバトル場へ出す場合の対象選択） ----------
     def test_to_active_opponent_bench_targets_lowest_hp(self):
@@ -384,16 +375,16 @@ class TestScoreCardOption:
 
     def test_to_active_own_pokemon_still_prefers_grimmsnarl(self):
         grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, energies=[7, 7])
-        morpeko    = make_pokemon(id=gm.Morpeko, energies=[])
-        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[grimmsnarl, morpeko])
+        other      = make_pokemon(id=999, energies=[])
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[grimmsnarl, other])
         op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
         obs = self._make_obs(my_ps, op_ps)
         fs = self._make_fs()
         o_grimmsnarl = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
-        o_morpeko    = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
+        o_other      = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
         score_grimmsnarl = gm._score_card_option(obs, o_grimmsnarl, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
-        score_morpeko    = gm._score_card_option(obs, o_morpeko, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
-        assert score_grimmsnarl > score_morpeko
+        score_other      = gm._score_card_option(obs, o_other, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        assert score_grimmsnarl > score_other
 
     def test_to_active_non_pokemon_returns_zero(self):
         non_pokemon_card = Card(id=gm.Basic_D_Energy, serial=1, playerIndex=1)
