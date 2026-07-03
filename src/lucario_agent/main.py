@@ -238,6 +238,7 @@ def calc_attack_plan(
     can_use_mega_brave: bool,
     can_attack:         bool,
     my_prize:           int,
+    rng: "random.Random | None" = None,
 ) -> AttackPlan:
     """最適な攻撃プランを計算して返す"""
     new_plan   = AttackPlan()
@@ -264,8 +265,6 @@ def calc_attack_plan(
                 else:
                     energy_required = 2
                     base_damage     = 270
-                if a == 1 and my_prize in (2, 3):
-                    base_score -= 500
             elif a == 1:
                 break
             elif my_pokemon.id == Solrock:
@@ -309,6 +308,19 @@ def calc_attack_plan(
                 else:
                     score *= damage / op_pokemon.hp
                 score += base_score
+
+                if my_pokemon.id == Mega_Lucario_ex and a == 1:
+                    base_dmg_normal = 130
+                    if data.weakness == EnergyType.FIGHTING:
+                        base_dmg_normal *= 2
+                    elif data.resistance == EnergyType.FIGHTING:
+                        base_dmg_normal -= 30
+                    if op_pokemon.hp <= base_dmg_normal:
+                        score -= 1000  # 通常攻撃で足りるならメガブレイブは温存
+                    elif op_pokemon.hp > damage:
+                        active_rng = rng if rng is not None else _rng
+                        if active_rng.random() >= EPSILON:
+                            score -= 300  # 探索に外れたら温存寄り
 
                 if len(op_state.prize) <= prize:
                     score = 50000

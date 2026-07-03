@@ -277,6 +277,53 @@ class TestCalcAttackPlan:
         assert result.attacker     == 0
         assert result.attack_index == 0
 
+    def test_mega_brave_held_when_normal_attack_already_ko(self):
+        """通常攻撃(130)で確定KOできる相手には、メガブレイブを温存し通常攻撃を選ぶ"""
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, hp=300, energies=[6, 6])
+        my_ps = make_player_state(active_pokemon=lucario, prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=lm.Riolu, hp=100), prize_count=6)
+        obs = MagicMock()
+        obs.select.option = [Option(type=OptionType.ATTACK, attackId=983)]
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int), defaultdict(int),
+            can_switch=False, can_op_switch=False,
+            can_use_mega_brave=True, can_attack=True, my_prize=6,
+        )
+        assert result.attack_index == 0
+
+    def test_mega_brave_explores_when_rng_below_epsilon_and_no_ko_either_way(self):
+        """どちらの技でも確定KOできない場面で、rngがEPSILON未満ならメガブレイブを選ぶ"""
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, hp=300, energies=[6, 6])
+        my_ps = make_player_state(active_pokemon=lucario, prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=lm.Riolu, hp=1000), prize_count=6)
+        obs = MagicMock()
+        obs.select.option = [Option(type=OptionType.ATTACK, attackId=983)]
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int), defaultdict(int),
+            can_switch=False, can_op_switch=False,
+            can_use_mega_brave=True, can_attack=True, my_prize=6,
+            rng=_StubRng(0.1),
+        )
+        assert result.attack_index == 1
+
+    def test_mega_brave_holds_when_rng_above_epsilon_and_no_ko_either_way(self):
+        """どちらの技でも確定KOできない場面で、rngがEPSILON以上なら通常攻撃を選ぶ"""
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, hp=300, energies=[6, 6])
+        my_ps = make_player_state(active_pokemon=lucario, prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=lm.Riolu, hp=1000), prize_count=6)
+        obs = MagicMock()
+        obs.select.option = [Option(type=OptionType.ATTACK, attackId=983)]
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int), defaultdict(int),
+            can_switch=False, can_op_switch=False,
+            can_use_mega_brave=True, can_attack=True, my_prize=6,
+            rng=_StubRng(0.9),
+        )
+        assert result.attack_index == 0
+
 
 # ==================== Task 6: agent() 統合テスト ====================
 from unittest.mock import patch
