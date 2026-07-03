@@ -1,22 +1,24 @@
-# ルカリオデッキ定義（20260621生成）
-# deck.csv から逆引き生成された定義
+# ルカリオデッキ定義（20260703 軽量版リビルド）
+# 2026-07-02大会優勝デッキをベースに、マクノシタ・ハリテヤマ系統を撤去した軽量プラン
 
 DECK = [
-    ("Basic {F} Energy", 13),
-    ("Makuhita", 2),
-    ("Hariyama", 2),
-    ("Lunatone", 2),
-    ("Solrock", 3),
-    (677, 3),  # Riolu (MEG-076) - 同名カードが複数セットに存在するためIDで直接指定
-    ("Mega Lucario ex", 4),
-    ("Dusk Ball", 4),
-    ("Switch", 2),
-    ("Premium Power Pro", 4),
-    ("Fighting Gong", 4),
-    ("Poké Pad", 4),
-    ("Hero’s Cape", 1),
-    ("Boss’s Orders", 2),
-    ("Carmine", 4),
-    ("Lillie's Determination", 4),
-    ("Gravity Mountain", 2),
+    (677, 4),    # Riolu
+    (678, 3),    # Mega Lucario ex
+    (676, 4),    # Solrock
+    (675, 2),    # Lunatone
+    (1142, 4),   # Fighting Gong
+    (1121, 4),   # Ultra Ball
+    (1152, 2),   # Poké Pad
+    (1141, 4),   # Premium Power Pro
+    (1097, 2),   # Night Stretcher
+    (1122, 4),   # Pokégear 3.0
+    (1159, 1),   # Hero's Cape (ACE SPEC)
+    (1227, 4),   # Lillie's Determination
+    (1182, 4),   # Boss's Orders
+    (1213, 2),   # Judge
+    (1225, 2),   # Hilda
+    (1229, 1),   # Wally's Compassion
+    (1188, 1),   # Ciphermaniac's Codebreaking
+    (1252, 1),   # Gravity Mountain
+    (6, 11),     # Basic {F} Energy
 ]
