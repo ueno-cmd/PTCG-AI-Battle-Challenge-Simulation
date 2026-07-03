@@ -16,6 +16,17 @@ Impidimp      = 646
 Morgrem       = 647
 Grimmsnarl_ex = 648
 Munkidori     = 112
+Froslass      = 104
+Budew         = 235
+Shaymin       = 343
+Tatsugiri     = 122
+Yveltal       = 689
+Psyduck       = 858
+
+# 特性が「場にいれば無条件で発動」する専用要員。バトル場に出す前提のカードではないため、
+# SWITCH/TO_ACTIVEでは他に選択肢がある限り選ばれないよう明確に減点する。
+# Munkidoriは特性発動にエネルギー要求があり攻撃も可能なため対象外。
+SUPPORT_ONLY_IDS = {Froslass, Budew, Shaymin, Tatsugiri, Psyduck}
 
 Rare_Candy             = 1079
 Buddy_Buddy_Poffin     = 1086
@@ -220,6 +231,10 @@ def _score_attach(pokemon: "Pokemon", area: AreaType, card_id: int, fs: FieldSta
     if card_id == Basic_D_Energy:
         if pokemon.id == Grimmsnarl_ex:
             return 9000 - energy_count * 1000
+        if pokemon.id == Munkidori and energy_count == 0 and fs.grimmsnarl_energy_count >= 2:
+            # アドレナブレインはエネルギー1枚で発動するため、グリムスナールexが
+            # シャドーバレット分（2エネ）を確保済みの場合のみ余剰分を分配する
+            return 4000
         return -1
     return 3000
 
@@ -234,11 +249,17 @@ def _score_attack(attack_id: int, fs: FieldState) -> int:
 
 
 def _score_own_switch_target(card: "Pokemon") -> int:
-    """自分のポケモンをバトル場に出す際の優先スコア（SWITCH/TO_ACTIVE共通）"""
-    score = len(card.energies) * 2
+    """自分のポケモンをバトル場に出す際の優先スコア（SWITCH/TO_ACTIVE共通）
+
+    特性専用ポケモン（SUPPORT_ONLY_IDS）は場にいるだけで効果を発揮し攻撃力も乏しいため、
+    他に選択肢がある限り選ばれないよう常に負のスコア域に収める。
+    それ以外は残りHP（生存力）とエネルギー装着数を基準に評価する。
+    """
     if card.id == Grimmsnarl_ex:
-        score += 100
-    return score
+        return 10000 + len(card.energies) * 2
+    if card.id in SUPPORT_ONLY_IDS:
+        return -1000 + card.hp
+    return card.hp + len(card.energies) * 2
 
 
 def _score_card_option(
