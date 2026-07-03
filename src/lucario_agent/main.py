@@ -1,4 +1,5 @@
 import os
+import random
 from collections import defaultdict
 from dataclasses import dataclass
 
@@ -30,6 +31,9 @@ Ciphermaniac_Codebreaking  = 1188
 
 # ==================== デッキ安全性定数 ====================
 DECK_SAFETY_THRESHOLD = 15  # 山札残数がこれ未満なら大量ドロー系を抑制
+
+EPSILON = 0.28  # 温存判断時に探索的先出しをする確率
+_rng    = random.Random()  # 本番用の実乱数。テストではスタブを注入する
 
 # ==================== カードメタデータ（遅延初期化）====================
 card_table: dict = {}
@@ -394,7 +398,8 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
 
 def _score_play_option(obs, o, my_index, current_plan, can_attack,
                        state, my_state, hand_counts, field_counts, stadium_id,
-                       attacker1: bool = False) -> int:
+                       attacker1: bool = False,
+                       rng: "random.Random | None" = None) -> int:
     """OptionType.PLAY のスコアを返す"""
     card = get_card(obs, AreaType.HAND, o.index, my_index)
     data = card_table[card.id]
@@ -414,7 +419,14 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
             return -1
         return 5000
     if card.id == Boss_Orders:
-        return 3200 if current_plan.target >= 1 else -1
+        if current_plan.target < 1:
+            return -1  # 対象不在なら温存
+        if current_plan.remain_hp <= 0:
+            return 8800  # 即使用（確定KO）
+        active_rng = rng if rng is not None else _rng
+        if active_rng.random() < EPSILON:
+            return 6000  # 探索的先出し
+        return -1  # 温存
     if card.id == Lillie_Determination:
         return 3100 if my_state.deckCount >= DECK_SAFETY_THRESHOLD else -1
     if card.id == Ultra_Ball:

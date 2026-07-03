@@ -566,3 +566,41 @@ class TestNewCardScoring:
             hand_counts=defaultdict(int), field_counts=defaultdict(int), stadium_id=0,
         )
         assert score == -1
+
+
+# ==================== Task 6: ボスの指令のε-greedy ====================
+class _StubRng:
+    def __init__(self, value):
+        self.value = value
+
+    def random(self):
+        return self.value
+
+
+class TestBossOrdersEpsilonGreedy:
+    def _score(self, target, remain_hp, rng=None):
+        my_ps = make_player_state(hand=[Card(id=lm.Boss_Orders, serial=1, playerIndex=0)])
+        obs = MagicMock()
+        obs.current.players = [my_ps, make_player_state()]
+        plan = lm.AttackPlan(attacker=0, target=target, attack_index=0, remain_hp=remain_hp)
+        return lm._score_play_option(
+            obs, Option(type=OptionType.PLAY, index=0), my_index=0,
+            current_plan=plan, can_attack=True,
+            state=_make_state(), my_state=my_ps,
+            hand_counts=defaultdict(int), field_counts=defaultdict(int),
+            stadium_id=0, attacker1=True, rng=rng,
+        )
+
+    def test_holds_when_no_target(self):
+        assert self._score(target=-1, remain_hp=0) == -1
+
+    def test_uses_immediately_when_ko_confirmed(self):
+        assert self._score(target=1, remain_hp=0) == 8800
+
+    def test_explores_when_rng_below_epsilon(self):
+        score = self._score(target=1, remain_hp=50, rng=_StubRng(0.1))
+        assert score == 6000
+
+    def test_holds_when_rng_above_epsilon(self):
+        score = self._score(target=1, remain_hp=50, rng=_StubRng(0.9))
+        assert score == -1
