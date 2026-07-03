@@ -1,0 +1,56 @@
+# 実装サマリー：グリムスナールexデッキ フェーズB（座組整理・キチキギスex採用）
+
+**実装日：** 2026-07-03
+**関連設計書：** `docs/superpowers/specs/2026-07-03-grimmsnarl-deck-revision-phase-b-design.md`
+**関連調査：** `docs/reviews/20260703-grimmsnarl-switch-scoring-investigation.md`（フェーズA）
+
+## 背景
+
+フェーズA（`docs/implementations/20260703-grimmsnarl-switch-scoring-fix.md`）でSWITCH/TO_ACTIVEの
+同点デフォルト選択バグを修正した際、「特性専用・バトル場を想定しないポケモンの座組が厚く、
+バグの影響範囲を広げている」という仮説が挙がった。本フェーズはその仮説に基づき座組を整理した。
+
+## 変更内容
+
+### デッキ（`decks/grimmsnarl_20260701.py`）
+- スボミー(235)/コダック(858)/シャリタツ(122)を削除
+  - スボミー・コダックは実際のバトルログで低HPのまま前に出て誤選出された実害あり
+  - シャリタツは特性発動に「バトル場にいること」が必須で、今回の方針（弱いポケモンを
+    前に出さない）と根本的に矛盾するため削除
+- キチキギスex(140)を2枚新規採用（210HP高耐久、悪エネルギー2+無色1で実際に攻撃可能な
+  クルーエルアロー100ダメを持ち、特性「さかてにとる」もバトル場条件なしで安全に発動）
+- イベルタル(689)を1→2枚に増量
+
+### エージェントロジック（`src/grimmsnarl_agent/main.py`）
+- 削除カード（Budew/Tatsugiri/Psyduck）の定数と`SUPPORT_ONLY_IDS`からの参照を削除
+- `_score_attach`：グリムスナールexの攻撃分（2エネ）確保後、余剰の基本エネルギーを
+  キチキギスexにも配分できるよう追加
+- `_score_attack`：`Cruel_Arrow_ID`を`Shadow_Bullet_ID`と同じパターンで
+  `_build_card_table()`から取得し、相手フィールド（バトル場+ベンチ）に確定KO対象が
+  いれば優先するスコアリングを追加
+- `ABILITY`：キチキギスexの特性「さかてにとる」をマシマシラと同格の優先度にし、
+  非確定KOの攻撃より優先して毎ターン使用するようにした
+- SWITCH/TO_ACTIVEのスコアリングは変更不要（キチキギスexは`SUPPORT_ONLY_IDS`に
+  含めないため、既存のHP基準デフォルト式がそのまま適用され、210HPの高さから
+  グリムスナールex不在時の次善アタッカーとして自然に優先選出される）
+
+## テスト結果
+
+- `tests/test_grimmsnarl_deck.py`：新構成向けテスト追加、全件PASS
+- `tests/test_grimmsnarl_agent.py`：キチキギスexのエネルギー配分・攻撃スコアリング・
+  特性優先度のテストを追加。削除カード参照（`gm.Budew`）は`gm.Shaymin`に置換
+- リポジトリ全体：`uv run pytest -q` で189件全件PASS（回帰なし）
+
+## デッキCSV生成
+
+`output/deck_20260703_161212.csv` を生成（60行、`decks/grimmsnarl_20260701.py`のDECK定義から出力）。
+Kaggleへのアップロードはユーザーが手動で実施する。
+
+## 未対応・次回持ち越し
+
+- 新規採用したキチキギスex以外のトールボックスカード（Shaymin/Yveltal等）への
+  専用スコアリングロジック追加は引き続き未着手
+- 超高速デッキ（Mega Lucario ex、アラカザム）との相性問題は今回未対応
+- 他デッキ（cinderace_starmie_20260630.py等）への同種SWITCH/TO_ACTIVEスコアリング
+  改善の横展開は未着手
+- Kaggle再提出後のLBスコア変化確認（本改修のスコープ外、ユーザーが手動で実施）
