@@ -371,3 +371,103 @@ class TestDeckSafetyGate:
             stadium_id=0,
         )
         assert score == 3100
+
+
+# ==================== Task 4: ルナサイクル ====================
+class TestDiscardContext:
+    def _obs(self, hand_card):
+        obs = MagicMock()
+        my_ps = make_player_state(hand=[hand_card])
+        obs.current.players = [my_ps, make_player_state()]
+        return obs
+
+    def test_prefers_spare_fighting_energy(self):
+        energy = Card(id=lm.Basic_Fighting_Energy, serial=1, playerIndex=0)
+        obs = self._obs(energy)
+        score = lm._score_card_option(
+            obs, Option(type=OptionType.CARD, area=lm.AreaType.HAND, index=0, playerIndex=0),
+            context=lm.SelectContext.DISCARD, my_index=0, state=_make_state(),
+            my_state=make_player_state(),
+            field_counts=defaultdict(int),
+            hand_counts=defaultdict(int, {lm.Basic_Fighting_Energy: 2}),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), ability_used_flag=False,
+        )
+        assert score == 50
+
+    def test_protects_key_pokemon(self):
+        riolu = Card(id=lm.Riolu, serial=1, playerIndex=0)
+        obs = self._obs(riolu)
+        score = lm._score_card_option(
+            obs, Option(type=OptionType.CARD, area=lm.AreaType.HAND, index=0, playerIndex=0),
+            context=lm.SelectContext.DISCARD, my_index=0, state=_make_state(),
+            my_state=make_player_state(),
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), ability_used_flag=False,
+        )
+        assert score == -100
+
+    def test_protects_key_supporters(self):
+        boss = Card(id=lm.Boss_Orders, serial=1, playerIndex=0)
+        obs = self._obs(boss)
+        score = lm._score_card_option(
+            obs, Option(type=OptionType.CARD, area=lm.AreaType.HAND, index=0, playerIndex=0),
+            context=lm.SelectContext.DISCARD, my_index=0, state=_make_state(),
+            my_state=make_player_state(),
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), ability_used_flag=False,
+        )
+        assert score == -50
+
+    def test_default_trainer_is_low_priority_but_positive(self):
+        stretcher = Card(id=1097, serial=1, playerIndex=0)  # Night Stretcher（まだ定数化前）
+        obs = self._obs(stretcher)
+        score = lm._score_card_option(
+            obs, Option(type=OptionType.CARD, area=lm.AreaType.HAND, index=0, playerIndex=0),
+            context=lm.SelectContext.DISCARD, my_index=0, state=_make_state(),
+            my_state=make_player_state(),
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), ability_used_flag=False,
+        )
+        assert score == 10
+
+
+class TestLunaCycleAbilityScore:
+    def _obs_with_active_lunatone(self):
+        lunatone = Card(id=lm.Lunatone, serial=1, playerIndex=0)
+        obs = MagicMock()
+        obs.current.players = [make_player_state(), make_player_state()]
+        return obs, lunatone
+
+    def test_scores_high_when_deck_healthy(self, mock_card_table):
+        obs, lunatone = self._obs_with_active_lunatone()
+        obs.current.players[0].active = [lunatone]
+        my_state = make_player_state(deck_count=20)
+        score = lm._score_option(
+            obs, Option(type=OptionType.ABILITY, area=lm.AreaType.ACTIVE, index=0),
+            context=lm.SelectContext.MAIN, my_index=0, state=_make_state(),
+            my_state=my_state, op_state=make_player_state(),
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), can_attack=False,
+            stadium_id=0, ability_used_flag=False,
+        )
+        assert score == 8500
+
+    def test_suppressed_when_deck_low(self, mock_card_table):
+        obs, lunatone = self._obs_with_active_lunatone()
+        obs.current.players[0].active = [lunatone]
+        my_state = make_player_state(deck_count=10)
+        score = lm._score_option(
+            obs, Option(type=OptionType.ABILITY, area=lm.AreaType.ACTIVE, index=0),
+            context=lm.SelectContext.MAIN, my_index=0, state=_make_state(),
+            my_state=my_state, op_state=make_player_state(),
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), can_attack=False,
+            stadium_id=0, ability_used_flag=False,
+        )
+        assert score == -1

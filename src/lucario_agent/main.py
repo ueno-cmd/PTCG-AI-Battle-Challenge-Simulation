@@ -367,6 +367,17 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
                 score += 30 if not ability_used_flag or not state.energyAttached else -1
             return score
 
+        case SelectContext.DISCARD:
+            if o.playerIndex != my_index:
+                return 0
+            if card.id == Basic_Fighting_Energy:
+                return 50 if hand_counts[Basic_Fighting_Energy] >= 2 else -20
+            if card.id in (Riolu, Mega_Lucario_ex, Solrock, Lunatone):
+                return -100
+            if card.id in (Boss_Orders, Lillie_Determination):
+                return -50
+            return 10
+
         case SelectContext.ATTACH_FROM:
             return energy_score(card, o.area == AreaType.ACTIVE, attacker1)
 
@@ -453,7 +464,11 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
             return 9000 + len(pokemon.energies)
         case OptionType.ABILITY:
             card = get_card(obs, o.area, o.index, my_index)
-            return 1 if card.id == 1267 else 30000  # Lumiose City は低優先
+            if card.id == 1267:
+                return 1  # Lumiose City は低優先
+            if card.id == Lunatone:
+                return 8500 if my_state.deckCount >= DECK_SAFETY_THRESHOLD else -1
+            return 30000
         case OptionType.RETREAT:
             return 2000 if current_plan.attacker >= 1 else -1
         case OptionType.ATTACK:
