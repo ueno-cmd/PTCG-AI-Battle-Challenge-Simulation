@@ -232,6 +232,10 @@ def _score_attach(pokemon: "Pokemon", area: AreaType, card_id: int, fs: FieldSta
     if card_id == Basic_D_Energy:
         if pokemon.id == Grimmsnarl_ex:
             return 9000 - energy_count * 1000
+        if pokemon.id == Fezandipiti_ex and energy_count < 3 and fs.grimmsnarl_energy_count >= 2:
+            # クルーエルアローは悪悪+無色1=3エネで発動。グリムスナールexが
+            # シャドーバレット分（2エネ）を確保済みの場合のみ余剰分を分配する
+            return 5000 - energy_count * 500
         if pokemon.id == Munkidori and energy_count == 0 and fs.grimmsnarl_energy_count >= 2:
             # アドレナブレインはエネルギー1枚で発動するため、グリムスナールexが
             # シャドーバレット分（2エネ）を確保済みの場合のみ余剰分を分配する

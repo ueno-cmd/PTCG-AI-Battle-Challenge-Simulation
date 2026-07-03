@@ -269,6 +269,35 @@ class TestScoreAttach:
         fs = self._make_fs_with_grimmsnarl_energy(2)
         assert gm._score_attach(munkidori, AreaType.BENCH, gm.Basic_D_Energy, fs) == -1
 
+    def test_basic_d_energy_to_fezandipiti_allowed_when_grimmsnarl_attack_ready(self):
+        """グリムスナールexがシャドーバレット分（2エネ）を確保済みなら、余剰エネルギーをキチキギスexに貼れること"""
+        fezandipiti = make_pokemon(id=gm.Fezandipiti_ex, energies=[])
+        fs = self._make_fs_with_grimmsnarl_energy(2)
+        score = gm._score_attach(fezandipiti, AreaType.BENCH, gm.Basic_D_Energy, fs)
+        assert score > 0
+
+    def test_basic_d_energy_to_fezandipiti_denied_when_grimmsnarl_not_attack_ready(self):
+        """グリムスナールexがまだ攻撃可能エネルギー未確保なら、キチキギスexへの分配は認めないこと"""
+        fezandipiti = make_pokemon(id=gm.Fezandipiti_ex, energies=[])
+        fs = self._make_fs_with_grimmsnarl_energy(0)
+        assert gm._score_attach(fezandipiti, AreaType.BENCH, gm.Basic_D_Energy, fs) == -1
+
+    def test_basic_d_energy_to_fezandipiti_denied_when_already_has_3_energy(self):
+        """クルーエルアローは悪悪+無色1=3エネで発動するため、3枚目以降は不要"""
+        fezandipiti = make_pokemon(id=gm.Fezandipiti_ex, energies=[7, 7, 7])
+        fs = self._make_fs_with_grimmsnarl_energy(2)
+        assert gm._score_attach(fezandipiti, AreaType.BENCH, gm.Basic_D_Energy, fs) == -1
+
+    def test_fezandipiti_energy_priority_lower_than_grimmsnarl(self):
+        """キチキギスexへの配分スコアは、グリムスナールex本体への配分スコアを上回らないこと
+        （メインアタッカーの攻撃を絶対に阻害しない既存方針の維持）"""
+        grimmsnarl_low = make_pokemon(id=gm.Grimmsnarl_ex, energies=[])
+        fezandipiti    = make_pokemon(id=gm.Fezandipiti_ex, energies=[])
+        fs = self._make_fs_with_grimmsnarl_energy(2)
+        score_grimmsnarl  = gm._score_attach(grimmsnarl_low, AreaType.ACTIVE, gm.Basic_D_Energy, fs)
+        score_fezandipiti = gm._score_attach(fezandipiti, AreaType.BENCH, gm.Basic_D_Energy, fs)
+        assert score_grimmsnarl > score_fezandipiti
+
 
 # ==================== _score_attack ====================
 class TestScoreAttack:
