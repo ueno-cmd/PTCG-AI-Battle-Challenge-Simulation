@@ -425,33 +425,33 @@ class TestScoreCardOption:
         assert score == 0
 
     def test_switch_support_only_pokemon_scores_lower_than_attacker_same_hp(self):
-        """特性専用ポケモン（スボミー）はHPが同じでも実戦向きポケモン（イベルタル）より低スコアになること"""
-        budew   = make_pokemon(id=gm.Budew, hp=100)
+        """特性専用ポケモン（シェイミ）はHPが同じでも実戦向きポケモン（イベルタル）より低スコアになること"""
+        shaymin = make_pokemon(id=gm.Shaymin, hp=100)
         yveltal = make_pokemon(id=gm.Yveltal, hp=100)
-        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[budew, yveltal])
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[shaymin, yveltal])
         op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
         obs = self._make_obs(my_ps, op_ps)
         fs = self._make_fs()
-        o_budew   = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        o_shaymin = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
         o_yveltal = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
-        score_budew   = gm._score_card_option(obs, o_budew, SelectContext.SWITCH, 0, fs, defaultdict(int))
+        score_shaymin = gm._score_card_option(obs, o_shaymin, SelectContext.SWITCH, 0, fs, defaultdict(int))
         score_yveltal = gm._score_card_option(obs, o_yveltal, SelectContext.SWITCH, 0, fs, defaultdict(int))
-        assert score_yveltal > score_budew
+        assert score_yveltal > score_shaymin
 
     def test_to_active_support_only_pokemon_deprioritized_even_with_higher_hp(self):
         """低HPの実戦向きポケモンでも、高HPの特性専用ポケモンより優先されること
         （バトルログ83347688 step91・83438721 step125で実際に低HP特性要員が誤って前に出た事例の再現）"""
-        budew_high_hp = make_pokemon(id=gm.Budew, hp=150)
+        shaymin_high_hp = make_pokemon(id=gm.Shaymin, hp=150)
         yveltal_low_hp = make_pokemon(id=gm.Yveltal, hp=50)
-        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[budew_high_hp, yveltal_low_hp])
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[shaymin_high_hp, yveltal_low_hp])
         op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
         obs = self._make_obs(my_ps, op_ps)
         fs = self._make_fs()
-        o_budew   = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        o_shaymin = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
         o_yveltal = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
-        score_budew   = gm._score_card_option(obs, o_budew, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        score_shaymin = gm._score_card_option(obs, o_shaymin, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
         score_yveltal = gm._score_card_option(obs, o_yveltal, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
-        assert score_yveltal > score_budew
+        assert score_yveltal > score_shaymin
 
     def test_to_active_prefers_higher_hp_among_non_grimmsnarl_attackers(self):
         """グリムスナールex不在時、実戦向きポケモン同士では残りHPが高い方が優先されること"""
@@ -469,17 +469,17 @@ class TestScoreCardOption:
 
     def test_switch_munkidori_not_penalized_like_support_only_pokemon(self):
         """マシマシラは特性にエネルギー要求があり攻撃も可能なため、特性専用ポケモンほど減点されないこと"""
-        budew     = make_pokemon(id=gm.Budew, hp=100)
+        shaymin   = make_pokemon(id=gm.Shaymin, hp=100)
         munkidori = make_pokemon(id=gm.Munkidori, hp=100)
-        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[budew, munkidori])
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[shaymin, munkidori])
         op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
         obs = self._make_obs(my_ps, op_ps)
         fs = self._make_fs()
-        o_budew     = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        o_shaymin   = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
         o_munkidori = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
-        score_budew     = gm._score_card_option(obs, o_budew, SelectContext.SWITCH, 0, fs, defaultdict(int))
+        score_shaymin   = gm._score_card_option(obs, o_shaymin, SelectContext.SWITCH, 0, fs, defaultdict(int))
         score_munkidori = gm._score_card_option(obs, o_munkidori, SelectContext.SWITCH, 0, fs, defaultdict(int))
-        assert score_munkidori > score_budew
+        assert score_munkidori > score_shaymin
 
     # ---------- TO_BENCH / TO_HAND ----------
     def test_to_bench_grimmsnarl_high_when_none_in_play(self):

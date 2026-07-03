@@ -12,21 +12,22 @@ from cg.api import (
 # 20260702改修：Morpeko/Dudunsparce/Dunsparce/Dawn/Xerosic's Machinations/
 # Energy Recycler/Hero's Capeはデッキから削除済みのため定数ごと削除。
 # 代わりにTeam Rocket's Petrelを追加（docs/superpowers/specs/2026-07-02-grimmsnarl-deck-revision-design.md）
-Impidimp      = 646
-Morgrem       = 647
-Grimmsnarl_ex = 648
-Munkidori     = 112
-Froslass      = 104
-Budew         = 235
-Shaymin       = 343
-Tatsugiri     = 122
-Yveltal       = 689
-Psyduck       = 858
+# フェーズB改修（2026-07-03）：Budew/Tatsugiri/Psyduckはデッキから削除済みのため定数ごと削除。
+# 代わりにFezandipiti_exを追加（docs/superpowers/specs/2026-07-03-grimmsnarl-deck-revision-phase-b-design.md）
+Impidimp       = 646
+Morgrem        = 647
+Grimmsnarl_ex  = 648
+Munkidori      = 112
+Froslass       = 104
+Shaymin        = 343
+Yveltal        = 689
+Fezandipiti_ex = 140
 
 # 特性が「場にいれば無条件で発動」する専用要員。バトル場に出す前提のカードではないため、
 # SWITCH/TO_ACTIVEでは他に選択肢がある限り選ばれないよう明確に減点する。
 # Munkidoriは特性発動にエネルギー要求があり攻撃も可能なため対象外。
-SUPPORT_ONLY_IDS = {Froslass, Budew, Shaymin, Tatsugiri, Psyduck}
+# Fezandipiti_exは210HPの実戦アタッカーであり特性もバトル場条件なしのため対象外。
+SUPPORT_ONLY_IDS = {Froslass, Shaymin}
 
 Rare_Candy             = 1079
 Buddy_Buddy_Poffin     = 1086
