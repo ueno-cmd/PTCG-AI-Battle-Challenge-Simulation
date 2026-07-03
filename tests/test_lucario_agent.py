@@ -27,8 +27,6 @@ def _card(card_id: int, **kwargs) -> MockCardData:
 def mock_card_table(monkeypatch):
     """全テストで card_table をモックに差し替える"""
     table = {
-        lm.Makuhita:              _card(lm.Makuhita),
-        lm.Hariyama:              _card(lm.Hariyama, stage1=True),
         lm.Lunatone:              _card(lm.Lunatone),
         lm.Solrock:               _card(lm.Solrock),
         lm.Riolu:                 _card(lm.Riolu),
@@ -41,16 +39,13 @@ def mock_card_table(monkeypatch):
         1267: _card(1267),            # Lumiose City
         12:   _card(12,   cardType=CardType.SPECIAL_ENERGY),  # Legacy Energy
         1172: _card(1172, cardType=CardType.TOOL),            # Lillie's Pearl
-        lm.Switch:               _card(lm.Switch,               cardType=CardType.ITEM),
         lm.Premium_Power_Pro:    _card(lm.Premium_Power_Pro,    cardType=CardType.ITEM),
         lm.Boss_Orders:          _card(lm.Boss_Orders,          cardType=CardType.SUPPORTER),
-        lm.Carmine:              _card(lm.Carmine,              cardType=CardType.SUPPORTER),
         lm.Lillie_Determination: _card(lm.Lillie_Determination, cardType=CardType.SUPPORTER),
         lm.Gravity_Mountain:     _card(lm.Gravity_Mountain,     cardType=CardType.STADIUM),
         lm.Hero_Cape:            _card(lm.Hero_Cape,            cardType=CardType.TOOL),
         lm.Fighting_Gong:        _card(lm.Fighting_Gong,        cardType=CardType.ITEM),
         lm.Poke_Pad:             _card(lm.Poke_Pad,             cardType=CardType.ITEM),
-        lm.Dusk_Ball:            _card(lm.Dusk_Ball,            cardType=CardType.ITEM),
     }
     monkeypatch.setattr(lm, "card_table", table)
     return table
@@ -115,41 +110,42 @@ class TestPokemonScore:
         with_e = make_pokemon(id=112, hp=90, energies=[6])
         assert lm.pokemon_score(with_e) > lm.pokemon_score(no_e)
 
-    def test_stage1_gets_bonus(self):
+    def test_stage1_gets_bonus(self, mock_card_table):
         """stage1 ポケモンは同 HP の basic より高スコア"""
-        p_stage1 = make_pokemon(id=lm.Hariyama, hp=130)  # stage1=True in mock
-        p_basic  = make_pokemon(id=lm.Riolu,    hp=130)
+        mock_card_table[900] = MockCardData(cardId=900, stage1=True)
+        p_stage1 = make_pokemon(id=900, hp=130)
+        p_basic  = make_pokemon(id=lm.Riolu, hp=130)
         assert lm.pokemon_score(p_stage1) > lm.pokemon_score(p_basic)
 
 
 class TestEnergyScore:
     def test_active_slot_gets_bonus(self):
         p      = make_pokemon(id=lm.Riolu, energies=[])
-        active = lm.energy_score(p, True,  False, False)
-        bench  = lm.energy_score(p, False, False, False)
+        active = lm.energy_score(p, True,  False)
+        bench  = lm.energy_score(p, False, False)
         assert active > bench
 
     def test_riolu_low_energy_gets_bonus(self):
         """Riolu にエネルギーが足りない場合はスコアが高い"""
         no_e  = make_pokemon(id=lm.Riolu, energies=[])
         two_e = make_pokemon(id=lm.Riolu, energies=[6, 6])
-        assert lm.energy_score(no_e, False, False, False) > lm.energy_score(two_e, False, False, False)
+        assert lm.energy_score(no_e, False, False) > lm.energy_score(two_e, False, False)
 
     def test_lunatone_deprioritised(self):
         p_luna  = make_pokemon(id=lm.Lunatone, energies=[])
         p_riolu = make_pokemon(id=lm.Riolu,    energies=[])
-        assert lm.energy_score(p_riolu, False, False, False) > lm.energy_score(p_luna, False, False, False)
+        assert lm.energy_score(p_riolu, False, False) > lm.energy_score(p_luna, False, False)
 
     def test_solrock_deprioritised_after_one_energy(self):
         p_no  = make_pokemon(id=lm.Solrock, energies=[])
         p_one = make_pokemon(id=lm.Solrock, energies=[6])
-        assert lm.energy_score(p_no, False, False, False) > lm.energy_score(p_one, False, False, False)
+        assert lm.energy_score(p_no, False, False) > lm.energy_score(p_one, False, False)
 
     def test_attacker1_flag_lowers_score(self):
         """既に attacker1 が準備できている場合、Riolu へのエネルギー優先度を下げる"""
         p            = make_pokemon(id=lm.Riolu, energies=[])
-        without_flag = lm.energy_score(p, False, False, False)
-        with_flag    = lm.energy_score(p, False, True,  False)
+        without_flag = lm.energy_score(p, False, False)
+        with_flag    = lm.energy_score(p, False, True)
         assert without_flag > with_flag
 
 
@@ -161,30 +157,23 @@ from tests.conftest import make_player_state
 
 class TestCollectFieldState:
     def test_counts_active_and_bench(self):
-        riolu    = make_pokemon(id=lm.Riolu)
-        hariyama = make_pokemon(id=lm.Hariyama)
-        ps = make_player_state(active_pokemon=riolu, bench=[hariyama])
-        fc, hc, dc, a1, a2 = lm._collect_field_state(ps)
-        assert fc[lm.Riolu]    == 1
-        assert fc[lm.Hariyama] == 1
+        riolu   = make_pokemon(id=lm.Riolu)
+        solrock = make_pokemon(id=lm.Solrock)
+        ps = make_player_state(active_pokemon=riolu, bench=[solrock])
+        fc, hc, dc, a1 = lm._collect_field_state(ps)
+        assert fc[lm.Riolu]   == 1
+        assert fc[lm.Solrock] == 1
 
     def test_attacker1_true_when_lucario_has_2_energy(self):
         lucario = make_pokemon(id=lm.Mega_Lucario_ex, energies=[6, 6])
         ps = make_player_state(active_pokemon=lucario)
-        _, _, _, a1, a2 = lm._collect_field_state(ps)
+        _, _, _, a1 = lm._collect_field_state(ps)
         assert a1 is True
-        assert a2 is False
-
-    def test_attacker2_true_when_hariyama_has_3_energy(self):
-        hariyama = make_pokemon(id=lm.Hariyama, energies=[6, 6, 6])
-        ps = make_player_state(active_pokemon=hariyama)
-        _, _, _, a1, a2 = lm._collect_field_state(ps)
-        assert a2 is True
 
     def test_no_attacker1_when_energy_insufficient(self):
         lucario = make_pokemon(id=lm.Mega_Lucario_ex, energies=[6])  # 1 枚のみ
         ps = make_player_state(active_pokemon=lucario)
-        _, _, _, a1, _ = lm._collect_field_state(ps)
+        _, _, _, a1 = lm._collect_field_state(ps)
         assert a1 is False
 
 

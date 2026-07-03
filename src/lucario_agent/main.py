@@ -8,22 +8,17 @@ from cg.api import (
 )
 
 # ==================== カードID定数 ====================
-Makuhita             = 673
-Hariyama             = 674
-Lunatone             = 675
-Solrock              = 676
-Riolu                = 677
-Mega_Lucario_ex      = 678
-Dusk_Ball            = 1102
-Switch               = 1123
-Premium_Power_Pro    = 1141
-Fighting_Gong        = 1142
-Poke_Pad             = 1152
-Hero_Cape            = 1159
-Boss_Orders          = 1182
-Carmine              = 1192
-Lillie_Determination = 1227
-Gravity_Mountain     = 1252
+Lunatone              = 675
+Solrock               = 676
+Riolu                 = 677
+Mega_Lucario_ex       = 678
+Premium_Power_Pro     = 1141
+Fighting_Gong         = 1142
+Poke_Pad              = 1152
+Hero_Cape             = 1159
+Boss_Orders           = 1182
+Lillie_Determination  = 1227
+Gravity_Mountain      = 1252
 Basic_Fighting_Energy = 6
 
 # ==================== カードメタデータ（遅延初期化）====================
@@ -138,20 +133,13 @@ def pokemon_score(pokemon: Pokemon) -> int:
     return score
 
 
-def energy_score(pokemon: Pokemon, active: bool, attacker1: bool, attacker2: bool) -> int:
+def energy_score(pokemon: Pokemon, active: bool, attacker1: bool) -> int:
     """エネルギー付与先ポケモンの優先度スコアを返す"""
     energy_count = len(pokemon.energies)
     score = 8000
     if active:
         score += 10
-    if pokemon.id in (Makuhita, Hariyama):
-        if pokemon.id == Hariyama:
-            score += 1
-        if energy_count < 3:
-            score += 100
-        if attacker2:
-            score -= 50
-    elif pokemon.id == Lunatone:
+    if pokemon.id == Lunatone:
         score -= 100
     elif pokemon.id == Solrock:
         if energy_count < 1:
@@ -175,16 +163,12 @@ def _collect_field_state(my_state):
     hand_counts    = defaultdict(int)
     discard_counts = defaultdict(int)
     attacker1 = False
-    attacker2 = False
 
     for card in my_state.active + my_state.bench:
         if card is None:
             continue
         field_counts[card.id] += 1
-        if card.id in (Makuhita, Hariyama):
-            if len(card.energies) >= 3:
-                attacker2 = True
-        elif card.id in (Riolu, Mega_Lucario_ex):
+        if card.id in (Riolu, Mega_Lucario_ex):
             if len(card.energies) >= 2:
                 attacker1 = True
 
@@ -194,7 +178,7 @@ def _collect_field_state(my_state):
     for card in my_state.discard:
         discard_counts[card.id] += 1
 
-    return field_counts, hand_counts, discard_counts, attacker1, attacker2
+    return field_counts, hand_counts, discard_counts, attacker1
 
 
 def _get_stadium_id(state) -> int:
@@ -214,13 +198,7 @@ def _analyze_main_options(obs: Observation, select, my_index: int) -> tuple[bool
     for o in select.option:
         if o.type == OptionType.PLAY:
             card = get_card(obs, AreaType.HAND, o.index, my_index)
-            if card.id == Switch:
-                can_switch = True
-            elif card.id == Boss_Orders:
-                can_op_switch = True
-        elif o.type == OptionType.EVOLVE:
-            card = get_card(obs, AreaType.HAND, o.index, my_index)
-            if card.id == Hariyama:
+            if card.id == Boss_Orders:
                 can_op_switch = True
         elif o.type == OptionType.RETREAT:
             can_switch = True
@@ -276,20 +254,6 @@ def calc_attack_plan(
                     base_score -= 500
             elif a == 1:
                 break
-            elif my_pokemon.id == Hariyama:
-                energy_required = 3
-                base_damage     = 210
-            elif my_pokemon.id == Makuhita:
-                for o in obs.select.option:
-                    if o.type == OptionType.EVOLVE:
-                        idx = o.inPlayIndex + (1 if o.inPlayArea == AreaType.BENCH else 0)
-                        if idx == i:
-                            break
-                else:
-                    break
-                base_score     -= 100
-                energy_required = 3
-                base_damage     = 210
             elif my_pokemon.id == Solrock:
                 if field_counts[Lunatone] >= 1:
                     energy_required = 1
@@ -355,7 +319,7 @@ def calc_attack_plan(
 # ==================== スコアリング ====================
 def _score_card_option(obs, o, context, my_index, state, my_state,
                        field_counts, hand_counts, discard_counts,
-                       attacker1, attacker2, current_plan, ability_used_flag) -> int:
+                       attacker1, current_plan, ability_used_flag) -> int:
     """OptionType.CARD のスコアをコンテキスト別に返す"""
     card = get_card(obs, o.area, o.index, o.playerIndex)
     if card is None:
@@ -370,10 +334,6 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
                     score += 100
                 if card.id == Mega_Lucario_ex:
                     score += 8 if len(my_state.prize) in (2, 3) else 20
-                elif card.id == Hariyama and energy_count >= 2:
-                    score += 15
-                elif card.id == Makuhita and energy_count >= 2:
-                    score += 10
                 elif card.id == Solrock:
                     score += 5
                 elif card.id == Riolu:
@@ -387,17 +347,11 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
                 return 4 if state.firstPlayer != my_index else 2
             if card.id == Riolu:
                 return 3
-            if card.id == Makuhita:
-                return 1
             return 0
 
         case SelectContext.TO_HAND:
             score = 200 - hand_counts[card.id] * 100
-            if card.id == Makuhita:
-                score += 10 if field_counts[card.id] < 1 else -10
-            elif card.id == Hariyama:
-                score += 20 if field_counts[Makuhita] >= 1 else -20
-            elif card.id == Lunatone:
+            if card.id == Lunatone:
                 score += -250 if field_counts[card.id] >= 1 else 60
             elif card.id == Solrock:
                 score += -250 if field_counts[card.id] >= 1 else 50
@@ -411,7 +365,7 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
             return score
 
         case SelectContext.ATTACH_FROM:
-            return energy_score(card, o.area == AreaType.ACTIVE, attacker1, attacker2)
+            return energy_score(card, o.area == AreaType.ACTIVE, attacker1)
 
         case _:
             return 0
@@ -429,20 +383,16 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
             return -1 if field_counts[Riolu] + field_counts[Mega_Lucario_ex] >= 2 else 20000
         return 20000
     # トレーナーズ
-    if card.id == Switch:
-        return 6000 if current_plan.attacker > 0 else -1
     if card.id == Premium_Power_Pro:
         if state.supporterPlayed and current_plan.remain_hp <= 0:
             return -1
         if not can_attack:
-            if not state.supporterPlayed and hand_counts[Carmine] > 0 and hand_counts[Lillie_Determination] == 0:
+            if not state.supporterPlayed and hand_counts[Boss_Orders] == 0 and hand_counts[Lillie_Determination] == 0:
                 return 3050
             return -1
         return 5000
     if card.id == Boss_Orders:
         return 3200 if current_plan.target >= 1 else -1
-    if card.id == Carmine:
-        return 3000
     if card.id == Lillie_Determination:
         return 3100
     if card.id == Gravity_Mountain:
@@ -450,7 +400,7 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
     return 10000
 
 
-def _score_attach_option(obs, o, my_index, current_plan, attacker1, attacker2) -> int:
+def _score_attach_option(obs, o, my_index, current_plan, attacker1) -> int:
     """OptionType.ATTACH のスコアを返す"""
     card = get_card(obs, AreaType.HAND, o.index, my_index)
     if card.id == Hero_Cape:
@@ -462,7 +412,7 @@ def _score_attach_option(obs, o, my_index, current_plan, attacker1, attacker2) -
             score += 200
         return score
     pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
-    score = energy_score(pokemon, o.inPlayArea == AreaType.ACTIVE, attacker1, attacker2)
+    score = energy_score(pokemon, o.inPlayArea == AreaType.ACTIVE, attacker1)
     if o.inPlayArea == AreaType.ACTIVE:
         if current_plan.attacker == 0 and current_plan.energy:
             score += 200
@@ -474,7 +424,7 @@ def _score_attach_option(obs, o, my_index, current_plan, attacker1, attacker2) -
 
 def _score_option(obs, o, context, my_index, state, my_state, op_state,
                   field_counts, hand_counts, discard_counts,
-                  attacker1, attacker2, current_plan, can_attack,
+                  attacker1, current_plan, can_attack,
                   stadium_id, ability_used_flag) -> int:
     """1 つのオプションにヒューリスティックスコアを付ける"""
     match o.type:
@@ -486,7 +436,7 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
             return _score_card_option(
                 obs, o, context, my_index, state, my_state,
                 field_counts, hand_counts, discard_counts,
-                attacker1, attacker2, current_plan, ability_used_flag,
+                attacker1, current_plan, ability_used_flag,
             )
         case OptionType.PLAY:
             return _score_play_option(
@@ -494,13 +444,10 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
                 state, hand_counts, field_counts, stadium_id,
             )
         case OptionType.ATTACH:
-            return _score_attach_option(obs, o, my_index, current_plan, attacker1, attacker2)
+            return _score_attach_option(obs, o, my_index, current_plan, attacker1)
         case OptionType.EVOLVE:
             pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
-            score = 9000 + len(pokemon.energies)
-            if pokemon.id == Makuhita and current_plan.target == 0:
-                score = -1
-            return score
+            return 9000 + len(pokemon.energies)
         case OptionType.ABILITY:
             card = get_card(obs, o.area, o.index, my_index)
             return 1 if card.id == 1267 else 30000  # Lumiose City は低優先
@@ -545,7 +492,7 @@ def agent(obs_dict: dict) -> list[int]:
         pre_turn = state.turn
         _reset_turn_state()
 
-    field_counts, hand_counts, discard_counts, attacker1, attacker2 = _collect_field_state(my_state)
+    field_counts, hand_counts, discard_counts, attacker1 = _collect_field_state(my_state)
     stadium_id = _get_stadium_id(state)
 
     can_switch = can_op_switch = can_use_mega_brave = can_attack = False
@@ -562,7 +509,7 @@ def agent(obs_dict: dict) -> list[int]:
         _score_option(
             obs, o, context, my_index, state, my_state, op_state,
             field_counts, hand_counts, discard_counts,
-            attacker1, attacker2, plan, can_attack,
+            attacker1, plan, can_attack,
             stadium_id, ability_used,
         )
         for o in select.option
