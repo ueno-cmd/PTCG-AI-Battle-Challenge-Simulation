@@ -233,15 +233,25 @@ def _score_attach(pokemon: "Pokemon", area: AreaType, card_id: int, fs: FieldSta
     """ATTACH コンテキスト：エネルギー/ツールの付与先スコア"""
     energy_count = len(pokemon.energies)
     if card_id == Basic_D_Energy:
+        # グリムスナールexが攻撃可能エネルギーを確保済み、または場にそもそも
+        # 不在（きぜつ等）なら、キチキギスex・マシマシラへの分配を妨げない。
+        # 「場に不在」を含めないと、グリムスナールex不在時（次善アタッカーの
+        # キチキギスexが最も必要な場面）に限ってゲートが閉じてしまう不具合があった
+        grimmsnarl_ready_or_absent = (
+            fs.grimmsnarl_energy_count >= 2 or fs.field_counts[Grimmsnarl_ex] == 0
+        )
         if pokemon.id == Grimmsnarl_ex:
-            return 9000 - energy_count * 1000
-        if pokemon.id == Fezandipiti_ex and energy_count < 3 and fs.grimmsnarl_energy_count >= 2:
-            # クルーエルアローは悪悪+無色1=3エネで発動。グリムスナールexが
-            # シャドーバレット分（2エネ）を確保済みの場合のみ余剰分を分配する
+            if energy_count < 2:
+                return 9000 - energy_count * 1000
+            # シャドーバレット（悪悪=2エネ）は追加投資しても威力が変わらないため、
+            # 確保後はキチキギスex・マシマシラへの配分を優先する
+            return 3500 - energy_count * 100
+        if pokemon.id == Fezandipiti_ex and energy_count < 3 and grimmsnarl_ready_or_absent:
+            # クルーエルアローの実際のコストは無色3（本デッキは全て悪エネルギーのため
+            # 悪3枚で支払える）
             return 5000 - energy_count * 500
-        if pokemon.id == Munkidori and energy_count == 0 and fs.grimmsnarl_energy_count >= 2:
-            # アドレナブレインはエネルギー1枚で発動するため、グリムスナールexが
-            # シャドーバレット分（2エネ）を確保済みの場合のみ余剰分を分配する
+        if pokemon.id == Munkidori and energy_count == 0 and grimmsnarl_ready_or_absent:
+            # アドレナブレインはエネルギー1枚で発動する
             return 4000
         return -1
     return 3000
@@ -402,7 +412,10 @@ def agent(obs_dict: dict) -> list[int]:
                     score = 0
                 else:
                     # アビリティは無償（ターンを消費しない）ため、非確定KOの攻撃（2000点）より
-                    # 優先して毎ターン使用する。ただしEVOLVE（10000+）や確定KO攻撃（5000）は上回らない
+                    # 優先して使用する。ただしEVOLVE（10000+）や確定KO攻撃（5000）は上回らない。
+                    # マシマシラ（アドレナブレイン）は悪エネルギー装着のみが条件で毎ターン使用可能だが、
+                    # キチキギスex（さかてにとる）は「前の相手の番に自分のポケモンがきぜつしていた場合」
+                    # のみ選択肢として提示されるため常に使えるわけではない。提示された時は必ず優先する方針
                     score = 2500 if card.id in (Munkidori, Fezandipiti_ex) else 1200
             case OptionType.RETREAT:
                 # Grimmsnarl exが瀕死（想定される大技の一撃=180ダメ以下しか耐えられない）なら逃げる

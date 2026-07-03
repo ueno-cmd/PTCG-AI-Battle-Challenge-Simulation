@@ -244,8 +244,10 @@ class TestScoreAttach:
         assert gm._score_attach(grimmsnarl, AreaType.ACTIVE, 9999, fs) == 3000
 
     def _make_fs_with_grimmsnarl_energy(self, grimmsnarl_energy_count: int) -> "gm.FieldState":
+        # grimmsnarl_active=True（バトル場に存在）と整合するよう、
+        # field_counts にもグリムスナールexの存在を反映しておく
         return gm.FieldState(
-            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            field_counts=defaultdict(int, {gm.Grimmsnarl_ex: 1}), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), grimmsnarl_active=True,
             grimmsnarl_energy_count=grimmsnarl_energy_count, impidimp_bench_idx=-1,
             munkidori_bench_idx=-1, rare_candy_in_hand=False,
@@ -299,6 +301,43 @@ class TestScoreAttach:
         score_grimmsnarl  = gm._score_attach(grimmsnarl_low, AreaType.ACTIVE, gm.Basic_D_Energy, fs)
         score_fezandipiti = gm._score_attach(fezandipiti, AreaType.BENCH, gm.Basic_D_Energy, fs)
         assert score_grimmsnarl > score_fezandipiti
+
+    def test_basic_d_energy_to_fezandipiti_allowed_when_grimmsnarl_absent_from_field(self):
+        """グリムスナールexが場に不在（きぜつ等）でも、次善アタッカーのキチキギスexへの
+        エネルギー配分を止めないこと（グリムスナールex不在時こそキチキギスexが必要なため）"""
+        fezandipiti = make_pokemon(id=gm.Fezandipiti_ex, energies=[])
+        fs = gm.FieldState(
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), grimmsnarl_active=False,
+            grimmsnarl_energy_count=0, impidimp_bench_idx=-1,
+            munkidori_bench_idx=-1, rare_candy_in_hand=False,
+            my_active_hp=200, op_active_hp=200, op_bench_hp=[],
+        )
+        score = gm._score_attach(fezandipiti, AreaType.ACTIVE, gm.Basic_D_Energy, fs)
+        assert score > 0
+
+    def test_basic_d_energy_to_fezandipiti_denied_when_grimmsnarl_on_field_but_not_ready(self):
+        """グリムスナールexが場に存在する（ベンチ等）が攻撃可能エネルギー未確保なら、
+        引き続きキチキギスexへの配分は認めないこと（不用意な分散を防ぐ既存方針の維持）"""
+        fezandipiti = make_pokemon(id=gm.Fezandipiti_ex, energies=[])
+        fs = gm.FieldState(
+            field_counts=defaultdict(int, {gm.Grimmsnarl_ex: 1}), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), grimmsnarl_active=False,
+            grimmsnarl_energy_count=0, impidimp_bench_idx=-1,
+            munkidori_bench_idx=-1, rare_candy_in_hand=False,
+            my_active_hp=200, op_active_hp=200, op_bench_hp=[],
+        )
+        assert gm._score_attach(fezandipiti, AreaType.BENCH, gm.Basic_D_Energy, fs) == -1
+
+    def test_grimmsnarl_energy_priority_capped_once_attack_ready(self):
+        """シャドーバレット分（2エネ）確保後は、グリムスナールex本体への追加投資より
+        キチキギスexへの配分を優先すること（追加投資しても威力が変わらないため）"""
+        grimmsnarl_ready = make_pokemon(id=gm.Grimmsnarl_ex, energies=[7, 7])
+        fezandipiti = make_pokemon(id=gm.Fezandipiti_ex, energies=[])
+        fs = self._make_fs_with_grimmsnarl_energy(2)
+        score_grimmsnarl  = gm._score_attach(grimmsnarl_ready, AreaType.ACTIVE, gm.Basic_D_Energy, fs)
+        score_fezandipiti = gm._score_attach(fezandipiti, AreaType.BENCH, gm.Basic_D_Energy, fs)
+        assert score_fezandipiti > score_grimmsnarl
 
 
 # ==================== _score_attack ====================
