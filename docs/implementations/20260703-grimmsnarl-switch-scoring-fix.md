@@ -24,7 +24,7 @@
 
 ## テスト結果
 
-- 新規テスト8件（`_score_card_option`のSWITCH/TO_ACTIVE系5件、`_score_attach`のマシマシラ系3件）を先に失敗させてから実装（TDD）
+- 新規テスト7件（`_score_card_option`のSWITCH/TO_ACTIVE系4件、`_score_attach`のマシマシラ系3件）を先に失敗させてから実装（TDD）
 - `uv run pytest tests/test_grimmsnarl_agent.py` 61件全PASS
 - `uv run pytest -q`（リポジトリ全体）177件全PASS、既存テストの回帰なし
 - 実際に問題となった盤面を直接再現し、修正後は正しく選出されることを確認
