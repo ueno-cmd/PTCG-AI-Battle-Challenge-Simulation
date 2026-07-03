@@ -403,7 +403,7 @@ def agent(obs_dict: dict) -> list[int]:
                 else:
                     # アビリティは無償（ターンを消費しない）ため、非確定KOの攻撃（2000点）より
                     # 優先して毎ターン使用する。ただしEVOLVE（10000+）や確定KO攻撃（5000）は上回らない
-                    score = 2500 if card.id == Munkidori else 1200
+                    score = 2500 if card.id in (Munkidori, Fezandipiti_ex) else 1200
             case OptionType.RETREAT:
                 # Grimmsnarl exが瀕死（想定される大技の一撃=180ダメ以下しか耐えられない）なら逃げる
                 if fs.grimmsnarl_active and fs.my_active_hp <= 180:

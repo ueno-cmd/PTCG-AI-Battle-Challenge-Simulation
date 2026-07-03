@@ -724,6 +724,21 @@ class TestAgent:
         result = gm.agent(obs_dict)
         assert options[result[0]].type == OptionType.ABILITY
 
+    def test_fezandipiti_ability_fires_before_non_lethal_attack(self):
+        """キチキギスexの特性（さかてにとる）もマシマシラ同様、確定KOでない攻撃より優先して
+        毎ターン使用されること"""
+        fezandipiti = make_pokemon(id=gm.Fezandipiti_ex, energies=[7, 7, 7])
+        grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, hp=300, max_hp=320, energies=[7, 7])
+        my_ps = make_player_state(active_pokemon=grimmsnarl, bench=[fezandipiti])
+        # op_state を指定しない場合、make_main_obs のデフォルトは hp=200（>180、非確定KO）
+        options = [
+            Option(type=OptionType.ABILITY, area=AreaType.BENCH, index=0),
+            Option(type=OptionType.ATTACK, attackId=9102),  # Shadow_Bullet_ID (mocked)、非確定KO
+        ]
+        obs_dict = make_main_obs(my_state=my_ps, options=options)
+        result = gm.agent(obs_dict)
+        assert options[result[0]].type == OptionType.ABILITY
+
     def test_prefers_boss_orders_when_ko_target_available(self):
         """相手ベンチにKO可能な対象がいる場合、ボスの指令(PLAY)がENDより優先されること"""
         my_ps = make_player_state(active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex))
