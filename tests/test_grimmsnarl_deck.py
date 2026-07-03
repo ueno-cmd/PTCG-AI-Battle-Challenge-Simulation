@@ -62,3 +62,20 @@ def test_boss_orders_count():
 def test_energy_recycler_removed():
     count = sum(c for i, c in DECK if i == 1139)
     assert count == 0, "Energy Recycler は今回の改修で削除されたはず"
+
+
+def test_phase_b_removed_pokemon_absent():
+    ids = {card_id for card_id, _ in DECK}
+    assert 235 not in ids, "Budew(スボミー) はフェーズBで削除されたはず"
+    assert 122 not in ids, "Tatsugiri(シャリタツ) はフェーズBで削除されたはず"
+    assert 858 not in ids, "Psyduck(コダック) はフェーズBで削除されたはず"
+
+
+def test_fezandipiti_ex_count():
+    count = sum(c for i, c in DECK if i == 140)
+    assert count == 2, "キチキギスex(140)は2枚採用のはず"
+
+
+def test_yveltal_count_increased():
+    count = sum(c for i, c in DECK if i == 689)
+    assert count == 2, "イベルタル(689)はフェーズBで2枚に増量されたはず"
