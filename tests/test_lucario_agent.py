@@ -314,3 +314,60 @@ class TestAgent:
         lm.agent(obs_dict)
         assert lm.plan.attacker == -1
         assert lm.ability_used  is False
+
+
+# ==================== Task 3: デッキアウト防止ゲート ====================
+from unittest.mock import MagicMock as _MM
+
+
+def _obs_with_hand(hand_cards, my_index=0, deck_count=50):
+    obs = MagicMock()
+    my_ps = make_player_state(hand=hand_cards, deck_count=deck_count)
+    op_ps = make_player_state()
+    players = [my_ps, op_ps] if my_index == 0 else [op_ps, my_ps]
+    obs.current.players = players
+    return obs, players[my_index]
+
+
+class TestDeckSafetyGate:
+    def test_lillie_determination_scores_normally_when_deck_healthy(self):
+        card = Card(id=lm.Lillie_Determination, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=20)
+        o = Option(type=OptionType.PLAY, index=0)
+        state = _make_state()
+        state.supporterPlayed = False
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=state, my_state=my_state,
+            hand_counts=defaultdict(int), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == 3100
+
+    def test_lillie_determination_suppressed_when_deck_low(self):
+        card = Card(id=lm.Lillie_Determination, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=10)
+        o = Option(type=OptionType.PLAY, index=0)
+        state = _make_state()
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=state, my_state=my_state,
+            hand_counts=defaultdict(int), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == -1
+
+    def test_threshold_boundary_is_inclusive(self):
+        """山札残数がちょうどしきい値なら通常スコア"""
+        card = Card(id=lm.Lillie_Determination, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=lm.DECK_SAFETY_THRESHOLD)
+        o = Option(type=OptionType.PLAY, index=0)
+        state = _make_state()
+        state.supporterPlayed = False
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=state, my_state=my_state,
+            hand_counts=defaultdict(int), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == 3100

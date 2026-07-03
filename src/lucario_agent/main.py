@@ -21,6 +21,9 @@ Lillie_Determination  = 1227
 Gravity_Mountain      = 1252
 Basic_Fighting_Energy = 6
 
+# ==================== デッキ安全性定数 ====================
+DECK_SAFETY_THRESHOLD = 15  # 山札残数がこれ未満なら大量ドロー系を抑制
+
 # ==================== カードメタデータ（遅延初期化）====================
 card_table: dict = {}
 
@@ -372,7 +375,7 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
 
 
 def _score_play_option(obs, o, my_index, current_plan, can_attack,
-                       state, hand_counts, field_counts, stadium_id) -> int:
+                       state, my_state, hand_counts, field_counts, stadium_id) -> int:
     """OptionType.PLAY のスコアを返す"""
     card = get_card(obs, AreaType.HAND, o.index, my_index)
     data = card_table[card.id]
@@ -394,7 +397,7 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
     if card.id == Boss_Orders:
         return 3200 if current_plan.target >= 1 else -1
     if card.id == Lillie_Determination:
-        return 3100
+        return 3100 if my_state.deckCount >= DECK_SAFETY_THRESHOLD else -1
     if card.id == Gravity_Mountain:
         return -1 if stadium_id == 0 else 10000
     return 10000
@@ -441,7 +444,7 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
         case OptionType.PLAY:
             return _score_play_option(
                 obs, o, my_index, current_plan, can_attack,
-                state, hand_counts, field_counts, stadium_id,
+                state, my_state, hand_counts, field_counts, stadium_id,
             )
         case OptionType.ATTACH:
             return _score_attach_option(obs, o, my_index, current_plan, attacker1)
