@@ -47,6 +47,7 @@ _rng                  = random.Random()  # 本番用の実乱数。テストで�
 
 # ==================== アタックID（_build_card_table で設定）====================
 Shadow_Bullet_ID: int = 0
+Cruel_Arrow_ID: int = 0
 
 # ==================== カードメタデータ（遅延初期化）====================
 card_table: dict = {}
@@ -54,11 +55,13 @@ card_table: dict = {}
 
 def _build_card_table() -> dict:
     """card_table を初回のみ構築し、攻撃IDも設定する"""
-    global card_table, Shadow_Bullet_ID
+    global card_table, Shadow_Bullet_ID, Cruel_Arrow_ID
     if not card_table:
         card_table       = {c.cardId: c for c in all_card_data()}
         grimmsnarl_data  = card_table[Grimmsnarl_ex]
         Shadow_Bullet_ID = grimmsnarl_data.attacks[0]  # Shadow Bullet
+        fezandipiti_data = card_table[Fezandipiti_ex]
+        Cruel_Arrow_ID   = fezandipiti_data.attacks[0]  # Cruel Arrow
     return card_table
 
 
@@ -244,12 +247,20 @@ def _score_attach(pokemon: "Pokemon", area: AreaType, card_id: int, fs: FieldSta
     return 3000
 
 
+CRUEL_ARROW_DAMAGE = 100  # クルーエルアローの与ダメージ（相手1匹を選んで攻撃・ベンチも弱点抵抗力無視で狙える）
+
+
 def _score_attack(attack_id: int, fs: FieldState) -> int:
     """ATTACK コンテキスト：ワザ選択スコア"""
     if attack_id == Shadow_Bullet_ID:
         # 相手バトルポケモンのHPがSHADOW_BULLET_DAMAGE以下ならShadow Bulletで確実にKOできる
         # （きぜつ確定）ので、RETREATの3000点より高くして撤退より攻撃を優先する
         return 5000 if fs.op_active_hp <= SHADOW_BULLET_DAMAGE else 2000
+    if attack_id == Cruel_Arrow_ID:
+        # クルーエルアローは相手1匹（バトル場・ベンチ問わず）を選んで攻撃できるため、
+        # どちらかにCRUEL_ARROW_DAMAGE以下の確定KO対象がいれば優先する
+        op_hps = [fs.op_active_hp, *fs.op_bench_hp]
+        return 5000 if any(hp <= CRUEL_ARROW_DAMAGE for hp in op_hps) else 2000
     return 1000
 
 
