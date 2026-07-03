@@ -20,6 +20,13 @@ Boss_Orders           = 1182
 Lillie_Determination  = 1227
 Gravity_Mountain      = 1252
 Basic_Fighting_Energy = 6
+Ultra_Ball                 = 1121
+Pokegear                   = 1122
+Night_Stretcher            = 1097
+Judge                      = 1213
+Hilda                      = 1225
+Wally_Compassion           = 1229
+Ciphermaniac_Codebreaking  = 1188
 
 # ==================== デッキ安全性定数 ====================
 DECK_SAFETY_THRESHOLD = 15  # 山札残数がこれ未満なら大量ドロー系を抑制
@@ -386,7 +393,8 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
 
 
 def _score_play_option(obs, o, my_index, current_plan, can_attack,
-                       state, my_state, hand_counts, field_counts, stadium_id) -> int:
+                       state, my_state, hand_counts, field_counts, stadium_id,
+                       attacker1: bool = False) -> int:
     """OptionType.PLAY のスコアを返す"""
     card = get_card(obs, AreaType.HAND, o.index, my_index)
     data = card_table[card.id]
@@ -409,6 +417,28 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
         return 3200 if current_plan.target >= 1 else -1
     if card.id == Lillie_Determination:
         return 3100 if my_state.deckCount >= DECK_SAFETY_THRESHOLD else -1
+    if card.id == Ultra_Ball:
+        already_found = field_counts[Riolu] + field_counts[Mega_Lucario_ex] + hand_counts[Riolu] + hand_counts[Mega_Lucario_ex]
+        return 6000 if already_found == 0 else 5500
+    if card.id == Pokegear:
+        return 5200
+    if card.id == Night_Stretcher:
+        return 4800
+    if card.id == Judge:
+        return 7000 if hand_counts[Basic_Fighting_Energy] == 0 and not attacker1 else -1
+    if card.id == Hilda:
+        return 5300
+    if card.id == Ciphermaniac_Codebreaking:
+        return 5100
+    if card.id == Wally_Compassion:
+        my_lucario = next(
+            (p for p in ([my_state.active[0]] if my_state.active else []) + list(my_state.bench)
+             if p is not None and p.id == Mega_Lucario_ex),
+            None,
+        )
+        if my_lucario is not None and my_lucario.hp < my_lucario.maxHp:
+            return 6800
+        return -1
     if card.id == Gravity_Mountain:
         return -1 if stadium_id == 0 else 10000
     return 10000
@@ -456,6 +486,7 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
             return _score_play_option(
                 obs, o, my_index, current_plan, can_attack,
                 state, my_state, hand_counts, field_counts, stadium_id,
+                attacker1,
             )
         case OptionType.ATTACH:
             return _score_attach_option(obs, o, my_index, current_plan, attacker1)

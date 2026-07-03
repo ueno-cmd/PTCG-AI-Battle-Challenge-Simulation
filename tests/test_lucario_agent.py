@@ -46,6 +46,13 @@ def mock_card_table(monkeypatch):
         lm.Hero_Cape:            _card(lm.Hero_Cape,            cardType=CardType.TOOL),
         lm.Fighting_Gong:        _card(lm.Fighting_Gong,        cardType=CardType.ITEM),
         lm.Poke_Pad:             _card(lm.Poke_Pad,             cardType=CardType.ITEM),
+        lm.Ultra_Ball:            _card(lm.Ultra_Ball,            cardType=CardType.ITEM),
+        lm.Pokegear:              _card(lm.Pokegear,              cardType=CardType.ITEM),
+        lm.Night_Stretcher:       _card(lm.Night_Stretcher,       cardType=CardType.ITEM),
+        lm.Judge:                 _card(lm.Judge,                 cardType=CardType.SUPPORTER),
+        lm.Hilda:                 _card(lm.Hilda,                 cardType=CardType.SUPPORTER),
+        lm.Wally_Compassion:      _card(lm.Wally_Compassion,      cardType=CardType.SUPPORTER),
+        lm.Ciphermaniac_Codebreaking: _card(lm.Ciphermaniac_Codebreaking, cardType=CardType.SUPPORTER),
     }
     monkeypatch.setattr(lm, "card_table", table)
     return table
@@ -469,5 +476,93 @@ class TestLunaCycleAbilityScore:
             discard_counts=defaultdict(int), attacker1=False,
             current_plan=lm.AttackPlan(), can_attack=False,
             stadium_id=0, ability_used_flag=False,
+        )
+        assert score == -1
+
+
+# ==================== Task 5: 新規カードのスコアリング ====================
+class TestNewCardScoring:
+    def _score(self, card_id, my_state=None, hand_counts=None, field_counts=None,
+               attacker1=False, can_attack=False, state=None):
+        obs = MagicMock()
+        my_ps = my_state or make_player_state(hand=[Card(id=card_id, serial=1, playerIndex=0)])
+        obs.current.players = [my_ps, make_player_state()]
+        return lm._score_play_option(
+            obs, Option(type=OptionType.PLAY, index=0), my_index=0,
+            current_plan=lm.AttackPlan(), can_attack=can_attack,
+            state=state or _make_state(), my_state=my_ps,
+            hand_counts=hand_counts or defaultdict(int),
+            field_counts=field_counts or defaultdict(int), stadium_id=0,
+        )
+
+    def test_ultra_ball_prioritised_when_riolu_not_found(self):
+        score = self._score(lm.Ultra_Ball, hand_counts=defaultdict(int))
+        assert score == 6000
+
+    def test_ultra_ball_still_positive_when_riolu_present(self):
+        fc = defaultdict(int, {lm.Riolu: 1})
+        score = self._score(lm.Ultra_Ball, field_counts=fc)
+        assert score == 5500
+
+    def test_pokegear_flat_priority(self):
+        assert self._score(lm.Pokegear) == 5200
+
+    def test_night_stretcher_flat_priority(self):
+        assert self._score(lm.Night_Stretcher) == 4800
+
+    def test_hilda_flat_priority(self):
+        assert self._score(lm.Hilda) == 5300
+
+    def test_ciphermaniac_codebreaking_flat_priority(self):
+        assert self._score(lm.Ciphermaniac_Codebreaking) == 5100
+
+    def test_judge_used_when_hand_is_dead(self):
+        score = self._score(
+            lm.Judge, hand_counts=defaultdict(int), attacker1=False,
+        )
+        assert score == 7000
+
+    def test_judge_held_when_attacker_ready(self):
+        my_ps = make_player_state(hand=[Card(id=lm.Judge, serial=1, playerIndex=0)])
+        obs = MagicMock()
+        obs.current.players = [my_ps, make_player_state()]
+        score = lm._score_play_option(
+            obs, Option(type=OptionType.PLAY, index=0), my_index=0,
+            current_plan=lm.AttackPlan(), can_attack=False,
+            state=_make_state(), my_state=my_ps,
+            hand_counts=defaultdict(int, {lm.Basic_Fighting_Energy: 1}),
+            field_counts=defaultdict(int), stadium_id=0,
+        )
+        assert score == -1
+
+    def test_wally_compassion_used_when_lucario_damaged(self):
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, hp=200, max_hp=440)
+        my_ps = make_player_state(
+            active_pokemon=lucario,
+            hand=[Card(id=lm.Wally_Compassion, serial=1, playerIndex=0)],
+        )
+        obs = MagicMock()
+        obs.current.players = [my_ps, make_player_state()]
+        score = lm._score_play_option(
+            obs, Option(type=OptionType.PLAY, index=0), my_index=0,
+            current_plan=lm.AttackPlan(), can_attack=False,
+            state=_make_state(), my_state=my_ps,
+            hand_counts=defaultdict(int), field_counts=defaultdict(int), stadium_id=0,
+        )
+        assert score == 6800
+
+    def test_wally_compassion_held_when_lucario_full_hp(self):
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, hp=440, max_hp=440)
+        my_ps = make_player_state(
+            active_pokemon=lucario,
+            hand=[Card(id=lm.Wally_Compassion, serial=1, playerIndex=0)],
+        )
+        obs = MagicMock()
+        obs.current.players = [my_ps, make_player_state()]
+        score = lm._score_play_option(
+            obs, Option(type=OptionType.PLAY, index=0), my_index=0,
+            current_plan=lm.AttackPlan(), can_attack=False,
+            state=_make_state(), my_state=my_ps,
+            hand_counts=defaultdict(int), field_counts=defaultdict(int), stadium_id=0,
         )
         assert score == -1
