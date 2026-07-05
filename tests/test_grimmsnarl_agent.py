@@ -812,9 +812,28 @@ class TestAgent:
         result = gm.agent(obs_dict)
         assert options[result[0]].type == OptionType.ATTACK
 
+    def test_attacks_with_lethal_spiky_wheel_instead_of_retreating(self):
+        """モルペコがバトル場にいて、スパイキーホイールが相手をワザ一撃で確実にきぜつさせられる
+        （確定KO）なら撤退やターン終了より攻撃を選ぶこと（Grimmsnarl exのShadow Bulletと同様の
+        挙動をSpiky Wheelでも保証する）"""
+        morpeko = make_pokemon(
+            id=gm.Marnie_Morpeko, hp=100, max_hp=140, energies=[7, 7],
+        )
+        my_ps = make_player_state(active_pokemon=morpeko)
+        # 悪エネ2枚装着 → 20+40*2=100ダメ、相手HPを100に設定して確定KOにする
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=100))
+        options = [
+            Option(type=OptionType.RETREAT),
+            Option(type=OptionType.ATTACK, attackId=9106),  # Spiky_Wheel_ID (mocked)
+            Option(type=OptionType.END),
+        ]
+        obs_dict = make_main_obs(my_state=my_ps, op_state=op_ps, options=options)
+        result = gm.agent(obs_dict)
+        assert options[result[0]].type == OptionType.ATTACK
+
     def test_fezandipiti_ability_fires_before_non_lethal_attack(self):
-        """キチキギスexの特性（さかてにとる）もマシマシラ同様、確定KOでない攻撃より優先して
-        毎ターン使用されること"""
+        """キチキギスexの特性（さかてにとる）は、選択肢として提示された際は
+        確定KOでない攻撃より優先して使用されること"""
         fezandipiti = make_pokemon(id=gm.Fezandipiti_ex, energies=[7, 7, 7])
         grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, hp=300, max_hp=320, energies=[7, 7])
         my_ps = make_player_state(active_pokemon=grimmsnarl, bench=[fezandipiti])
