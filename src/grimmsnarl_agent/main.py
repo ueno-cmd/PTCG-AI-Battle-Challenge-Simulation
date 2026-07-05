@@ -219,6 +219,11 @@ def _score_play(
     if card_id == Buddy_Buddy_Poffin:
         needs_bench = fs.impidimp_bench_idx == -1 or fs.morpeko_bench_idx == -1
         return 8000 if needs_bench else 2000
+    if card_id == Grimsley_Move:
+        # 山札上7枚から悪ポケモン1体をベンチに出す。本デッキは悪タイプ密度が高く
+        # ヒット率が良好なため、ベンチが手薄な間はBuddy-Buddy Poffinに次ぐ優先度にする
+        needs_bench = fs.impidimp_bench_idx == -1 or fs.morpeko_bench_idx == -1
+        return 7800 if needs_bench else 1500
     if card_id == Team_Rocket_Petrel:
         # Dawnの後継：進化ライン（特にRare Candy）を狙ってサーチする役割
         return 7000

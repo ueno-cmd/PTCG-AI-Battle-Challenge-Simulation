@@ -171,6 +171,14 @@ class TestScorePlay:
         fs = self._make_fs(impidimp_bench_idx=0, morpeko_bench_idx=1)
         assert gm._score_play(gm.Buddy_Buddy_Poffin, fs, prize_count=6) == 2000
 
+    def test_grimsley_move_high_when_bench_targets_missing(self):
+        fs = self._make_fs()
+        assert gm._score_play(gm.Grimsley_Move, fs, prize_count=6) == 7800
+
+    def test_grimsley_move_low_when_bench_targets_present(self):
+        fs = self._make_fs(impidimp_bench_idx=0, morpeko_bench_idx=1)
+        assert gm._score_play(gm.Grimsley_Move, fs, prize_count=6) == 1500
+
     def test_team_rocket_petrel_score(self):
         """Team Rocket's PetrelはDawnの後継として進化ライン探索を担うため高優先度"""
         fs = self._make_fs()
