@@ -319,6 +319,50 @@ class TestScoreAttach:
         score_fezandipiti = gm._score_attach(fezandipiti, AreaType.BENCH, gm.Basic_D_Energy, fs)
         assert score_fezandipiti > score_grimmsnarl
 
+    def test_basic_d_energy_to_morpeko_allowed_when_grimmsnarl_attack_ready(self):
+        """グリムスナールexがシャドーバレット分（2エネ）を確保済みなら、余剰エネルギーをモルペコに貼れること"""
+        morpeko = make_pokemon(id=gm.Marnie_Morpeko, energies=[])
+        fs = self._make_fs_with_grimmsnarl_energy(2)
+        score = gm._score_attach(morpeko, AreaType.BENCH, gm.Basic_D_Energy, fs)
+        assert score > 0
+
+    def test_basic_d_energy_to_morpeko_denied_when_grimmsnarl_not_attack_ready(self):
+        """グリムスナールexがまだ攻撃可能エネルギー未確保なら、モルペコへの分配は認めないこと"""
+        morpeko = make_pokemon(id=gm.Marnie_Morpeko, energies=[])
+        fs = self._make_fs_with_grimmsnarl_energy(0)
+        assert gm._score_attach(morpeko, AreaType.BENCH, gm.Basic_D_Energy, fs) == -1
+
+    def test_basic_d_energy_to_morpeko_still_positive_with_many_energies(self):
+        """スパイキーホイールは装着エネルギー数に応じてダメージが際限なく伸びるため、
+        Fezandipiti_exの3枚上限とは異なり、複数枚ついていても配分を認め続けること"""
+        morpeko = make_pokemon(id=gm.Marnie_Morpeko, energies=[7, 7, 7, 7])
+        fs = self._make_fs_with_grimmsnarl_energy(2)
+        assert gm._score_attach(morpeko, AreaType.BENCH, gm.Basic_D_Energy, fs) > 0
+
+    def test_morpeko_energy_priority_lower_than_grimmsnarl(self):
+        """モルペコへの配分スコアは、グリムスナールex本体への配分スコアを上回らないこと
+        （メインアタッカーの攻撃を絶対に阻害しない既存方針の維持）"""
+        grimmsnarl_low = make_pokemon(id=gm.Grimmsnarl_ex, energies=[])
+        morpeko        = make_pokemon(id=gm.Marnie_Morpeko, energies=[])
+        fs = self._make_fs_with_grimmsnarl_energy(2)
+        score_grimmsnarl = gm._score_attach(grimmsnarl_low, AreaType.ACTIVE, gm.Basic_D_Energy, fs)
+        score_morpeko    = gm._score_attach(morpeko, AreaType.BENCH, gm.Basic_D_Energy, fs)
+        assert score_grimmsnarl > score_morpeko
+
+    def test_basic_d_energy_to_morpeko_allowed_when_grimmsnarl_absent_from_field(self):
+        """グリムスナールexが場に不在（きぜつ等）でも、モルペコへのエネルギー配分を
+        止めないこと（次善アタッカーが最も必要な場面であるため）"""
+        morpeko = make_pokemon(id=gm.Marnie_Morpeko, energies=[])
+        fs = gm.FieldState(
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), grimmsnarl_active=False,
+            grimmsnarl_energy_count=0, impidimp_bench_idx=-1,
+            morpeko_bench_idx=-1, morpeko_energy_count=0, rare_candy_in_hand=False,
+            my_active_hp=200, op_active_hp=200, op_bench_hp=[],
+        )
+        score = gm._score_attach(morpeko, AreaType.ACTIVE, gm.Basic_D_Energy, fs)
+        assert score > 0
+
 
 # ==================== _score_attack ====================
 class TestScoreAttack:

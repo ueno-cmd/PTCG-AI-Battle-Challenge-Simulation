@@ -259,6 +259,11 @@ def _score_attach(pokemon: "Pokemon", area: AreaType, card_id: int, fs: FieldSta
             # クルーエルアローの実際のコストは無色3（本デッキは全て悪エネルギーのため
             # 悪3枚で支払える）
             return 5000 - energy_count * 500
+        if pokemon.id == Marnie_Morpeko and grimmsnarl_ready_or_absent:
+            # スパイキーホイールは装着した悪エネルギー数に比例して際限なくダメージが伸びる
+            # （20+悪エネルギー×40）ため上限を設けず、グリムスナールexの攻撃分確保後は
+            # 積極的に投資する
+            return 4500 - energy_count * 200
         return -1
     return 3000
 
