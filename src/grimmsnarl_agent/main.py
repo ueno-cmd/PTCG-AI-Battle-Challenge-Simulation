@@ -233,6 +233,10 @@ def _score_play(
         return 4000
     if card_id == Night_Stretcher:
         return 2000
+    if card_id == Cheren:
+        # 条件なしの単純ドロー（3枚）。相手に非干渉で腐り札化リスクもない安全牌として
+        # 一定の優先度を与える
+        return 2200
     if card_id == Boss_Orders:
         if not fs.op_bench_hp:
             return -1  # 対象不在なら温存

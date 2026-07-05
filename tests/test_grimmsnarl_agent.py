@@ -188,6 +188,11 @@ class TestScorePlay:
         fs = self._make_fs()
         assert gm._score_play(gm.Lillie_Determination, fs, prize_count=6) == 5000
 
+    def test_cheren_score(self):
+        """チェレンは条件なしの単純ドロー（3枚）のため、常に固定スコアを返すこと"""
+        fs = self._make_fs()
+        assert gm._score_play(gm.Cheren, fs, prize_count=6) == 2200
+
     def test_unhandled_card_returns_default(self):
         fs = self._make_fs()
         assert gm._score_play(9999, fs, prize_count=4) == 1000
