@@ -27,6 +27,7 @@ def mock_card_table(monkeypatch):
         gm.Morgrem:         MockCardData(cardId=gm.Morgrem, stage1=True, attacks=[9101]),
         gm.Grimmsnarl_ex:   MockCardData(cardId=gm.Grimmsnarl_ex, stage2=True, ex=True, attacks=[9102]),
         gm.Fezandipiti_ex:  MockCardData(cardId=gm.Fezandipiti_ex, ex=True, attacks=[9105]),
+        gm.Marnie_Morpeko:  MockCardData(cardId=gm.Marnie_Morpeko, attacks=[9106]),
         gm.Rare_Candy:      MockCardData(cardId=gm.Rare_Candy, cardType=CardType.ITEM),
         gm.Buddy_Buddy_Poffin: MockCardData(cardId=gm.Buddy_Buddy_Poffin, cardType=CardType.ITEM),
         gm.Lillie_Determination: MockCardData(cardId=gm.Lillie_Determination, cardType=CardType.SUPPORTER),
@@ -36,6 +37,7 @@ def mock_card_table(monkeypatch):
     monkeypatch.setattr(gm, "card_table", table)
     monkeypatch.setattr(gm, "Shadow_Bullet_ID", 9102)
     monkeypatch.setattr(gm, "Cruel_Arrow_ID", 9105)
+    monkeypatch.setattr(gm, "Spiky_Wheel_ID", 9106)
     return table
 
 
@@ -414,6 +416,25 @@ class TestScoreAttack:
         fs = self._make_fs(op_hp=80)
         assert gm._score_attack(9105, fs) == 5000
         assert gm._score_attack(9105, fs) > 3000  # RETREATのスコア（agent()内でインライン計算）
+
+    def test_spiky_wheel_non_lethal_score(self):
+        fs = self._make_fs(op_hp=300)
+        assert gm._score_attack(9106, fs) == 2000  # Spiky_Wheel_ID (mocked)、エネ0枚(20ダメ)では確定KOでない
+
+    def test_spiky_wheel_lethal_scores_higher_than_non_lethal(self):
+        """装着エネルギー数によるダメージ（20+40×枚数）が相手HP以上（確定KO）なら、
+        非確定KO時よりスコアが高くなること"""
+        fs_lethal = self._make_fs(op_hp=100)
+        fs_lethal.morpeko_energy_count = 2  # 20+40*2=100ダメ、ちょうど確定KO
+        fs_non_lethal = self._make_fs(op_hp=300)
+        fs_non_lethal.morpeko_energy_count = 2
+        assert gm._score_attack(9106, fs_lethal) > gm._score_attack(9106, fs_non_lethal)
+
+    def test_spiky_wheel_lethal_scores_higher_than_retreat(self):
+        fs = self._make_fs(op_hp=100)
+        fs.morpeko_energy_count = 2
+        assert gm._score_attack(9106, fs) == 5000
+        assert gm._score_attack(9106, fs) > 3000  # RETREATのスコア（agent()内でインライン計算）
 
 
 # ==================== _score_card_option ====================

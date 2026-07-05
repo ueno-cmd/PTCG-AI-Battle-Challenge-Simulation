@@ -52,6 +52,7 @@ _rng                  = random.Random()  # 本番用の実乱数。テストで�
 # ==================== アタックID（_build_card_table で設定）====================
 Shadow_Bullet_ID: int = 0
 Cruel_Arrow_ID: int = 0
+Spiky_Wheel_ID: int = 0
 
 # ==================== カードメタデータ（遅延初期化）====================
 card_table: dict = {}
@@ -59,13 +60,15 @@ card_table: dict = {}
 
 def _build_card_table() -> dict:
     """card_table を初回のみ構築し、攻撃IDも設定する"""
-    global card_table, Shadow_Bullet_ID, Cruel_Arrow_ID
+    global card_table, Shadow_Bullet_ID, Cruel_Arrow_ID, Spiky_Wheel_ID
     if not card_table:
         card_table       = {c.cardId: c for c in all_card_data()}
         grimmsnarl_data  = card_table[Grimmsnarl_ex]
         Shadow_Bullet_ID = grimmsnarl_data.attacks[0]  # Shadow Bullet
         fezandipiti_data = card_table[Fezandipiti_ex]
         Cruel_Arrow_ID   = fezandipiti_data.attacks[0]  # Cruel Arrow
+        morpeko_data     = card_table[Marnie_Morpeko]
+        Spiky_Wheel_ID   = morpeko_data.attacks[0]  # Spiky Wheel
     return card_table
 
 
@@ -269,6 +272,8 @@ def _score_attach(pokemon: "Pokemon", area: AreaType, card_id: int, fs: FieldSta
 
 
 CRUEL_ARROW_DAMAGE = 100  # クルーエルアローの与ダメージ（相手1匹を選んで攻撃・ベンチも弱点抵抗力無視で狙える）
+SPIKY_WHEEL_BASE_DAMAGE       = 20  # スパイキーホイールの基礎ダメージ
+SPIKY_WHEEL_DAMAGE_PER_ENERGY = 40  # 装着した悪エネルギー1枚ごとの追加ダメージ
 
 
 def _score_attack(attack_id: int, fs: FieldState) -> int:
@@ -282,6 +287,11 @@ def _score_attack(attack_id: int, fs: FieldState) -> int:
         # どちらかにCRUEL_ARROW_DAMAGE以下の確定KO対象がいれば優先する
         op_hps = [fs.op_active_hp, *fs.op_bench_hp]
         return 5000 if any(hp <= CRUEL_ARROW_DAMAGE for hp in op_hps) else 2000
+    if attack_id == Spiky_Wheel_ID:
+        # 装着した悪エネルギー数に応じてダメージが伸びるため、都度ダメージを計算し
+        # 確定KOできるかを判定する
+        damage = SPIKY_WHEEL_BASE_DAMAGE + fs.morpeko_energy_count * SPIKY_WHEEL_DAMAGE_PER_ENERGY
+        return 5000 if damage >= fs.op_active_hp else 2000
     return 1000
 
 
