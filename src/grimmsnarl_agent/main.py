@@ -349,6 +349,8 @@ def _score_card_option(
                 return 100 if fs.field_counts[Grimmsnarl_ex] == 0 else 10
             if card.id == Impidimp:
                 return 60 if fs.field_counts[Impidimp] < 2 else 20
+            if card.id == Marnie_Morpeko:
+                return 40 if fs.morpeko_bench_idx == -1 else 10
             return 10
 
         case SelectContext.DAMAGE_COUNTER:

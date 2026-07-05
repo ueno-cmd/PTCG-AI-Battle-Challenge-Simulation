@@ -623,6 +623,26 @@ class TestScoreCardOption:
         score = gm._score_card_option(obs, o, SelectContext.TO_BENCH, 0, fs, defaultdict(int))
         assert score == 10
 
+    def test_to_bench_morpeko_high_when_none_in_play(self):
+        morpeko = make_pokemon(id=gm.Marnie_Morpeko)
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), hand=[morpeko])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs(morpeko_bench_idx=-1)
+        o = Option(type=OptionType.CARD, area=AreaType.HAND, index=0, playerIndex=0)
+        score = gm._score_card_option(obs, o, SelectContext.TO_BENCH, 0, fs, defaultdict(int))
+        assert score == 40
+
+    def test_to_bench_morpeko_low_when_already_in_play(self):
+        morpeko = make_pokemon(id=gm.Marnie_Morpeko)
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), hand=[morpeko])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs(morpeko_bench_idx=0)
+        o = Option(type=OptionType.CARD, area=AreaType.HAND, index=0, playerIndex=0)
+        score = gm._score_card_option(obs, o, SelectContext.TO_BENCH, 0, fs, defaultdict(int))
+        assert score == 10
+
     # ---------- DAMAGE_COUNTER ----------
     def test_damage_counter_targets_lowest_hp(self):
         low_hp  = make_pokemon(id=1, hp=50)
