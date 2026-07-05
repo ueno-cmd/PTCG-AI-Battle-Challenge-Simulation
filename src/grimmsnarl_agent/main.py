@@ -14,20 +14,24 @@ from cg.api import (
 # 代わりにTeam Rocket's Petrelを追加（docs/superpowers/specs/2026-07-02-grimmsnarl-deck-revision-design.md）
 # フェーズB改修（2026-07-03）：Budew/Tatsugiri/Psyduckはデッキから削除済みのため定数ごと削除。
 # 代わりにFezandipiti_exを追加（docs/superpowers/specs/2026-07-03-grimmsnarl-deck-revision-phase-b-design.md）
+# 第3次改修（2026-07-05）：Froslass/Snorunt/Munkidoriはデッキから削除済みのため定数ごと削除。
+# 代わりにMarnie_Morpeko/Grimsley_Move/Cherenを追加
+# （docs/superpowers/specs/2026-07-05-grimmsnarl-morpeko-revision-design.md）
 Impidimp       = 646
 Morgrem        = 647
 Grimmsnarl_ex  = 648
-Munkidori      = 112
-Froslass       = 104
 Shaymin        = 343
 Yveltal        = 689
 Fezandipiti_ex = 140
+Marnie_Morpeko = 649
+Grimsley_Move  = 1230
+Cheren         = 1224
 
 # 特性が「場にいれば無条件で発動」する専用要員。バトル場に出す前提のカードではないため、
 # SWITCH/TO_ACTIVEでは他に選択肢がある限り選ばれないよう明確に減点する。
-# Munkidoriは特性発動にエネルギー要求があり攻撃も可能なため対象外。
 # Fezandipiti_exは210HPの実戦アタッカーであり特性もバトル場条件なしのため対象外。
-SUPPORT_ONLY_IDS = {Froslass, Shaymin}
+# Marnie_Morpekoは非exアタッカー（スパイキーホイール）であり対象外。
+SUPPORT_ONLY_IDS = {Shaymin}
 
 Rare_Candy             = 1079
 Buddy_Buddy_Poffin     = 1086
@@ -121,7 +125,8 @@ class FieldState:
     grimmsnarl_active:       bool
     grimmsnarl_energy_count: int
     impidimp_bench_idx:      int
-    munkidori_bench_idx:     int
+    morpeko_bench_idx:       int
+    morpeko_energy_count:    int
     rare_candy_in_hand:      bool
     my_active_hp:            int
     op_active_hp:            int
@@ -137,7 +142,8 @@ def _collect_field_state(my_state, op_state) -> FieldState:
     grimmsnarl_active       = False
     grimmsnarl_energy_count = 0
     impidimp_bench_idx      = -1
-    munkidori_bench_idx     = -1
+    morpeko_bench_idx       = -1
+    morpeko_energy_count    = 0
     my_active_hp            = 0
 
     for card in my_state.active:
@@ -148,6 +154,8 @@ def _collect_field_state(my_state, op_state) -> FieldState:
         if card.id == Grimmsnarl_ex:
             grimmsnarl_active       = True
             grimmsnarl_energy_count = len(card.energies)
+        elif card.id == Marnie_Morpeko:
+            morpeko_energy_count = len(card.energies)
 
     for i, card in enumerate(my_state.bench):
         if card is None:
@@ -155,8 +163,8 @@ def _collect_field_state(my_state, op_state) -> FieldState:
         field_counts[card.id] += 1
         if card.id == Impidimp and impidimp_bench_idx == -1:
             impidimp_bench_idx = i
-        elif card.id == Munkidori and munkidori_bench_idx == -1:
-            munkidori_bench_idx = i
+        elif card.id == Marnie_Morpeko and morpeko_bench_idx == -1:
+            morpeko_bench_idx = i
 
     for card in my_state.hand:
         if card is None:
@@ -184,7 +192,8 @@ def _collect_field_state(my_state, op_state) -> FieldState:
         grimmsnarl_active=grimmsnarl_active,
         grimmsnarl_energy_count=grimmsnarl_energy_count,
         impidimp_bench_idx=impidimp_bench_idx,
-        munkidori_bench_idx=munkidori_bench_idx,
+        morpeko_bench_idx=morpeko_bench_idx,
+        morpeko_energy_count=morpeko_energy_count,
         rare_candy_in_hand=rare_candy_in_hand,
         my_active_hp=my_active_hp,
         op_active_hp=op_active_hp,
@@ -205,7 +214,7 @@ def _score_play(
         grimmsnarl_ready = fs.hand_counts[Grimmsnarl_ex] >= 1
         return 9000 if (has_impidimp and grimmsnarl_ready) else -1
     if card_id == Buddy_Buddy_Poffin:
-        needs_bench = fs.impidimp_bench_idx == -1 or fs.munkidori_bench_idx == -1
+        needs_bench = fs.impidimp_bench_idx == -1 or fs.morpeko_bench_idx == -1
         return 8000 if needs_bench else 2000
     if card_id == Team_Rocket_Petrel:
         # Dawnの後継：進化ライン（特にRare Candy）を狙ってサーチする役割
@@ -250,9 +259,6 @@ def _score_attach(pokemon: "Pokemon", area: AreaType, card_id: int, fs: FieldSta
             # クルーエルアローの実際のコストは無色3（本デッキは全て悪エネルギーのため
             # 悪3枚で支払える）
             return 5000 - energy_count * 500
-        if pokemon.id == Munkidori and energy_count == 0 and grimmsnarl_ready_or_absent:
-            # アドレナブレインはエネルギー1枚で発動する
-            return 4000
         return -1
     return 3000
 
@@ -328,8 +334,6 @@ def _score_card_option(
                 return 100 if fs.field_counts[Grimmsnarl_ex] == 0 else 10
             if card.id == Impidimp:
                 return 60 if fs.field_counts[Impidimp] < 2 else 20
-            if card.id == Munkidori:
-                return 40 if fs.munkidori_bench_idx == -1 else 10
             return 10
 
         case SelectContext.DAMAGE_COUNTER:
@@ -416,7 +420,7 @@ def agent(obs_dict: dict) -> list[int]:
                     # マシマシラ（アドレナブレイン）は悪エネルギー装着のみが条件で毎ターン使用可能だが、
                     # キチキギスex（さかてにとる）は「前の相手の番に自分のポケモンがきぜつしていた場合」
                     # のみ選択肢として提示されるため常に使えるわけではない。提示された時は必ず優先する方針
-                    score = 2500 if card.id in (Munkidori, Fezandipiti_ex) else 1200
+                    score = 2500 if card.id == Fezandipiti_ex else 1200
             case OptionType.RETREAT:
                 # Grimmsnarl exが瀕死（想定される大技の一撃=180ダメ以下しか耐えられない）なら逃げる
                 if fs.grimmsnarl_active and fs.my_active_hp <= 180:

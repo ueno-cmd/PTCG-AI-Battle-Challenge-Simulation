@@ -26,7 +26,6 @@ def mock_card_table(monkeypatch):
         gm.Impidimp:        MockCardData(cardId=gm.Impidimp, attacks=[9101]),
         gm.Morgrem:         MockCardData(cardId=gm.Morgrem, stage1=True, attacks=[9101]),
         gm.Grimmsnarl_ex:   MockCardData(cardId=gm.Grimmsnarl_ex, stage2=True, ex=True, attacks=[9102]),
-        gm.Munkidori:       MockCardData(cardId=gm.Munkidori, attacks=[9104]),
         gm.Fezandipiti_ex:  MockCardData(cardId=gm.Fezandipiti_ex, ex=True, attacks=[9105]),
         gm.Rare_Candy:      MockCardData(cardId=gm.Rare_Candy, cardType=CardType.ITEM),
         gm.Buddy_Buddy_Poffin: MockCardData(cardId=gm.Buddy_Buddy_Poffin, cardType=CardType.ITEM),
@@ -73,15 +72,15 @@ class TestCollectFieldState:
         fs = gm._collect_field_state(my_ps, op_ps)
         assert fs.impidimp_bench_idx == -1
 
-    def test_munkidori_bench_detected(self):
-        munkidori = make_pokemon(id=gm.Munkidori, energies=[7])
+    def test_morpeko_bench_detected(self):
+        morpeko = make_pokemon(id=gm.Marnie_Morpeko, energies=[7])
         my_ps = make_player_state(
             active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex),
-            bench=[munkidori],
+            bench=[morpeko],
         )
         op_ps = make_player_state(active_pokemon=make_pokemon(id=1, hp=200))
         fs = gm._collect_field_state(my_ps, op_ps)
-        assert fs.munkidori_bench_idx == 0
+        assert fs.morpeko_bench_idx == 0
 
     def test_rare_candy_in_hand_detected(self):
         candy = Card(id=gm.Rare_Candy, serial=1, playerIndex=0)
@@ -141,7 +140,7 @@ class TestScorePlay:
             grimmsnarl_active=False,
             grimmsnarl_energy_count=0,
             impidimp_bench_idx=-1,
-            munkidori_bench_idx=-1,
+            morpeko_bench_idx=-1, morpeko_energy_count=0,
             rare_candy_in_hand=False,
             my_active_hp=200,
             op_active_hp=200,
@@ -167,7 +166,7 @@ class TestScorePlay:
         assert gm._score_play(gm.Buddy_Buddy_Poffin, fs, prize_count=6) == 8000
 
     def test_buddy_buddy_poffin_low_when_bench_targets_present(self):
-        fs = self._make_fs(impidimp_bench_idx=0, munkidori_bench_idx=1)
+        fs = self._make_fs(impidimp_bench_idx=0, morpeko_bench_idx=1)
         assert gm._score_play(gm.Buddy_Buddy_Poffin, fs, prize_count=6) == 2000
 
     def test_team_rocket_petrel_score(self):
@@ -224,7 +223,7 @@ class TestScoreAttach:
             field_counts=defaultdict(int), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), grimmsnarl_active=True,
             grimmsnarl_energy_count=0, impidimp_bench_idx=-1,
-            munkidori_bench_idx=-1, rare_candy_in_hand=False,
+            morpeko_bench_idx=-1, morpeko_energy_count=0, rare_candy_in_hand=False,
             my_active_hp=200, op_active_hp=200, op_bench_hp=[],
         )
         score_low  = gm._score_attach(grimmsnarl_low,  AreaType.ACTIVE, gm.Basic_D_Energy, fs)
@@ -238,7 +237,7 @@ class TestScoreAttach:
             field_counts=defaultdict(int), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), grimmsnarl_active=True,
             grimmsnarl_energy_count=0, impidimp_bench_idx=-1,
-            munkidori_bench_idx=-1, rare_candy_in_hand=False,
+            morpeko_bench_idx=-1, morpeko_energy_count=0, rare_candy_in_hand=False,
             my_active_hp=200, op_active_hp=200, op_bench_hp=[],
         )
         assert gm._score_attach(grimmsnarl, AreaType.ACTIVE, 9999, fs) == 3000
@@ -250,28 +249,9 @@ class TestScoreAttach:
             field_counts=defaultdict(int, {gm.Grimmsnarl_ex: 1}), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), grimmsnarl_active=True,
             grimmsnarl_energy_count=grimmsnarl_energy_count, impidimp_bench_idx=-1,
-            munkidori_bench_idx=-1, rare_candy_in_hand=False,
+            morpeko_bench_idx=-1, morpeko_energy_count=0, rare_candy_in_hand=False,
             my_active_hp=200, op_active_hp=200, op_bench_hp=[],
         )
-
-    def test_basic_d_energy_to_munkidori_allowed_when_grimmsnarl_attack_ready(self):
-        """グリムスナールexがシャドーバレット分（2エネ）を確保済みなら、余剰エネルギーをマシマシラに貼れること"""
-        munkidori = make_pokemon(id=gm.Munkidori, energies=[])
-        fs = self._make_fs_with_grimmsnarl_energy(2)
-        score = gm._score_attach(munkidori, AreaType.BENCH, gm.Basic_D_Energy, fs)
-        assert score > 0
-
-    def test_basic_d_energy_to_munkidori_denied_when_grimmsnarl_not_attack_ready(self):
-        """グリムスナールexがまだ攻撃可能エネルギー未確保なら、マシマシラへの分配は認めないこと"""
-        munkidori = make_pokemon(id=gm.Munkidori, energies=[])
-        fs = self._make_fs_with_grimmsnarl_energy(0)
-        assert gm._score_attach(munkidori, AreaType.BENCH, gm.Basic_D_Energy, fs) == -1
-
-    def test_basic_d_energy_to_munkidori_denied_when_already_has_energy(self):
-        """マシマシラのアドレナブレインはエネルギー1枚で発動するため、2枚目以降は不要"""
-        munkidori = make_pokemon(id=gm.Munkidori, energies=[7])
-        fs = self._make_fs_with_grimmsnarl_energy(2)
-        assert gm._score_attach(munkidori, AreaType.BENCH, gm.Basic_D_Energy, fs) == -1
 
     def test_basic_d_energy_to_fezandipiti_allowed_when_grimmsnarl_attack_ready(self):
         """グリムスナールexがシャドーバレット分（2エネ）を確保済みなら、余剰エネルギーをキチキギスexに貼れること"""
@@ -310,7 +290,7 @@ class TestScoreAttach:
             field_counts=defaultdict(int), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), grimmsnarl_active=False,
             grimmsnarl_energy_count=0, impidimp_bench_idx=-1,
-            munkidori_bench_idx=-1, rare_candy_in_hand=False,
+            morpeko_bench_idx=-1, morpeko_energy_count=0, rare_candy_in_hand=False,
             my_active_hp=200, op_active_hp=200, op_bench_hp=[],
         )
         score = gm._score_attach(fezandipiti, AreaType.ACTIVE, gm.Basic_D_Energy, fs)
@@ -324,7 +304,7 @@ class TestScoreAttach:
             field_counts=defaultdict(int, {gm.Grimmsnarl_ex: 1}), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), grimmsnarl_active=False,
             grimmsnarl_energy_count=0, impidimp_bench_idx=-1,
-            munkidori_bench_idx=-1, rare_candy_in_hand=False,
+            morpeko_bench_idx=-1, morpeko_energy_count=0, rare_candy_in_hand=False,
             my_active_hp=200, op_active_hp=200, op_bench_hp=[],
         )
         assert gm._score_attach(fezandipiti, AreaType.BENCH, gm.Basic_D_Energy, fs) == -1
@@ -347,7 +327,7 @@ class TestScoreAttack:
             field_counts=defaultdict(int), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), grimmsnarl_active=True,
             grimmsnarl_energy_count=2, impidimp_bench_idx=-1,
-            munkidori_bench_idx=-1, rare_candy_in_hand=False,
+            morpeko_bench_idx=-1, morpeko_energy_count=0, rare_candy_in_hand=False,
             my_active_hp=200, op_active_hp=op_hp, op_bench_hp=op_bench_hp or [],
         )
 
@@ -404,7 +384,7 @@ class TestScoreCardOption:
             grimmsnarl_active=False,
             grimmsnarl_energy_count=0,
             impidimp_bench_idx=-1,
-            munkidori_bench_idx=-1,
+            morpeko_bench_idx=-1, morpeko_energy_count=0,
             rare_candy_in_hand=False,
             my_active_hp=200,
             op_active_hp=200,
@@ -556,20 +536,6 @@ class TestScoreCardOption:
         score_low  = gm._score_card_option(obs, o_low, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
         score_high = gm._score_card_option(obs, o_high, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
         assert score_high > score_low
-
-    def test_switch_munkidori_not_penalized_like_support_only_pokemon(self):
-        """マシマシラは特性にエネルギー要求があり攻撃も可能なため、特性専用ポケモンほど減点されないこと"""
-        shaymin   = make_pokemon(id=gm.Shaymin, hp=100)
-        munkidori = make_pokemon(id=gm.Munkidori, hp=100)
-        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[shaymin, munkidori])
-        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
-        obs = self._make_obs(my_ps, op_ps)
-        fs = self._make_fs()
-        o_shaymin   = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
-        o_munkidori = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
-        score_shaymin   = gm._score_card_option(obs, o_shaymin, SelectContext.SWITCH, 0, fs, defaultdict(int))
-        score_munkidori = gm._score_card_option(obs, o_munkidori, SelectContext.SWITCH, 0, fs, defaultdict(int))
-        assert score_munkidori > score_shaymin
 
     # ---------- TO_BENCH / TO_HAND ----------
     def test_to_bench_grimmsnarl_high_when_none_in_play(self):
@@ -747,21 +713,6 @@ class TestAgent:
         obs_dict = make_main_obs(my_state=my_ps, op_state=op_ps, options=options)
         result = gm.agent(obs_dict)
         assert options[result[0]].type == OptionType.ATTACK
-
-    def test_ability_fires_before_non_lethal_attack(self):
-        """アビリティ（Munkidori）は無償で使えるため、確定KOでない攻撃より優先して
-        毎ターン使用されること（Adrena-Brainの仕様意図の挙動保証）"""
-        munkidori = make_pokemon(id=gm.Munkidori, energies=[7])
-        grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, hp=300, max_hp=320, energies=[7, 7])
-        my_ps = make_player_state(active_pokemon=grimmsnarl, bench=[munkidori])
-        # op_state を指定しない場合、make_main_obs のデフォルトは hp=200（>180、非確定KO）
-        options = [
-            Option(type=OptionType.ABILITY, area=AreaType.BENCH, index=0),
-            Option(type=OptionType.ATTACK, attackId=9102),  # Shadow_Bullet_ID (mocked)、非確定KO
-        ]
-        obs_dict = make_main_obs(my_state=my_ps, options=options)
-        result = gm.agent(obs_dict)
-        assert options[result[0]].type == OptionType.ABILITY
 
     def test_fezandipiti_ability_fires_before_non_lethal_attack(self):
         """キチキギスexの特性（さかてにとる）もマシマシラ同様、確定KOでない攻撃より優先して
