@@ -19,14 +19,12 @@ def test_key_pokemon_present():
     assert 646 in ids, "Marnie's Impidimp が不在"
     assert 647 in ids, "Marnie's Morgrem が不在"
     assert 648 in ids, "Marnie's Grimmsnarl ex が不在"
-    assert 112 in ids, "Munkidori が不在"
-    assert 104 in ids, "Froslass が不在"
+    assert 649 in ids, "Marnie's Morpeko が不在"
     assert 689 in ids, "Yveltal が不在"
 
 
 def test_removed_pokemon_absent():
     ids = {card_id for card_id, _ in DECK}
-    assert 649 not in ids, "Marnie's Morpeko は今回の改修で削除されたはず"
     assert 66 not in ids, "Dudunsparce は今回の改修で削除されたはず"
     assert 305 not in ids, "Dunsparce は今回の改修で削除されたはず"
 
@@ -79,3 +77,30 @@ def test_fezandipiti_ex_count():
 def test_yveltal_count_increased():
     count = sum(c for i, c in DECK if i == 689)
     assert count == 2, "イベルタル(689)はフェーズBで2枚に増量されたはず"
+
+
+def test_phase3_removed_pokemon_absent():
+    ids = {card_id for card_id, _ in DECK}
+    assert 860 not in ids, "Snorunt(ユキワラシ) は第3次改修で削除されたはず"
+    assert 104 not in ids, "Froslass(ユキメノコ) は第3次改修で削除されたはず"
+    assert 112 not in ids, "Munkidori(マシマシラ) は第3次改修で削除されたはず"
+
+
+def test_morpeko_count():
+    count = sum(c for i, c in DECK if i == 649)
+    assert count == 3, "マリィのモルペコ(649)は3枚採用のはず"
+
+
+def test_buddy_buddy_poffin_count_increased():
+    count = sum(c for i, c in DECK if i == 1086)
+    assert count == 3, "Buddy-Buddy Poffin(1086)は第3次改修で3枚に増量されたはず"
+
+
+def test_grimsley_move_count():
+    count = sum(c for i, c in DECK if i == 1230)
+    assert count == 2, "ギーマの一手(1230)は2枚採用のはず"
+
+
+def test_cheren_count():
+    count = sum(c for i, c in DECK if i == 1224)
+    assert count == 1, "チェレン(1224)は1枚採用のはず"
