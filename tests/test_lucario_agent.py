@@ -544,6 +544,32 @@ class TestDeckSafetyGate:
         assert score == 3100
 
 
+class TestSwitchContext:
+    """SWITCH/TO_ACTIVEコンテキストでのオーガポンex優先度テスト"""
+
+    def _score(self, energies):
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, hp=210, energies=energies)
+        my_ps = make_player_state(bench=[ogerpon])
+        obs = MagicMock()
+        obs.current.players = [my_ps, make_player_state()]
+        return lm._score_card_option(
+            obs, Option(type=OptionType.CARD, area=lm.AreaType.BENCH, index=0, playerIndex=0),
+            context=lm.SelectContext.SWITCH, my_index=0, state=_make_state(),
+            my_state=my_ps,
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), ability_used_flag=False,
+        )
+
+    def test_ogerpon_ex_prioritized_when_charged(self):
+        """3エネルギー確保済み（ぶちやぶる可能）なら高優先度になる"""
+        assert self._score([6, 6, 6]) == 3 * 2 + 20  # energy_count*2 + 充填済みボーナス
+
+    def test_ogerpon_ex_low_priority_when_not_charged(self):
+        """2エネルギー以下（ぶちやぶる不可）では優先度が低いまま"""
+        assert self._score([6, 6]) == 2 * 2 + 6  # energy_count*2 + 充填中ボーナス
+
+
 # ==================== Task 4: ルナサイクル ====================
 class TestDiscardContext:
     def _obs(self, hand_card):

@@ -377,6 +377,8 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
                     score += 5
                 elif card.id == Riolu:
                     score += 4
+                elif card.id == Ogerpon_ex:
+                    score += 20 if energy_count >= 3 else 6
             else:
                 score = 100 if o.index == current_plan.target - 1 else 0
             return score
