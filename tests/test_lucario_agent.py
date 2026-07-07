@@ -525,6 +525,20 @@ class TestDiscardContext:
         )
         assert score == -100
 
+    def test_protects_ogerpon_ex(self):
+        """1枚しかないオーガポンexも誤トラッシュから保護する"""
+        ogerpon = Card(id=lm.Ogerpon_ex, serial=1, playerIndex=0)
+        obs = self._obs(ogerpon)
+        score = lm._score_card_option(
+            obs, Option(type=OptionType.CARD, area=lm.AreaType.HAND, index=0, playerIndex=0),
+            context=lm.SelectContext.DISCARD, my_index=0, state=_make_state(),
+            my_state=make_player_state(),
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), ability_used_flag=False,
+        )
+        assert score == -100
+
     def test_protects_key_supporters(self):
         boss = Card(id=lm.Boss_Orders, serial=1, playerIndex=0)
         obs = self._obs(boss)
