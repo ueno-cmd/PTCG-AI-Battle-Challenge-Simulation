@@ -145,7 +145,9 @@ class TestScorePlay:
             morpeko_bench_idx=-1, morpeko_energy_count=0,
             rare_candy_in_hand=False,
             my_active_hp=200,
+            my_active_id=0,
             op_active_hp=200,
+            op_active_id=0,
             op_bench_hp=[],
         )
         defaults.update(kwargs)
@@ -239,7 +241,7 @@ class TestScoreAttach:
             discard_counts=defaultdict(int), grimmsnarl_active=True,
             grimmsnarl_energy_count=0, impidimp_bench_idx=-1,
             morpeko_bench_idx=-1, morpeko_energy_count=0, rare_candy_in_hand=False,
-            my_active_hp=200, op_active_hp=200, op_bench_hp=[],
+            my_active_hp=200, my_active_id=0, op_active_hp=200, op_active_id=0, op_bench_hp=[],
         )
         score_low  = gm._score_attach(grimmsnarl_low,  AreaType.ACTIVE, gm.Basic_D_Energy, fs)
         score_full = gm._score_attach(grimmsnarl_full, AreaType.ACTIVE, gm.Basic_D_Energy, fs)
@@ -253,7 +255,7 @@ class TestScoreAttach:
             discard_counts=defaultdict(int), grimmsnarl_active=True,
             grimmsnarl_energy_count=0, impidimp_bench_idx=-1,
             morpeko_bench_idx=-1, morpeko_energy_count=0, rare_candy_in_hand=False,
-            my_active_hp=200, op_active_hp=200, op_bench_hp=[],
+            my_active_hp=200, my_active_id=0, op_active_hp=200, op_active_id=0, op_bench_hp=[],
         )
         assert gm._score_attach(grimmsnarl, AreaType.ACTIVE, 9999, fs) == 3000
 
@@ -265,7 +267,7 @@ class TestScoreAttach:
             discard_counts=defaultdict(int), grimmsnarl_active=True,
             grimmsnarl_energy_count=grimmsnarl_energy_count, impidimp_bench_idx=-1,
             morpeko_bench_idx=-1, morpeko_energy_count=0, rare_candy_in_hand=False,
-            my_active_hp=200, op_active_hp=200, op_bench_hp=[],
+            my_active_hp=200, my_active_id=0, op_active_hp=200, op_active_id=0, op_bench_hp=[],
         )
 
     def test_basic_d_energy_to_fezandipiti_allowed_when_grimmsnarl_attack_ready(self):
@@ -306,7 +308,7 @@ class TestScoreAttach:
             discard_counts=defaultdict(int), grimmsnarl_active=False,
             grimmsnarl_energy_count=0, impidimp_bench_idx=-1,
             morpeko_bench_idx=-1, morpeko_energy_count=0, rare_candy_in_hand=False,
-            my_active_hp=200, op_active_hp=200, op_bench_hp=[],
+            my_active_hp=200, my_active_id=0, op_active_hp=200, op_active_id=0, op_bench_hp=[],
         )
         score = gm._score_attach(fezandipiti, AreaType.ACTIVE, gm.Basic_D_Energy, fs)
         assert score > 0
@@ -320,7 +322,7 @@ class TestScoreAttach:
             discard_counts=defaultdict(int), grimmsnarl_active=False,
             grimmsnarl_energy_count=0, impidimp_bench_idx=-1,
             morpeko_bench_idx=-1, morpeko_energy_count=0, rare_candy_in_hand=False,
-            my_active_hp=200, op_active_hp=200, op_bench_hp=[],
+            my_active_hp=200, my_active_id=0, op_active_hp=200, op_active_id=0, op_bench_hp=[],
         )
         assert gm._score_attach(fezandipiti, AreaType.BENCH, gm.Basic_D_Energy, fs) == -1
 
@@ -373,7 +375,7 @@ class TestScoreAttach:
             discard_counts=defaultdict(int), grimmsnarl_active=False,
             grimmsnarl_energy_count=0, impidimp_bench_idx=-1,
             morpeko_bench_idx=-1, morpeko_energy_count=0, rare_candy_in_hand=False,
-            my_active_hp=200, op_active_hp=200, op_bench_hp=[],
+            my_active_hp=200, my_active_id=0, op_active_hp=200, op_active_id=0, op_bench_hp=[],
         )
         score = gm._score_attach(morpeko, AreaType.ACTIVE, gm.Basic_D_Energy, fs)
         assert score > 0
@@ -381,13 +383,14 @@ class TestScoreAttach:
 
 # ==================== _score_attack ====================
 class TestScoreAttack:
-    def _make_fs(self, op_hp=200, op_bench_hp=None):
+    def _make_fs(self, op_hp=200, op_bench_hp=None, op_active_id=0):
         return gm.FieldState(
             field_counts=defaultdict(int), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), grimmsnarl_active=True,
             grimmsnarl_energy_count=2, impidimp_bench_idx=-1,
             morpeko_bench_idx=-1, morpeko_energy_count=0, rare_candy_in_hand=False,
-            my_active_hp=200, op_active_hp=op_hp, op_bench_hp=op_bench_hp or [],
+            my_active_hp=200, my_active_id=gm.Grimmsnarl_ex,
+            op_active_hp=op_hp, op_active_id=op_active_id, op_bench_hp=op_bench_hp or [],
         )
 
     def test_shadow_bullet_non_lethal_score(self):
@@ -449,6 +452,23 @@ class TestScoreAttack:
         assert gm._score_attack(9106, fs) == 5000
         assert gm._score_attack(9106, fs) > 3000  # RETREATのスコア（agent()内でインライン計算）
 
+    def test_shadow_bullet_nullified_when_opponent_is_crustle(self):
+        """Crustleの特性でGrimmsnarl_ex（ex）のShadow Bulletは無効化されるため、
+        確定KO圏内のHPであっても攻撃スコアが最低（-1）になること"""
+        fs = self._make_fs(op_hp=100, op_active_id=gm.Crustle)
+        assert gm._score_attack(9102, fs) == -1
+
+    def test_cruel_arrow_nullified_when_opponent_is_crustle(self):
+        """Crustleの特性でFezandipiti_ex（ex）のCruel Arrowも同様に無効化されること"""
+        fs = self._make_fs(op_hp=100, op_active_id=gm.Crustle)
+        assert gm._score_attack(9105, fs) == -1
+
+    def test_spiky_wheel_not_nullified_when_opponent_is_crustle(self):
+        """非exのモルペコのSpiky Wheelは、Crustle対面でも通常通り評価されること"""
+        fs = self._make_fs(op_hp=100, op_active_id=gm.Crustle)
+        fs.morpeko_energy_count = 2
+        assert gm._score_attack(9106, fs) == 5000
+
 
 # ==================== _score_card_option ====================
 class TestScoreCardOption:
@@ -465,7 +485,9 @@ class TestScoreCardOption:
             morpeko_bench_idx=-1, morpeko_energy_count=0,
             rare_candy_in_hand=False,
             my_active_hp=200,
+            my_active_id=0,
             op_active_hp=200,
+            op_active_id=0,
             op_bench_hp=[],
         )
         defaults.update(kwargs)
@@ -534,6 +556,34 @@ class TestScoreCardOption:
         score_grimmsnarl = gm._score_card_option(obs, o_grimmsnarl, SelectContext.SWITCH, 0, fs, defaultdict(int))
         score_other      = gm._score_card_option(obs, o_other, SelectContext.SWITCH, 0, fs, defaultdict(int))
         assert score_grimmsnarl > score_other
+
+    def test_switch_morpeko_outranks_grimmsnarl_when_opponent_is_crustle(self):
+        """相手アクティブがCrustle（ex技無効化）の場合、非exのモルペコをGrimmsnarl_exより優先すること"""
+        grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, energies=[7, 7])
+        morpeko    = make_pokemon(id=gm.Marnie_Morpeko, energies=[7])
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[grimmsnarl, morpeko])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=gm.Crustle, hp=130))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs(op_active_id=gm.Crustle)
+        o_grimmsnarl = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        o_morpeko    = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
+        score_grimmsnarl = gm._score_card_option(obs, o_grimmsnarl, SelectContext.SWITCH, 0, fs, defaultdict(int))
+        score_morpeko    = gm._score_card_option(obs, o_morpeko, SelectContext.SWITCH, 0, fs, defaultdict(int))
+        assert score_morpeko > score_grimmsnarl
+
+    def test_switch_grimmsnarl_still_preferred_when_opponent_is_not_crustle(self):
+        """相手アクティブがCrustleでなければ、従来通りGrimmsnarl_exが優先されること（副作用がないことの確認）"""
+        grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, energies=[7, 7])
+        morpeko    = make_pokemon(id=gm.Marnie_Morpeko, energies=[7])
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[grimmsnarl, morpeko])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=999, hp=130))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs(op_active_id=999)
+        o_grimmsnarl = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        o_morpeko    = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
+        score_grimmsnarl = gm._score_card_option(obs, o_grimmsnarl, SelectContext.SWITCH, 0, fs, defaultdict(int))
+        score_morpeko    = gm._score_card_option(obs, o_morpeko, SelectContext.SWITCH, 0, fs, defaultdict(int))
+        assert score_grimmsnarl > score_morpeko
 
     # ---------- TO_ACTIVE（相手ベンチを強制的にバトル場へ出す場合の対象選択） ----------
     def test_to_active_opponent_bench_targets_lowest_hp(self):
@@ -793,6 +843,22 @@ class TestAgent:
         obs_dict = make_main_obs(my_state=my_ps, options=options)
         result = gm.agent(obs_dict)
         assert options[result[0]].type == OptionType.END
+
+    def test_retreats_to_morpeko_when_opponent_is_crustle(self):
+        """Grimmsnarl exが健康でも、相手アクティブがCrustle（ex技無効化）でベンチにモルペコが
+        いるなら、無意味なShadow Bulletより撤退を優先すること"""
+        healthy_grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, hp=300, max_hp=320)
+        morpeko = make_pokemon(id=gm.Marnie_Morpeko, energies=[7])
+        my_ps = make_player_state(active_pokemon=healthy_grimmsnarl, bench=[morpeko])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=gm.Crustle, hp=130))
+        options = [
+            Option(type=OptionType.RETREAT),
+            Option(type=OptionType.ATTACK, attackId=9102),
+            Option(type=OptionType.END),
+        ]
+        obs_dict = make_main_obs(my_state=my_ps, op_state=op_ps, options=options)
+        result = gm.agent(obs_dict)
+        assert options[result[0]].type == OptionType.RETREAT
 
     def test_attacks_for_lethal_instead_of_retreating(self):
         """Grimmsnarl exが瀕死でも、相手をワザ一撃で確実にきぜつさせられる（確定KO）なら

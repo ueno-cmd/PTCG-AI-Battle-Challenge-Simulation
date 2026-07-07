@@ -44,6 +44,12 @@ Team_Rocket_Petrel     = 1219
 
 Basic_D_Energy = 7
 
+Crustle = 345  # 特性「ふしぎな岩の宿／しんぴのいしやど」：相手の「ポケモン【ex】」の技ダメージを無効化する壁ポケモン
+
+# Crustleの特性で技ダメージを無効化されるex攻撃者（Grimmsnarl_ex/Fezandipiti_ex）。
+# 非exのMarnie_Morpekoはこの制約を受けない
+EX_ATTACKER_IDS = {Grimmsnarl_ex, Fezandipiti_ex}
+
 # ==================== ボスの指令：即使用/温存の判断用定数 ====================
 SHADOW_BULLET_DAMAGE = 180  # Shadow Bulletの与ダメージ（_score_attackと共通の閾値）
 EPSILON              = 0.28  # 温存判断時に探索的先出しをする確率
@@ -132,7 +138,9 @@ class FieldState:
     morpeko_energy_count:    int
     rare_candy_in_hand:      bool
     my_active_hp:            int
+    my_active_id:            int
     op_active_hp:            int
+    op_active_id:            int
     op_bench_hp:             list
 
 
@@ -148,12 +156,14 @@ def _collect_field_state(my_state, op_state) -> FieldState:
     morpeko_bench_idx       = -1
     morpeko_energy_count    = 0
     my_active_hp            = 0
+    my_active_id            = 0
 
     for card in my_state.active:
         if card is None:
             continue
         field_counts[card.id] += 1
         my_active_hp = card.hp
+        my_active_id = card.id
         if card.id == Grimmsnarl_ex:
             grimmsnarl_active       = True
             grimmsnarl_energy_count = len(card.energies)
@@ -180,9 +190,11 @@ def _collect_field_state(my_state, op_state) -> FieldState:
         discard_counts[card.id] += 1
 
     op_active_hp = 0
+    op_active_id = 0
     for card in op_state.active:
         if card is not None:
             op_active_hp = card.hp
+            op_active_id = card.id
 
     op_bench_hp = [card.hp for card in op_state.bench if card is not None]
 
@@ -199,7 +211,9 @@ def _collect_field_state(my_state, op_state) -> FieldState:
         morpeko_energy_count=morpeko_energy_count,
         rare_candy_in_hand=rare_candy_in_hand,
         my_active_hp=my_active_hp,
+        my_active_id=my_active_id,
         op_active_hp=op_active_hp,
+        op_active_id=op_active_id,
         op_bench_hp=op_bench_hp,
     )
 
@@ -287,6 +301,10 @@ SPIKY_WHEEL_DAMAGE_PER_ENERGY = 40  # 装着した悪エネルギー1枚ごと�
 
 def _score_attack(attack_id: int, fs: FieldState) -> int:
     """ATTACK コンテキスト：ワザ選択スコア"""
+    if fs.op_active_id == Crustle and attack_id in (Shadow_Bullet_ID, Cruel_Arrow_ID):
+        # Crustleの特性により、ex（Grimmsnarl_ex/Fezandipiti_ex）の技ダメージは0になる。
+        # 実質無意味な攻撃として扱い、撤退やモルペコへの切り替えを優先させる
+        return -1
     if attack_id == Shadow_Bullet_ID:
         # 相手バトルポケモンのHPがSHADOW_BULLET_DAMAGE以下ならShadow Bulletで確実にKOできる
         # （きぜつ確定）ので、RETREATの3000点より高くして撤退より攻撃を優先する
@@ -304,13 +322,17 @@ def _score_attack(attack_id: int, fs: FieldState) -> int:
     return 1000
 
 
-def _score_own_switch_target(card: "Pokemon") -> int:
+def _score_own_switch_target(card: "Pokemon", fs: FieldState) -> int:
     """自分のポケモンをバトル場に出す際の優先スコア（SWITCH/TO_ACTIVE共通）
 
     特性専用ポケモン（SUPPORT_ONLY_IDS）は場にいるだけで効果を発揮し攻撃力も乏しいため、
     他に選択肢がある限り選ばれないよう常に負のスコア域に収める。
     それ以外は残りHP（生存力）とエネルギー装着数を基準に評価する。
+    相手がCrustle（ex技を無効化する特性持ち）の場合は、非exのモルペコを最優先で
+    アクティブにする（他の攻撃者ではダメージが通らないため）。
     """
+    if fs.op_active_id == Crustle and card.id == Marnie_Morpeko:
+        return 20000 + len(card.energies) * 2
     if card.id == Grimmsnarl_ex:
         return 10000 + len(card.energies) * 2
     if card.id in SUPPORT_ONLY_IDS:
@@ -340,7 +362,7 @@ def _score_card_option(
         case SelectContext.SWITCH:
             if o.playerIndex != my_index or not isinstance(card, Pokemon):
                 return 0
-            return _score_own_switch_target(card)
+            return _score_own_switch_target(card, fs)
 
         case SelectContext.TO_ACTIVE:
             if not isinstance(card, Pokemon):
@@ -349,7 +371,7 @@ def _score_card_option(
                 # ボスの指令等で相手ベンチを強制的にバトル場に出す場合：
                 # 最もHPが低い（KOに近い）ポケモンを狙う
                 return 100000 - card.hp
-            return _score_own_switch_target(card)
+            return _score_own_switch_target(card, fs)
 
         case SelectContext.TO_BENCH | SelectContext.TO_HAND:
             if not isinstance(card, Pokemon):
@@ -449,8 +471,15 @@ def agent(obs_dict: dict) -> list[int]:
                     # スコアとして1200を割り当てる）
                     score = 2500 if card.id == Fezandipiti_ex else 1200
             case OptionType.RETREAT:
-                # Grimmsnarl exが瀕死（想定される大技の一撃=180ダメ以下しか耐えられない）なら逃げる
-                if fs.grimmsnarl_active and fs.my_active_hp <= 180:
+                # Grimmsnarl exが瀕死（想定される大技の一撃=180ダメ以下しか耐えられない）なら逃げる。
+                # あるいは、ex攻撃者（Grimmsnarl_ex/Fezandipiti_ex）でCrustle対面（技ダメージ無効化）
+                # かつベンチにモルペコがいるなら、非exのモルペコに交代して攻撃を通す
+                crustle_matchup = (
+                    fs.op_active_id == Crustle
+                    and fs.my_active_id in EX_ATTACKER_IDS
+                    and fs.morpeko_bench_idx != -1
+                )
+                if (fs.grimmsnarl_active and fs.my_active_hp <= 180) or crustle_matchup:
                     score = 3000
                 else:
                     score = -1
