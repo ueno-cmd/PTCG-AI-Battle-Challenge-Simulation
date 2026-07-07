@@ -28,6 +28,7 @@ Judge                      = 1213
 Hilda                      = 1225
 Wally_Compassion           = 1229
 Ciphermaniac_Codebreaking  = 1188
+Ogerpon_ex                 = 117
 
 # ==================== デッキ安全性定数 ====================
 DECK_SAFETY_THRESHOLD = 15  # 山札残数がこれ未満なら大量ドロー系を抑制
@@ -271,6 +272,9 @@ def calc_attack_plan(
                 if field_counts[Lunatone] >= 1:
                     energy_required = 1
                     base_damage     = 70
+            elif my_pokemon.id == Ogerpon_ex:
+                energy_required = 3
+                base_damage     = 140
 
             if base_damage <= 0:
                 continue
@@ -296,10 +300,11 @@ def calc_attack_plan(
                     break
                 damage = base_damage
                 data   = card_table[op_pokemon.id]
-                if data.weakness == EnergyType.FIGHTING:
-                    damage *= 2
-                elif data.resistance == EnergyType.FIGHTING:
-                    damage -= 30
+                if my_pokemon.id != Ogerpon_ex:
+                    if data.weakness == EnergyType.FIGHTING:
+                        damage *= 2
+                    elif data.resistance == EnergyType.FIGHTING:
+                        damage -= 30
 
                 prize = 0
                 score = pokemon_score(op_pokemon)

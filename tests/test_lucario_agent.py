@@ -31,6 +31,7 @@ def mock_card_table(monkeypatch):
         lm.Solrock:               _card(lm.Solrock),
         lm.Riolu:                 _card(lm.Riolu),
         lm.Mega_Lucario_ex:       _card(lm.Mega_Lucario_ex, megaEx=True),
+        lm.Ogerpon_ex:            _card(lm.Ogerpon_ex, ex=True),  # Cornerstone Mask Ogerpon ex
         144:  _card(144,  ex=True),   # Squawkabilly ex
         322:  _card(322),             # Noctowl
         323:  _card(323),             # Fan Rotom
@@ -323,6 +324,53 @@ class TestCalcAttackPlan:
             rng=_StubRng(0.9),
         )
         assert result.attack_index == 0
+
+    def test_ogerpon_ex_selected_as_attacker_with_3_energy(self):
+        """オーガポンexが3エネルギー確保時にアタッカー候補として選ばれ、140ダメ固定になる"""
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, hp=210, energies=[6, 6, 6])
+        my_ps = make_player_state(active_pokemon=ogerpon, prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=lm.Riolu, hp=100), prize_count=6)
+        obs = MagicMock()
+        obs.select.option = []
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int), defaultdict(int),
+            can_switch=False, can_op_switch=False,
+            can_use_mega_brave=False, can_attack=True, my_prize=6,
+        )
+        assert result.attacker  == 0
+        assert result.remain_hp == 100 - 140
+
+    def test_ogerpon_ex_ignores_weakness(self):
+        """ぶちやぶるは弱点を計算しないため、相手が格闘弱点でも140ダメ固定（280にならない）"""
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, hp=210, energies=[6, 6, 6])
+        my_ps = make_player_state(active_pokemon=ogerpon, prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=lm.Riolu, hp=300), prize_count=6)
+        lm.card_table[lm.Riolu] = MockCardData(cardId=lm.Riolu, weakness=EnergyType.FIGHTING)
+        obs = MagicMock()
+        obs.select.option = []
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int), defaultdict(int),
+            can_switch=False, can_op_switch=False,
+            can_use_mega_brave=False, can_attack=True, my_prize=6,
+        )
+        assert result.remain_hp == 300 - 140
+
+    def test_ogerpon_ex_not_selected_with_insufficient_energy(self):
+        """2エネルギーでは「ぶちやぶる」(3エネ必要)を使えずアタッカー候補にならない"""
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, hp=210, energies=[6, 6])
+        my_ps = make_player_state(active_pokemon=ogerpon, prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=lm.Riolu, hp=100), prize_count=6)
+        obs = MagicMock()
+        obs.select.option = []
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int), defaultdict(int),
+            can_switch=False, can_op_switch=False,
+            can_use_mega_brave=False, can_attack=True, my_prize=6,
+        )
+        assert result.attacker == -1
 
 
 # ==================== Task 6: agent() 統合テスト ====================
