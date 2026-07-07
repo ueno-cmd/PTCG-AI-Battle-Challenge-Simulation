@@ -29,6 +29,7 @@ Hilda                      = 1225
 Wally_Compassion           = 1229
 Ciphermaniac_Codebreaking  = 1188
 Ogerpon_ex                 = 117
+Crustle                     = 345  # 特性「ふしぎな岩の宿」：相手の「ポケモン【ex】」の技ダメージを無効化する壁ポケモン
 
 # ==================== デッキ安全性定数 ====================
 DECK_SAFETY_THRESHOLD = 15  # 山札残数がこれ未満なら大量ドロー系を抑制
@@ -310,6 +311,8 @@ def calc_attack_plan(
                         damage *= 2
                     elif data.resistance == EnergyType.FIGHTING:
                         damage -= 30
+                if op_pokemon.id == Crustle and my_pokemon.id == Mega_Lucario_ex:
+                    damage = 0  # Crustleの特性により、ex ポケモンの技ダメージは通らない
 
                 prize = 0
                 score = pokemon_score(op_pokemon)

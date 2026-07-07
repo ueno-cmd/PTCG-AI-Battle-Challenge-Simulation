@@ -388,6 +388,60 @@ class TestCalcAttackPlan:
         assert result.attacker == -1
 
 
+class TestCrustleAbilityInteraction:
+    """Crustle(345)の特性「ふしぎな岩の宿」対策のテスト"""
+
+    def test_mega_lucario_ex_damage_nullified_by_crustle_ability(self):
+        """Crustleの特性は相手のexポケモンの技ダメージを無効化する"""
+        lm.card_table[lm.Crustle] = MockCardData(cardId=lm.Crustle, weakness=EnergyType.FIRE)
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, hp=300, energies=[6, 6])
+        my_ps = make_player_state(active_pokemon=lucario, prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=lm.Crustle, hp=150), prize_count=6)
+        obs = MagicMock()
+        obs.select.option = [Option(type=OptionType.ATTACK, attackId=983)]
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int), defaultdict(int),
+            can_switch=False, can_op_switch=False,
+            can_use_mega_brave=True, can_attack=True, my_prize=6,
+        )
+        assert result.remain_hp == 150  # 0ダメージなのでHPは変化しない
+
+    def test_ogerpon_ex_bypasses_crustle_ability(self):
+        """オーガポンexの「ぶちやぶる」は効果を計算しないためCrustleの特性を貫通する"""
+        lm.card_table[lm.Crustle] = MockCardData(cardId=lm.Crustle, weakness=EnergyType.FIRE)
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, hp=210, energies=[6, 6, 6])
+        my_ps = make_player_state(active_pokemon=ogerpon, prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=lm.Crustle, hp=150), prize_count=6)
+        obs = MagicMock()
+        obs.select.option = []
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int), defaultdict(int),
+            can_switch=False, can_op_switch=False,
+            can_use_mega_brave=False, can_attack=True, my_prize=6,
+        )
+        assert result.remain_hp == 150 - 140
+
+    def test_switches_to_ogerpon_ex_over_mega_lucario_ex_against_crustle(self):
+        """Crustle相手にはメガルカリオexではなくオーガポンexへの切り替えが選ばれる"""
+        lm.card_table[lm.Crustle] = MockCardData(cardId=lm.Crustle, weakness=EnergyType.FIRE)
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, hp=300, energies=[6, 6])
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, hp=210, energies=[6, 6, 6])
+        my_ps = make_player_state(active_pokemon=lucario, bench=[ogerpon], prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=lm.Crustle, hp=150), prize_count=6)
+        obs = MagicMock()
+        obs.select.option = [Option(type=OptionType.ATTACK, attackId=983)]
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int), defaultdict(int),
+            can_switch=True, can_op_switch=False,
+            can_use_mega_brave=True, can_attack=True, my_prize=6,
+        )
+        assert result.attacker  == 1  # my_cards=[active, *bench] → bench[0]はindex1
+        assert result.remain_hp == 150 - 140
+
+
 # ==================== Task 6: agent() 統合テスト ====================
 from unittest.mock import patch
 from tests.conftest import make_main_obs
