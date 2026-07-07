@@ -4,8 +4,9 @@
 DECK = [
     (677, 4),    # Riolu
     (678, 3),    # Mega Lucario ex
-    (676, 4),    # Solrock
+    (676, 3),    # Solrock（4→3。オーガポンex採用のため1枚減）
     (675, 2),    # Lunatone
+    (117, 1),    # Cornerstone Mask Ogerpon ex（サブアタッカー新規採用）
     (1142, 4),   # Fighting Gong
     (1121, 4),   # Ultra Ball
     (1152, 2),   # Poké Pad

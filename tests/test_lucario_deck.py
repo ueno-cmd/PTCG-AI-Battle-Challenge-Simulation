@@ -60,3 +60,13 @@ def test_new_cards_present_with_expected_counts():
     assert counts[1225] == 2  # Hilda
     assert counts[1229] == 1  # Wally's Compassion
     assert counts[1188] == 1  # Ciphermaniac's Codebreaking
+
+
+def test_ogerpon_ex_present_with_1_copy():
+    counts = dict(DECK)
+    assert counts[117] == 1  # Cornerstone Mask Ogerpon ex
+
+
+def test_solrock_reduced_to_3():
+    counts = dict(DECK)
+    assert counts[676] == 3  # Solrock 4→3（オーガポンex採用のため1枚減）
