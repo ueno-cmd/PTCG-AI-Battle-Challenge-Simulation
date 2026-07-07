@@ -168,6 +168,11 @@ def energy_score(pokemon: Pokemon, active: bool, attacker1: bool) -> int:
             score += 100
         if attacker1:
             score -= 50
+    elif pokemon.id == Ogerpon_ex:
+        if energy_count < 3:
+            score += 80
+        if attacker1:
+            score += 40  # ルカリオ確保済みなら余剰エネルギーをオーガポンexへ
     return score
 
 

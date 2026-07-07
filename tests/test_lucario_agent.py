@@ -157,6 +157,21 @@ class TestEnergyScore:
         assert without_flag > with_flag
 
 
+class TestEnergyScoreOgerponEx:
+    def test_charging_gets_bonus_below_3_energy(self):
+        """3エネ未満（充填中）はボーナスが付く"""
+        charging = make_pokemon(id=lm.Ogerpon_ex, energies=[6, 6])
+        full     = make_pokemon(id=lm.Ogerpon_ex, energies=[6, 6, 6])
+        assert lm.energy_score(charging, False, False) > lm.energy_score(full, False, False)
+
+    def test_attacker1_ready_gives_extra_bonus(self):
+        """ルカリオ系統(attacker1)が準備済みなら、余剰エネルギーをオーガポンexへ回すため加点される"""
+        p = make_pokemon(id=lm.Ogerpon_ex, energies=[6])
+        without_flag = lm.energy_score(p, False, False)
+        with_flag    = lm.energy_score(p, False, True)
+        assert with_flag > without_flag
+
+
 # ==================== Task 4: フィールド状態ヘルパー ====================
 from unittest.mock import MagicMock
 from cg.api import Card
