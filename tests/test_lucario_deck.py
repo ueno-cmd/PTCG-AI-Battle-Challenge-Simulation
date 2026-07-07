@@ -62,11 +62,11 @@ def test_new_cards_present_with_expected_counts():
     assert counts[1188] == 1  # Ciphermaniac's Codebreaking
 
 
-def test_ogerpon_ex_present_with_1_copy():
+def test_ogerpon_ex_present_with_2_copies():
     counts = dict(DECK)
-    assert counts[117] == 1  # Cornerstone Mask Ogerpon ex
+    assert counts[117] == 2  # Cornerstone Mask Ogerpon ex（1→2に増量）
 
 
-def test_solrock_reduced_to_3():
+def test_solrock_reduced_to_2():
     counts = dict(DECK)
-    assert counts[676] == 3  # Solrock 4→3（オーガポンex採用のため1枚減）
+    assert counts[676] == 2  # Solrock 3→2（オーガポンex増量のため1枚減）
