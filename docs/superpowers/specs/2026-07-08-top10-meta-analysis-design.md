@@ -31,7 +31,7 @@ Web検索（2クエリで独立に一致）により、本コンペ（Simulation
 ## 入力データの契約
 
 - ユーザーが手動DLしたJSON30件は、既存の`data/battle_logs/`にそのまま配置する（新規フォルダは作らない）
-- 対象ログのリストを`data/top10_meta_targets.txt`としてユーザーが作成する。フォーマットはCSV形式（ヘッダなし、`#`始まりの行はコメントとして無視）：
+- 対象ログのリストを`data/top10_meta_targets.csv`としてユーザーが作成する。フォーマットはCSV形式（ヘッダなし、`#`始まりの行はコメントとして無視）：
   ```
   # 形式: episode_id,target_player_name
   # target_player_name は info.Agents の名前と完全一致させ、そのログ内で分析対象とする側（TOP10プレイヤー側）を明示する
@@ -49,7 +49,7 @@ Web検索（2クエリで独立に一致）により、本コンペ（Simulation
 ハイブリッド方式を採用する。ただし実装調査の結果、既存の`silver.py`が実際に出力しているのは**勝者名・ターン数（`total_steps`）のみ**であり、デッキリストやRESULT理由は含まれていないことが分かった（`bronze.py`は生JSONの単純コピー）。そのため「デッキ分布・基本サマリー」のうち実際にsilverを再利用できるのは勝敗・ターン数だけで、**デッキリスト抽出とアーキタイプ分類は意思決定パターン抽出と同じく生JSON直読みの新規実装**になる。両者とも生JSONを扱う点は共通なので、`gold.py`に両方の関数を置く。
 
 ```
-data/top10_meta_targets.txt          … 対象30件の episode_id,target_player_name リスト（ユーザー作成）
+data/top10_meta_targets.csv          … 対象30件の episode_id,target_player_name リスト（ユーザー作成）
 data/battle_logs/<id>.json            … 既存の生ログ（そのまま）
 
 src/etl/silver.py                     … 【修正】rewardsにNoneが含まれる場合にクラッシュしないようガード追加（勝者名・ターン数の取得に利用）
@@ -59,7 +59,7 @@ scripts/analyze_top10_meta.py         … 【新規】集約CLI
 output/top10_meta_report_<実行日>.md  … 生成されるレポート
 ```
 
-`scripts/analyze_top10_meta.py`は`data/top10_meta_targets.txt`を読み、対象ログそれぞれについて (a) `silver.py`で勝者名・ターン数を取得、(b) `gold.py`でデッキリスト・意思決定イベントを抽出し、1つのMarkdownレポートに集約する。既存の`scripts/etl_battle_log.py`と同じCLIパターン（`uv run python scripts/xxx.py`）を踏襲する。
+`scripts/analyze_top10_meta.py`は`data/top10_meta_targets.csv`を読み、対象ログそれぞれについて (a) `silver.py`で勝者名・ターン数を取得、(b) `gold.py`でデッキリスト・意思決定イベントを抽出し、1つのMarkdownレポートに集約する。既存の`scripts/etl_battle_log.py`と同じCLIパターン（`uv run python scripts/xxx.py`）を踏襲する。
 
 `silver.py`のNone-reward修正は既知のバグ（`parse_to_silver()`が`rewards`の片方が`None`の試合でクラッシュ、2026-07-03にログ83510250で発生確認済み、[[project_battle_log_parser]]参照）の解消であり、既存の全デッキ分析にも波及する副次的な改善になる。
 
@@ -102,7 +102,7 @@ output/top10_meta_report_<実行日>.md  … 生成されるレポート
 
 - `src/etl/silver.py`：`rewards=[1, None]`のようなfixtureで回帰テストを追加（実ログ`83510250.json`が既知の再現ケース）
 - `src/etl/gold.py`：`data/battle_logs/`内の既存ログ数件をfixtureとして使い、ATTACK/SWITCH/RESULTイベントが正しい件数・内容で抽出できることをユニットテストで検証
-- `scripts/analyze_top10_meta.py`：対象30件が揃う前でも、既存ログ数件を`targets.txt`に入れてエンドツーエンドで実行し、レポートが生成されることを確認
+- `scripts/analyze_top10_meta.py`：対象30件が揃う前でも、既存ログ数件を`top10_meta_targets.csv`に入れてエンドツーエンドで実行し、レポートが生成されることを確認
 
 ---
 
