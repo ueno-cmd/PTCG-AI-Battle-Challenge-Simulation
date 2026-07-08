@@ -807,6 +807,54 @@ class TestNewCardScoring:
         assert score == -1
 
 
+class TestPremiumPowerProScoring:
+    """パワープロテインのスコアリング（既存挙動の固定化テスト）"""
+
+    def _score(self, remain_hp, can_attack, supporter_played,
+               boss_in_hand=0, lillie_in_hand=0):
+        my_ps = make_player_state(hand=[Card(id=lm.Premium_Power_Pro, serial=1, playerIndex=0)])
+        obs = MagicMock()
+        obs.current.players = [my_ps, make_player_state()]
+        state = _make_state()
+        state.supporterPlayed = supporter_played
+        plan = lm.AttackPlan(remain_hp=remain_hp)
+        hand_counts = defaultdict(int, {
+            lm.Boss_Orders: boss_in_hand,
+            lm.Lillie_Determination: lillie_in_hand,
+        })
+        return lm._score_play_option(
+            obs, Option(type=OptionType.PLAY, index=0), my_index=0,
+            current_plan=plan, can_attack=can_attack,
+            state=state, my_state=my_ps,
+            hand_counts=hand_counts, field_counts=defaultdict(int), stadium_id=0,
+        )
+
+    def test_holds_when_supporter_played_and_ko_already_confirmed(self):
+        score = self._score(remain_hp=0, can_attack=True, supporter_played=True)
+        assert score == -1
+
+    def test_used_freely_when_can_attack(self):
+        """攻撃可能な場面では確定KO済みでない限り優先的に使う"""
+        score = self._score(remain_hp=50, can_attack=True, supporter_played=False)
+        assert score == 5000
+
+    def test_used_as_backup_supporter_when_no_other_option(self):
+        """攻撃不可・サポーター未使用・他の有力サポーターも手札にない場合は温存せず使う"""
+        score = self._score(remain_hp=50, can_attack=False, supporter_played=False)
+        assert score == 3050
+
+    def test_held_when_attack_impossible_but_supporter_already_played(self):
+        score = self._score(remain_hp=50, can_attack=False, supporter_played=True)
+        assert score == -1
+
+    def test_held_when_better_supporter_available_in_hand(self):
+        """ボスの指令が手札にあるならパワープロテインは温存"""
+        score = self._score(
+            remain_hp=50, can_attack=False, supporter_played=False, boss_in_hand=1,
+        )
+        assert score == -1
+
+
 # ==================== Task 6: ボスの指令のε-greedy ====================
 class _StubRng:
     def __init__(self, value):

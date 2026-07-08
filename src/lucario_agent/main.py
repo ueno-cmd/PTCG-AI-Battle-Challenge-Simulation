@@ -454,13 +454,15 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
         return 20000
     # トレーナーズ
     if card.id == Premium_Power_Pro:
-        if state.supporterPlayed and current_plan.remain_hp <= 0:
+        confirmed_ko_already_secured = state.supporterPlayed and current_plan.remain_hp <= 0
+        if confirmed_ko_already_secured:
             return -1
-        if not can_attack:
-            if not state.supporterPlayed and hand_counts[Boss_Orders] == 0 and hand_counts[Lillie_Determination] == 0:
-                return 3050
-            return -1
-        return 5000
+        if can_attack:
+            return 5000
+        other_supporter_in_hand = hand_counts[Boss_Orders] >= 1 or hand_counts[Lillie_Determination] >= 1
+        if not state.supporterPlayed and not other_supporter_in_hand:
+            return 3050
+        return -1
     if card.id == Boss_Orders:
         if current_plan.target < 1:
             return -1  # 対象不在なら温存
