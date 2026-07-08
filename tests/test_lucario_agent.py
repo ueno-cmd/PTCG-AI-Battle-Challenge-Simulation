@@ -840,3 +840,28 @@ class TestToHandContext:
         """デッキの採用枚数(2枚)を場で使い切っていれば探す必要はない"""
         fc = defaultdict(int, {lm.Ogerpon_ex: 2})
         assert self._score(lm.Ogerpon_ex, field_counts=fc) == 200 - 150
+
+
+class TestUltraBallAlreadyFoundIncludesOgerponEx:
+    """Ultra_Ballの使用判定(already_found)にOgerpon_exも含まれることの確認"""
+
+    def _score(self, field_counts=None, hand_counts=None):
+        obs = MagicMock()
+        my_ps = make_player_state(hand=[Card(id=lm.Ultra_Ball, serial=1, playerIndex=0)])
+        obs.current.players = [my_ps, make_player_state()]
+        return lm._score_play_option(
+            obs, Option(type=OptionType.PLAY, index=0), my_index=0,
+            current_plan=lm.AttackPlan(), can_attack=False,
+            state=_make_state(), my_state=my_ps,
+            hand_counts=hand_counts or defaultdict(int),
+            field_counts=field_counts or defaultdict(int), stadium_id=0,
+        )
+
+    def test_lower_priority_when_ogerpon_ex_already_on_field(self):
+        """リオル/メガルカリオexが未確保でも、オーガポンexが場にいれば優先度を下げる"""
+        fc = defaultdict(int, {lm.Ogerpon_ex: 1})
+        assert self._score(field_counts=fc) == 5500
+
+    def test_lower_priority_when_ogerpon_ex_already_in_hand(self):
+        hc = defaultdict(int, {lm.Ogerpon_ex: 1})
+        assert self._score(hand_counts=hc) == 5500

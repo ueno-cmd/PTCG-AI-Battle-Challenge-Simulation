@@ -460,7 +460,10 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
     if card.id == Lillie_Determination:
         return 3100 if my_state.deckCount >= DECK_SAFETY_THRESHOLD else -1
     if card.id == Ultra_Ball:
-        already_found = field_counts[Riolu] + field_counts[Mega_Lucario_ex] + hand_counts[Riolu] + hand_counts[Mega_Lucario_ex]
+        already_found = (
+            field_counts[Riolu] + field_counts[Mega_Lucario_ex] + field_counts[Ogerpon_ex]
+            + hand_counts[Riolu] + hand_counts[Mega_Lucario_ex] + hand_counts[Ogerpon_ex]
+        )
         return 6000 if already_found == 0 else 5500
     if card.id == Pokegear:
         return 5200
