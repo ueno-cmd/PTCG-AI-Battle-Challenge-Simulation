@@ -226,6 +226,41 @@ def _make_state(turn=3, energy_attached=False, first_player=0):
     return state
 
 
+class TestCalcAttackDamage:
+    """弱点/抵抗力/Crustle無効化を1箇所に集約した_calc_attack_damageのテスト"""
+
+    def test_no_modifier_returns_base_damage(self):
+        defender = MockCardData(cardId=999)
+        assert lm._calc_attack_damage(lm.Mega_Lucario_ex, 130, 999, defender) == 130
+
+    def test_weakness_doubles_damage(self):
+        defender = MockCardData(cardId=999, weakness=EnergyType.FIGHTING)
+        assert lm._calc_attack_damage(lm.Mega_Lucario_ex, 130, 999, defender) == 260
+
+    def test_resistance_reduces_damage_by_30(self):
+        defender = MockCardData(cardId=999, resistance=EnergyType.FIGHTING)
+        assert lm._calc_attack_damage(lm.Mega_Lucario_ex, 130, 999, defender) == 100
+
+    def test_ogerpon_ex_ignores_weakness(self):
+        """ぶちやぶるは弱点を計算しない"""
+        defender = MockCardData(cardId=999, weakness=EnergyType.FIGHTING)
+        assert lm._calc_attack_damage(lm.Ogerpon_ex, 140, 999, defender) == 140
+
+    def test_crustle_nullifies_mega_lucario_ex_damage(self):
+        defender = MockCardData(cardId=lm.Crustle)
+        assert lm._calc_attack_damage(lm.Mega_Lucario_ex, 270, lm.Crustle, defender) == 0
+
+    def test_crustle_does_not_nullify_ogerpon_ex_damage(self):
+        """ぶちやぶるは相手にかかっている効果を計算しないためCrustleの特性を貫通する"""
+        defender = MockCardData(cardId=lm.Crustle)
+        assert lm._calc_attack_damage(lm.Ogerpon_ex, 140, lm.Crustle, defender) == 140
+
+    def test_crustle_does_not_nullify_non_ex_attacker_damage(self):
+        """Crustleの特性はexポケモンの技のみを無効化する（Solrock等の非exは通常通り）"""
+        defender = MockCardData(cardId=lm.Crustle)
+        assert lm._calc_attack_damage(lm.Solrock, 70, lm.Crustle, defender) == 70
+
+
 class TestCalcAttackPlan:
     def test_no_attackers_returns_default_plan(self):
         """攻撃可能なポケモンがいない場合はデフォルト AttackPlan(-1) を返す"""

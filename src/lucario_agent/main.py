@@ -232,6 +232,23 @@ def _analyze_main_options(obs: Observation, select, my_index: int) -> tuple[bool
 
 
 # ==================== 攻撃プラン計算 ====================
+def _calc_attack_damage(attacker_id: int, base_damage: int, defender_id: int, defender_data) -> int:
+    """弱点・抵抗力・Crustleの特性無効化を考慮した実ダメージを1箇所で計算する"""
+    damage = base_damage
+    attack_ignores_defender_effects = attacker_id == Ogerpon_ex  # ぶちやぶる：相手にかかっている効果を計算しない
+    if not attack_ignores_defender_effects:
+        if defender_data.weakness == EnergyType.FIGHTING:
+            damage *= 2
+        elif defender_data.resistance == EnergyType.FIGHTING:
+            damage -= 30
+
+    defender_nullifies_ex_damage = defender_id == Crustle and attacker_id == Mega_Lucario_ex
+    if defender_nullifies_ex_damage:
+        damage = 0  # Crustleの特性「ふしぎな岩の宿」：相手のexポケモンの技ダメージを無効化する
+
+    return damage
+
+
 def calc_attack_plan(
     obs: Observation,
     my_state,
@@ -287,10 +304,16 @@ def calc_attack_plan(
 
             energy_count = len(my_pokemon.energies)
             more_energy  = False
-            if a == 1 and i == 0 and energy_count >= 2 and not can_use_mega_brave:
+            mega_brave_unavailable_for_current_active = (
+                a == 1 and i == 0 and energy_count >= 2 and not can_use_mega_brave
+            )
+            if mega_brave_unavailable_for_current_active:
                 break
             if energy_count < energy_required:
-                if hand_counts[Basic_Fighting_Energy] >= 1 and not state.energyAttached:
+                can_attach_energy_this_turn = (
+                    hand_counts[Basic_Fighting_Energy] >= 1 and not state.energyAttached
+                )
+                if can_attach_energy_this_turn:
                     energy_count += 1
                     if energy_count < energy_required:
                         continue
@@ -304,15 +327,8 @@ def calc_attack_plan(
                     continue
                 if j != 0 and not can_op_switch:
                     break
-                damage = base_damage
                 data   = card_table[op_pokemon.id]
-                if my_pokemon.id != Ogerpon_ex:
-                    if data.weakness == EnergyType.FIGHTING:
-                        damage *= 2
-                    elif data.resistance == EnergyType.FIGHTING:
-                        damage -= 30
-                if op_pokemon.id == Crustle and my_pokemon.id == Mega_Lucario_ex:
-                    damage = 0  # Crustleの特性により、ex ポケモンの技ダメージは通らない
+                damage = _calc_attack_damage(my_pokemon.id, base_damage, op_pokemon.id, data)
 
                 prize = 0
                 score = pokemon_score(op_pokemon)
@@ -322,12 +338,9 @@ def calc_attack_plan(
                     score *= damage / op_pokemon.hp
                 score += base_score
 
-                if my_pokemon.id == Mega_Lucario_ex and a == 1:
-                    base_dmg_normal = 130
-                    if data.weakness == EnergyType.FIGHTING:
-                        base_dmg_normal *= 2
-                    elif data.resistance == EnergyType.FIGHTING:
-                        base_dmg_normal -= 30
+                is_mega_brave_choice = my_pokemon.id == Mega_Lucario_ex and a == 1
+                if is_mega_brave_choice:
+                    base_dmg_normal = _calc_attack_damage(my_pokemon.id, 130, op_pokemon.id, data)
                     if op_pokemon.hp <= base_dmg_normal:
                         score -= 1000  # 通常攻撃で足りるならメガブレイブは温存
                     elif op_pokemon.hp > damage:
