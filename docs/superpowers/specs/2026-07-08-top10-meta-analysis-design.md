@@ -31,9 +31,16 @@ Web検索（2クエリで独立に一致）により、本コンペ（Simulation
 ## 入力データの契約
 
 - ユーザーが手動DLしたJSON30件は、既存の`data/battle_logs/`にそのまま配置する（新規フォルダは作らない）
-- 対象30エピソードIDのリストを`data/top10_meta_targets.txt`（1行1エピソードID）としてユーザーが作成する
-  - 理由：ログJSON内には「LB順位」の情報が無く、対戦相手名（`info.Agents`）だけでは自動判定できないため、対象選定はユーザーの目視作業に委ねる
-- 意思決定パターン分析は「対戦相手（TOP10プレイヤー）側」のプレイのみを対象とする（自分＝Kagura_UT側の手番は対象外）。ログ内でどちらがTOP10プレイヤーかは`info.Agents`の名前で判定する
+- 対象ログのリストを`data/top10_meta_targets.txt`としてユーザーが作成する。フォーマットはCSV形式（ヘッダなし、`#`始まりの行はコメントとして無視）：
+  ```
+  # 形式: episode_id,target_player_name
+  # target_player_name は info.Agents の名前と完全一致させ、そのログ内で分析対象とする側（TOP10プレイヤー側）を明示する
+  84580427,Zammaar Shafqat Malhi
+  83433347,Canon
+  81826988,keidroid
+  ```
+  - `target_player_name`を1行ごとに明示する理由：TOP10プレイヤー同士の対戦ログ（自分＝Kagura_UTが関与しない試合）も対象になり得るため、「相手側＝分析対象」という単純な決め打ちができない。`gold.py`は`info.Agents`の中から`target_player_name`と完全一致する側（`player0`/`player1`のどちらか）を機械的に特定するだけでよく、TOP10プレイヤー名リストとの突合ロジックを別途持つ必要がなくなる
+  - 対象選定・ファイル作成自体はユーザーの手作業（ログJSON内に「LB順位」の情報が無いため自動化できない）
 
 ---
 
@@ -42,7 +49,7 @@ Web検索（2クエリで独立に一致）により、本コンペ（Simulation
 ハイブリッド方式を採用する。ただし実装調査の結果、既存の`silver.py`が実際に出力しているのは**勝者名・ターン数（`total_steps`）のみ**であり、デッキリストやRESULT理由は含まれていないことが分かった（`bronze.py`は生JSONの単純コピー）。そのため「デッキ分布・基本サマリー」のうち実際にsilverを再利用できるのは勝敗・ターン数だけで、**デッキリスト抽出とアーキタイプ分類は意思決定パターン抽出と同じく生JSON直読みの新規実装**になる。両者とも生JSONを扱う点は共通なので、`gold.py`に両方の関数を置く。
 
 ```
-data/top10_meta_targets.txt          … 対象30エピソードIDのリスト（ユーザー作成）
+data/top10_meta_targets.txt          … 対象30件の episode_id,target_player_name リスト（ユーザー作成）
 data/battle_logs/<id>.json            … 既存の生ログ（そのまま）
 
 src/etl/silver.py                     … 【修正】rewardsにNoneが含まれる場合にクラッシュしないようガード追加（勝者名・ターン数の取得に利用）
@@ -68,7 +75,7 @@ output/top10_meta_report_<実行日>.md  … 生成されるレポート
 
 ### `src/etl/gold.py`（新規）
 
-生JSONの`steps[i][player]['observation']['logs']`を`LogType`（`data/cg/api.py`）でデコードし、対戦相手（TOP10プレイヤー）側の行動のみを対象に、以下を1試合分のイベント列として抽出する関数群を提供する。
+生JSONの`steps[i][player]['observation']['logs']`を`LogType`（`data/cg/api.py`）でデコードし、`target_player_name`と`info.Agents`が一致する側の行動のみを対象に、以下を1試合分のイベント列として抽出する関数群を提供する。
 
 - `ATTACK`イベント：使用した技・その時点のエネルギー数・与えたダメージ
 - `select.context`が`SWITCH`/`TO_ACTIVE`系のイベント：交代先ポケモン・その時点のHP
