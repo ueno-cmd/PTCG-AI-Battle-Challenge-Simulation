@@ -401,6 +401,9 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
                 score += -150 if total >= 2 else (-3 if total >= 1 else 40)
             elif card.id == Mega_Lucario_ex:
                 score += 40 if field_counts[Riolu] >= 1 else -15
+            elif card.id == Ogerpon_ex:
+                # デッキ採用枚数(2枚)に対する充足度で優先度を調整（Riolu方式を踏襲）
+                score += -150 if field_counts[Ogerpon_ex] >= 2 else (-3 if field_counts[Ogerpon_ex] >= 1 else 40)
             elif card.id == Basic_Fighting_Energy:
                 score += 30 if not ability_used_flag or not state.energyAttached else -1
             return score

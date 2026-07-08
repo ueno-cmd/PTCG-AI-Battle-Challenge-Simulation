@@ -808,3 +808,35 @@ class TestBossOrdersEpsilonGreedy:
     def test_holds_when_rng_above_epsilon(self):
         score = self._score(target=1, remain_hp=50, rng=_StubRng(0.9))
         assert score == -1
+
+
+# ==================== ロジック不整合修正: Ogerpon_exのサーチ優先度 ====================
+class TestToHandContext:
+    """SelectContext.TO_HAND（山札サーチ時の候補選択）でのOgerpon_ex優先度テスト"""
+
+    def _score(self, card_id, field_counts=None, hand_counts=None):
+        card = Card(id=card_id, serial=1, playerIndex=0)
+        obs = MagicMock()
+        obs.select.deck = [card]
+        return lm._score_card_option(
+            obs, Option(type=OptionType.CARD, area=lm.AreaType.DECK, index=0, playerIndex=0),
+            context=lm.SelectContext.TO_HAND, my_index=0, state=_make_state(),
+            my_state=make_player_state(),
+            field_counts=field_counts or defaultdict(int),
+            hand_counts=hand_counts or defaultdict(int),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), ability_used_flag=False,
+        )
+
+    def test_prioritized_when_not_yet_secured(self):
+        """場に1枚もいなければ、リオル等と同様にサーチ優先度を上げる"""
+        assert self._score(lm.Ogerpon_ex) == 200 + 40
+
+    def test_slightly_deprioritized_with_1_in_play(self):
+        fc = defaultdict(int, {lm.Ogerpon_ex: 1})
+        assert self._score(lm.Ogerpon_ex, field_counts=fc) == 200 - 3
+
+    def test_deprioritized_when_both_copies_in_play(self):
+        """デッキの採用枚数(2枚)を場で使い切っていれば探す必要はない"""
+        fc = defaultdict(int, {lm.Ogerpon_ex: 2})
+        assert self._score(lm.Ogerpon_ex, field_counts=fc) == 200 - 150
