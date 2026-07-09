@@ -28,11 +28,18 @@ def _read_targets(targets_csv: Path) -> list[tuple[int, str]]:
     """targets_csvから(episode_id, target_player_name)のリストを読む（#始まりはコメント）"""
     targets = []
     with targets_csv.open(encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
+        for line_number, raw_line in enumerate(f, start=1):
+            line = raw_line.strip()
             if not line or line.startswith("#"):
                 continue
-            episode_id_str, player_name = line.split(",", 1)
+            # 手作業入力によるカンマ不足を検出し、行番号付きで分かりやすく報告する
+            parts = line.split(",", 1)
+            if len(parts) != 2:
+                raise SystemExit(
+                    f"targets_csvの記法が不正です（{line_number}行目: '{line}'）。"
+                    "'episode_id,target_player_name' 形式にしてください"
+                )
+            episode_id_str, player_name = parts
             targets.append((int(episode_id_str), player_name))
     return targets
 
@@ -51,6 +58,9 @@ def build_report(
 
     for episode_id, player_name in _read_targets(targets_csv):
         src_path = battle_logs_dir / f"{episode_id}.json"
+        # 手作業ダウンロード漏れ・ファイル名の入力ミスを分かりやすく報告する
+        if not src_path.exists():
+            raise SystemExit(f"バトルログが見つかりません: {src_path}（episode_id={episode_id}）")
         bronze_path = copy_to_bronze(src_path, catalog_dir)
         summary_path, _ = parse_to_silver(bronze_path, catalog_dir)
         with summary_path.open(encoding="utf-8") as f:
