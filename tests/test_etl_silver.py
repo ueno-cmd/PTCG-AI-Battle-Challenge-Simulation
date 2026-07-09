@@ -98,3 +98,30 @@ def test_parse_turns_content(bronze_json: Path, tmp_path: Path) -> None:
     assert rows[2]["action"] == "[1, 2]"
     assert rows[2]["logs_count"] == "1"
     assert rows[2]["status"] == "DONE"
+
+
+def test_parse_to_silver_handles_none_reward(tmp_path):
+    """rewardsの片方がNone（タイムアウト等）でもクラッシュしないこと"""
+    bronze_data = {
+        "info": {
+            "EpisodeId": 99999999,
+            "Agents": [{"Name": "PlayerA"}, {"Name": "PlayerB"}],
+        },
+        "rewards": [1, None],
+        "steps": [
+            [
+                {"observation": {"step": 0, "logs": []}, "action": None, "reward": 1, "status": "DONE"},
+                {"observation": {"step": 0, "logs": []}, "action": None, "reward": None, "status": "DONE"},
+            ]
+        ],
+    }
+    bronze_path = tmp_path / "bronze_99999999.json"
+    bronze_path.write_text(json.dumps(bronze_data), encoding="utf-8")
+    catalog_dir = tmp_path / "catalog"
+
+    summary_path, _ = parse_to_silver(bronze_path, catalog_dir)
+
+    with summary_path.open(encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    assert rows[0]["winner_index"] == "0"
+    assert rows[0]["winner_name"] == "PlayerA"

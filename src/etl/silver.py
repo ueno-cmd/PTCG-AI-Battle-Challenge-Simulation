@@ -15,8 +15,8 @@ def parse_to_silver(bronze_path: Path, catalog_dir: Path) -> tuple[Path, Path]:
     rewards = data["rewards"]
     steps = data["steps"]
 
-    # 報酬が最大のエージェントを勝者とする
-    winner_index = rewards.index(max(rewards))
+    # 報酬が最大のエージェントを勝者とする（Noneは最小値扱い：タイムアウト等で片方がNoneになる試合対策）
+    winner_index = max(range(len(rewards)), key=lambda i: (rewards[i] is not None, rewards[i] or 0))
     winner_name = agents[winner_index]["Name"]
 
     summary_path = catalog_dir / f"silver_summary_{episode_id}.csv"
