@@ -1,0 +1,6 @@
+# TOP10メタ分析対象ログ一覧
+# 形式: episode_id,target_player_name
+# target_player_name は info.Agents の名前と完全一致させ、そのログ内で分析対象とする側（TOP10プレイヤー側）を明示する
+#
+# 以下はサンプル1行（動作確認用）。実運用ではユーザーが現行LB TOP10の30行に差し替える。
+84580427,Kagura_UT

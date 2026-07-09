@@ -46,7 +46,9 @@ htmlcov/
 .superpowers/
 
 # コンペ配布データ（再配布不可）
-data/
+data/*
+# ただしユーザー自作の分析対象リスト（配布データではないため例外的に追跡）
+!data/top10_meta_targets.csv
 
 # 提出用 deck.csv 一時出力先
 output/
