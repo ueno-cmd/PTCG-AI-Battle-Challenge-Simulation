@@ -3,9 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from etl.gold import build_event_timeline, find_player_index, load_raw_log
+from etl.gold import build_event_timeline, classify_archetype, extract_deck_list, find_player_index, load_card_names, load_raw_log
 
 FIXTURE_PATH = Path(__file__).parent.parent / "data" / "battle_logs" / "84580427.json"
+CARD_DATA_PATH = Path(__file__).parent.parent / "data" / "EN_Card_Data.csv"
 
 
 @pytest.fixture
@@ -34,3 +35,33 @@ def test_build_event_timeline_reconstructs_full_game(sample_log):
     step_index, event = timeline[0]
     assert isinstance(step_index, int)
     assert "type" in event
+
+
+def test_extract_deck_list_returns_60_cards(sample_log):
+    deck0 = extract_deck_list(sample_log, target_player_index=0)
+    deck1 = extract_deck_list(sample_log, target_player_index=1)
+    assert len(deck0) == 60
+    assert len(deck1) == 60
+    assert deck0.count(345) == 4  # Crustle x4
+    assert deck1.count(677) == 4  # Riolu x4
+    assert deck1.count(678) == 3  # Mega Lucario ex x3
+
+
+def test_load_card_names_maps_id_to_name_and_rule():
+    card_names = load_card_names(CARD_DATA_PATH)
+    assert card_names[678] == ("Mega Lucario ex", "Mega Pokémon ex")
+    assert card_names[345] == ("Crustle", "n/a")
+
+
+def test_classify_archetype_lists_ex_pokemon_by_count(sample_log):
+    card_names = load_card_names(CARD_DATA_PATH)
+    deck1 = extract_deck_list(sample_log, target_player_index=1)
+    label = classify_archetype(deck1, card_names)
+    assert "Mega Lucario ex" in label
+    assert "Cornerstone Mask Ogerpon ex" in label
+
+
+def test_classify_archetype_returns_placeholder_when_no_ex(sample_log):
+    card_names = load_card_names(CARD_DATA_PATH)
+    label = classify_archetype([1, 2, 3], card_names)  # ex非該当の適当なID
+    assert label == "(exなし)"
