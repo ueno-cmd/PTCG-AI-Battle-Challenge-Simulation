@@ -65,3 +65,34 @@ def test_classify_archetype_returns_placeholder_when_no_ex(sample_log):
     card_names = load_card_names(CARD_DATA_PATH)
     label = classify_archetype([1, 2, 3], card_names)  # ex非該当の適当なID
     assert label == "(exなし)"
+
+
+from etl.gold import extract_attack_events, extract_play_events, extract_switch_events
+
+
+def test_extract_attack_events_includes_energy_count_at_that_time(sample_log):
+    attacks = extract_attack_events(sample_log, target_player_index=1)
+    assert len(attacks) == 14
+    first = attacks[0]
+    assert first["step"] == 20
+    assert first["turn"] == 3
+    assert first["attack_id"] == 981
+    assert first["card_id"] == 677
+    assert first["serial"] == 66
+    assert first["energy_count"] == 1
+
+
+def test_extract_switch_events_count(sample_log):
+    switches = extract_switch_events(sample_log, target_player_index=1)
+    assert len(switches) == 2
+
+
+def test_extract_play_events_count(sample_log):
+    plays = extract_play_events(sample_log, target_player_index=1)
+    assert len(plays) == 25
+
+
+def test_extract_result_reason_returns_none_when_absent(sample_log):
+    # フィクスチャ84580427.jsonはRESULTログイベントが記録されていない既知のケース
+    from etl.gold import extract_result_reason
+    assert extract_result_reason(sample_log) is None

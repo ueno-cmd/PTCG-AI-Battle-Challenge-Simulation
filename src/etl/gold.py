@@ -75,3 +75,81 @@ def classify_archetype(deck_card_ids: list[int], card_names: dict[int, tuple[str
         return "(exなし)"
     ex_cards.sort(key=lambda x: (-x[0], x[1]))
     return " + ".join(f"{name}x{count}" for count, name in ex_cards)
+
+
+LOG_TYPE_SWITCH = 8
+LOG_TYPE_PLAY = 10
+LOG_TYPE_ATTACK = 15
+LOG_TYPE_RESULT = 23
+
+
+def _find_energy_count(data: dict, step_index: int, owner_index: int, serial: int) -> int | None:
+    """指定ステップ時点で、指定シリアルのポケモンが持つエネルギー数を返す（見つからなければNone）"""
+    state = data["steps"][step_index][0]["observation"]["current"]
+    player_state = state["players"][owner_index]
+    candidates = list(player_state["active"]) + list(player_state["bench"])
+    for poke in candidates:
+        if poke and poke.get("serial") == serial:
+            return len(poke["energies"])
+    return None
+
+
+def _find_turn_number(data: dict, step_index: int) -> int:
+    """指定ステップ時点のターン数を返す"""
+    return data["steps"][step_index][0]["observation"]["current"]["turn"]
+
+
+def extract_attack_events(data: dict, target_player_index: int) -> list[dict]:
+    """target_player_indexの技使用イベントを、その時点のエネルギー数付きで抽出する"""
+    result = []
+    for step_index, event in build_event_timeline(data, player_index=0):
+        if event.get("type") != LOG_TYPE_ATTACK or event.get("playerIndex") != target_player_index:
+            continue
+        result.append({
+            "step": step_index,
+            "turn": _find_turn_number(data, step_index),
+            "attack_id": event["attackId"],
+            "card_id": event["cardId"],
+            "serial": event["serial"],
+            "energy_count": _find_energy_count(data, step_index, target_player_index, event["serial"]),
+        })
+    return result
+
+
+def extract_switch_events(data: dict, target_player_index: int) -> list[dict]:
+    """target_player_indexの入れ替え（SWITCH）イベントを抽出する"""
+    result = []
+    for step_index, event in build_event_timeline(data, player_index=0):
+        if event.get("type") != LOG_TYPE_SWITCH or event.get("playerIndex") != target_player_index:
+            continue
+        result.append({
+            "step": step_index,
+            "turn": _find_turn_number(data, step_index),
+            "card_id_active": event["cardIdActive"],
+            "card_id_bench": event["cardIdBench"],
+        })
+    return result
+
+
+def extract_play_events(data: dict, target_player_index: int) -> list[dict]:
+    """target_player_indexのカードプレイ（PLAY）イベントを抽出する（トレーナーズ・サポート含む）"""
+    result = []
+    for step_index, event in build_event_timeline(data, player_index=0):
+        if event.get("type") != LOG_TYPE_PLAY or event.get("playerIndex") != target_player_index:
+            continue
+        result.append({
+            "step": step_index,
+            "turn": _find_turn_number(data, step_index),
+            "card_id": event["cardId"],
+            "serial": event["serial"],
+        })
+    return result
+
+
+def extract_result_reason(data: dict) -> int | None:
+    """試合の決着理由を返す（1=プライズ0/2=デッキアウト/3=バトル場0/4=カード効果）。
+    RESULTログイベントが記録されていない試合ではNoneを返す（ベストエフォート）。"""
+    for _step_index, event in build_event_timeline(data, player_index=0):
+        if event.get("type") == LOG_TYPE_RESULT:
+            return event.get("reason")
+    return None
