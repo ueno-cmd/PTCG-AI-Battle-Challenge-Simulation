@@ -403,9 +403,14 @@ def _score_own_switch_target(card: "Pokemon", fs: FieldState) -> int:
     それ以外は残りHP（生存力）とエネルギー装着数を基準に評価する。
     相手がCrustle（ex技を無効化する特性持ち）の場合は、非exのモルペコを最優先で
     アクティブにする（他の攻撃者ではダメージが通らないため）。
+    修正①：攻撃準備完了のアタッカーは立ち往生の入口対策として最優先で前に出す。
     """
     if fs.op_active_id == Crustle and card.id == Marnie_Morpeko:
         return 20000 + len(card.energies) * 2
+    if FEATURE_FLAGS["attacker_promotion"] and _is_attack_ready(card):
+        # 攻撃準備完了のアタッカーは最優先で前に出す（855系ログ12件で7敗に関与した
+        # 「立ち往生」の入口対策）。準備完了同士は期待ダメージが大きい方を選ぶ
+        return 12000 + _expected_damage(card)
     if card.id == Grimmsnarl_ex:
         return 10000 + len(card.energies) * 2
     if card.id in SUPPORT_ONLY_IDS:
@@ -546,13 +551,20 @@ def agent(obs_dict: dict) -> list[int]:
             case OptionType.RETREAT:
                 # Grimmsnarl exが瀕死（想定される大技の一撃=180ダメ以下しか耐えられない）なら逃げる。
                 # あるいは、ex攻撃者（Grimmsnarl_ex/Fezandipiti_ex）でCrustle対面（技ダメージ無効化）
-                # かつベンチにモルペコがいるなら、非exのモルペコに交代して攻撃を通す
+                # かつベンチにモルペコがいるなら、非exのモルペコに交代して攻撃を通す。
+                # さらに、アクティブが攻撃不能でベンチに準備完了アタッカーがいる場合も
+                # 撤退して昇格させる（855系ログの立ち往生対策）
                 crustle_matchup = (
                     fs.op_active_id == Crustle
                     and fs.my_active_id in EX_ATTACKER_IDS
                     and fs.morpeko_bench_idx != -1
                 )
-                if (fs.grimmsnarl_active and fs.my_active_hp <= 180) or crustle_matchup:
+                promotion_needed = (
+                    FEATURE_FLAGS["attacker_promotion"]
+                    and not fs.my_active_ready
+                    and fs.bench_ready_attacker
+                )
+                if (fs.grimmsnarl_active and fs.my_active_hp <= 180) or crustle_matchup or promotion_needed:
                     score = 3000
                 else:
                     score = -1

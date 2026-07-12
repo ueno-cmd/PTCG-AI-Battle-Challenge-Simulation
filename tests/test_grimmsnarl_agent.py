@@ -785,6 +785,81 @@ class TestScoreCardOption:
         score_yveltal = gm._score_card_option(obs, o_yveltal, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
         assert score_yveltal > score_shaymin
 
+    # ---------- 新優先順位テスト：攻撃準備度優先（修正①）----------
+    def test_to_active_prefers_ready_grimmsnarl_over_e0_wall(self):
+        """実ログ85534500の再現：エネ6のベンチオーロンゲは、エネ0のキチキギスex（壁）より
+        優先してバトル場に出されること（立ち往生の入口対策）"""
+        grimmsnarl  = make_pokemon(id=gm.Grimmsnarl_ex, hp=320, energies=[7] * 6)
+        fezandipiti = make_pokemon(id=gm.Fezandipiti_ex, hp=210, energies=[])
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[grimmsnarl, fezandipiti])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+        o_grimmsnarl = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        o_fezandipiti = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
+        score_grimmsnarl = gm._score_card_option(obs, o_grimmsnarl, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        score_fezandipiti = gm._score_card_option(obs, o_fezandipiti, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        assert score_grimmsnarl > score_fezandipiti
+
+    def test_ready_morpeko_outranks_unready_grimmsnarl(self):
+        """新優先順位の明示：攻撃準備完了のモルペコ（エネ3）は未準備のオーロンゲ（エネ0）より優先。
+        従来はオーロンゲが無条件で最優先だったが、攻撃できないオーロンゲを前に出しても
+        立ち往生するだけなので、今攻撃できる方を選ぶ"""
+        morpeko    = make_pokemon(id=gm.Marnie_Morpeko, hp=70, energies=[7, 7, 7])
+        grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, hp=320, energies=[])
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[morpeko, grimmsnarl])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+        o_morpeko = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        o_grimmsnarl = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
+        score_morpeko = gm._score_card_option(obs, o_morpeko, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        score_grimmsnarl = gm._score_card_option(obs, o_grimmsnarl, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        assert score_morpeko > score_grimmsnarl
+
+    def test_ready_grimmsnarl_outranks_ready_fezandipiti(self):
+        """準備完了同士は期待ダメージで比較（オーロンゲ180 > キチキギス100）"""
+        grimmsnarl  = make_pokemon(id=gm.Grimmsnarl_ex, hp=320, energies=[7, 7])
+        fezandipiti = make_pokemon(id=gm.Fezandipiti_ex, hp=210, energies=[7, 7, 7])
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[grimmsnarl, fezandipiti])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+        o_grimmsnarl = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        o_fezandipiti = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
+        score_grimmsnarl = gm._score_card_option(obs, o_grimmsnarl, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        score_fezandipiti = gm._score_card_option(obs, o_fezandipiti, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        assert score_grimmsnarl > score_fezandipiti
+
+    def test_crustle_morpeko_still_top_even_over_ready_grimmsnarl(self):
+        """Crustle対面では準備完了のオーロンゲより非exモルペコが優先されること（既存挙動の維持）"""
+        grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, hp=320, energies=[7, 7])
+        morpeko    = make_pokemon(id=gm.Marnie_Morpeko, hp=70, energies=[7])
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[grimmsnarl, morpeko])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=gm.Crustle, hp=130))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs(op_active_id=gm.Crustle)
+        o_grimmsnarl = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        o_morpeko = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
+        score_grimmsnarl = gm._score_card_option(obs, o_grimmsnarl, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        score_morpeko = gm._score_card_option(obs, o_morpeko, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        assert score_morpeko > score_grimmsnarl
+
+    def test_promotion_flag_off_restores_old_priority(self, monkeypatch):
+        """attacker_promotion=Falseなら現行挙動（オーロンゲ無条件最優先）に戻ること"""
+        monkeypatch.setitem(gm.FEATURE_FLAGS, "attacker_promotion", False)
+        morpeko    = make_pokemon(id=gm.Marnie_Morpeko, hp=70, energies=[7, 7, 7])
+        grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, hp=320, energies=[])
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=1), bench=[morpeko, grimmsnarl])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
+        obs = self._make_obs(my_ps, op_ps)
+        fs = self._make_fs()
+        o_morpeko = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        o_grimmsnarl = Option(type=OptionType.CARD, area=AreaType.BENCH, index=1, playerIndex=0)
+        score_morpeko = gm._score_card_option(obs, o_morpeko, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        score_grimmsnarl = gm._score_card_option(obs, o_grimmsnarl, SelectContext.TO_ACTIVE, 0, fs, defaultdict(int))
+        assert score_grimmsnarl > score_morpeko
+
     def test_to_active_prefers_higher_hp_among_non_grimmsnarl_attackers(self):
         """グリムスナールex不在時、実戦向きポケモン同士では残りHPが高い方が優先されること"""
         low_hp_impidimp = make_pokemon(id=gm.Impidimp, hp=20)
@@ -970,6 +1045,61 @@ class TestAgent:
     def test_does_not_retreat_when_grimmsnarl_healthy(self):
         healthy_grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, hp=300, max_hp=320)
         my_ps = make_player_state(active_pokemon=healthy_grimmsnarl)
+        options = [
+            Option(type=OptionType.RETREAT),
+            Option(type=OptionType.END),
+        ]
+        obs_dict = make_main_obs(my_state=my_ps, options=options)
+        result = gm.agent(obs_dict)
+        assert options[result[0]].type == OptionType.END
+
+    # ---------- 新ルールテスト：RETREAT昇格（修正②）----------
+    def test_retreats_when_active_cannot_attack_and_bench_ready(self):
+        """アクティブが攻撃不能（キチキギスexエネ0）でベンチに準備完了のオーロンゲ（エネ2）が
+        いるなら、ENDより撤退を優先すること（855系ログの立ち往生対策・昇格ルール）"""
+        wall  = make_pokemon(id=gm.Fezandipiti_ex, hp=210, energies=[])
+        ready = make_pokemon(id=gm.Grimmsnarl_ex, hp=320, energies=[7, 7])
+        my_ps = make_player_state(active_pokemon=wall, bench=[ready])
+        options = [
+            Option(type=OptionType.RETREAT),
+            Option(type=OptionType.END),
+        ]
+        obs_dict = make_main_obs(my_state=my_ps, options=options)
+        result = gm.agent(obs_dict)
+        assert options[result[0]].type == OptionType.RETREAT
+
+    def test_does_not_retreat_when_bench_not_ready(self):
+        """ベンチのアタッカーも未準備（エネ1のオーロンゲ）なら撤退しないこと"""
+        wall     = make_pokemon(id=gm.Fezandipiti_ex, hp=210, energies=[])
+        unready  = make_pokemon(id=gm.Grimmsnarl_ex, hp=320, energies=[7])
+        my_ps = make_player_state(active_pokemon=wall, bench=[unready])
+        options = [
+            Option(type=OptionType.RETREAT),
+            Option(type=OptionType.END),
+        ]
+        obs_dict = make_main_obs(my_state=my_ps, options=options)
+        result = gm.agent(obs_dict)
+        assert options[result[0]].type == OptionType.END
+
+    def test_does_not_retreat_when_active_is_ready(self):
+        """アクティブ自身が攻撃可能（モルペコエネ3）なら昇格条件は発動しないこと"""
+        ready_active = make_pokemon(id=gm.Marnie_Morpeko, hp=70, energies=[7, 7, 7])
+        ready_bench  = make_pokemon(id=gm.Grimmsnarl_ex, hp=320, energies=[7, 7])
+        my_ps = make_player_state(active_pokemon=ready_active, bench=[ready_bench])
+        options = [
+            Option(type=OptionType.RETREAT),
+            Option(type=OptionType.END),
+        ]
+        obs_dict = make_main_obs(my_state=my_ps, options=options)
+        result = gm.agent(obs_dict)
+        assert options[result[0]].type == OptionType.END
+
+    def test_promotion_retreat_flag_off_keeps_current(self, monkeypatch):
+        """attacker_promotion=Falseなら立ち往生状態でも撤退しない（現行挙動）こと"""
+        monkeypatch.setitem(gm.FEATURE_FLAGS, "attacker_promotion", False)
+        wall  = make_pokemon(id=gm.Fezandipiti_ex, hp=210, energies=[])
+        ready = make_pokemon(id=gm.Grimmsnarl_ex, hp=320, energies=[7, 7])
+        my_ps = make_player_state(active_pokemon=wall, bench=[ready])
         options = [
             Option(type=OptionType.RETREAT),
             Option(type=OptionType.END),
