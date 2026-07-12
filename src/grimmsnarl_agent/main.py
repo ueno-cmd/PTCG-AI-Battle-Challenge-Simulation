@@ -371,7 +371,7 @@ def _score_card_option(
                 # ボスの指令等で相手ベンチを強制的にバトル場に出す場合：
                 # 最もHPが低い（KOに近い）ポケモンを狙う
                 return 100000 - card.hp
-            return _score_own_switch_target(card)
+            return _score_own_switch_target(card, fs)
 
         case SelectContext.TO_BENCH | SelectContext.TO_HAND:
             if not isinstance(card, Pokemon):
