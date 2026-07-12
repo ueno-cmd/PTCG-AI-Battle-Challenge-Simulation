@@ -287,11 +287,11 @@ class TestScorePlay:
         assert gm._score_play(9999, fs, prize_count=4) == 1000
 
     def test_boss_orders_high_when_ko_target_exists(self):
-        fs = self._make_fs(op_bench_hp=[150, 300])
+        fs = self._make_fs(op_bench_hp=[150, 300], my_active_ready=True)
         assert gm._score_play(gm.Boss_Orders, fs, prize_count=4) == 8800
 
     def test_boss_orders_holds_when_no_ko_target_and_rng_above_epsilon(self):
-        fs = self._make_fs(op_bench_hp=[300])
+        fs = self._make_fs(op_bench_hp=[300], my_active_ready=True)
 
         class StubRng:
             def random(self):
@@ -300,7 +300,7 @@ class TestScorePlay:
         assert gm._score_play(gm.Boss_Orders, fs, prize_count=4, rng=StubRng()) == -1
 
     def test_boss_orders_explores_when_rng_below_epsilon(self):
-        fs = self._make_fs(op_bench_hp=[300])
+        fs = self._make_fs(op_bench_hp=[300], my_active_ready=True)
 
         class StubRng:
             def random(self):
@@ -309,13 +309,36 @@ class TestScorePlay:
         assert gm._score_play(gm.Boss_Orders, fs, prize_count=4, rng=StubRng()) == 6000
 
     def test_boss_orders_holds_when_bench_empty_even_if_rng_favors_explore(self):
-        fs = self._make_fs(op_bench_hp=[])
+        fs = self._make_fs(op_bench_hp=[], my_active_ready=True)
 
         class StubRng:
             def random(self):
                 return 0.0  # 最も探索されやすい値でも対象不在なら温存
 
         assert gm._score_play(gm.Boss_Orders, fs, prize_count=4, rng=StubRng()) == -1
+
+    def test_boss_suppressed_when_active_cannot_attack(self):
+        """自分のアクティブが攻撃不能なら、KO確定対象がベンチにいてもボスの指令は温存すること
+        （855系ログで負け6試合がT2〜T5に浪費していた対策）"""
+        fs = self._make_fs(op_bench_hp=[100], my_active_ready=False)
+        assert gm._score_play(gm.Boss_Orders, fs, prize_count=6) == -1
+
+    def test_boss_epsilon_also_suppressed_when_active_cannot_attack(self):
+        """ε探索（先出し）も攻撃可否ゲートの内側であること（乱数が探索側でも温存）"""
+        fs = self._make_fs(op_bench_hp=[300], my_active_ready=False)
+        rng = type("StubRng", (), {"random": lambda self: 0.0})()
+        assert gm._score_play(gm.Boss_Orders, fs, prize_count=6, rng=rng) == -1
+
+    def test_boss_immediate_when_ko_target_and_active_ready(self):
+        """アクティブが攻撃可能でKO確定対象がいれば従来通り即使用（8800）"""
+        fs = self._make_fs(op_bench_hp=[100], my_active_ready=True)
+        assert gm._score_play(gm.Boss_Orders, fs, prize_count=6) == 8800
+
+    def test_boss_gate_flag_off_keeps_current(self, monkeypatch):
+        """boss_attack_gate=Falseなら攻撃不能でも現行挙動（KO確定なら8800）"""
+        monkeypatch.setitem(gm.FEATURE_FLAGS, "boss_attack_gate", False)
+        fs = self._make_fs(op_bench_hp=[100], my_active_ready=False)
+        assert gm._score_play(gm.Boss_Orders, fs, prize_count=6) == 8800
 
 
 # ==================== _score_attach ====================
@@ -1178,7 +1201,7 @@ class TestAgent:
 
     def test_prefers_boss_orders_when_ko_target_available(self):
         """相手ベンチにKO可能な対象がいる場合、ボスの指令(PLAY)がENDより優先されること"""
-        my_ps = make_player_state(active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex))
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex, energies=[7, 7]))
         op_bench = [make_pokemon(id=2, hp=150)]  # 180以下 → KO可能
         op_ps = make_player_state(active_pokemon=make_pokemon(id=3, hp=300), bench=op_bench)
         options = [
@@ -1198,7 +1221,7 @@ class TestAgent:
         """相手ベンチにKO可能な対象がいない場合、探索が発生しない限りボスの指令(PLAY)より
         ENDが優先されること（_rngの実乱数を使うため、EPSILON=0.28よりかなり大きい閾値になる
         乱数値が出ても温存側に倒れることをrandomのシードで固定して検証する）"""
-        my_ps = make_player_state(active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex))
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex, energies=[7, 7]))
         op_bench = [make_pokemon(id=2, hp=300)]  # 180超 → KO不可
         op_ps = make_player_state(active_pokemon=make_pokemon(id=3, hp=300), bench=op_bench)
         options = [

@@ -295,6 +295,10 @@ def _score_play(
         # 一定の優先度を与える
         return 2200
     if card_id == Boss_Orders:
+        if FEATURE_FLAGS["boss_attack_gate"] and not fs.my_active_ready:
+            # 自分が今ターン攻撃できないなら、引きずり出してもダメージゼロで
+            # サポート権だけ失う（855系ログで負け6試合がT2〜T5に浪費）。温存する
+            return -1
         if not fs.op_bench_hp:
             return -1  # 対象不在なら温存
         has_ko_target = any(hp <= SHADOW_BULLET_DAMAGE for hp in fs.op_bench_hp)
