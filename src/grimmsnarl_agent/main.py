@@ -55,6 +55,22 @@ SHADOW_BULLET_DAMAGE = 180  # Shadow Bulletの与ダメージ（_score_attackと
 EPSILON              = 0.28  # 温存判断時に探索的先出しをする確率
 _rng                  = random.Random()  # 本番用の実乱数。テストではスタブを注入する
 
+# ==================== エネルギー配分のチューニング対象 ====================
+# 進化探索（ハイブリッドチューニング）で調整する数字。デフォルト値は手書きの現行値。
+# 実験ノートブック側からこの辞書を clear()+update() で差し替えて学習する。
+# 場合分けの構造（ゲート条件・閾値）は _score_attach 側に固定で残す。
+# 設計書: docs/superpowers/specs/2026-07-12-grimmsnarl-hybrid-tuning-design.md
+TUNABLE_WEIGHTS = {
+    "grimmsnarl_base":          9000,  # オーロンゲ2エネ未満の基礎点
+    "grimmsnarl_slope":         1000,  # 同・エネ1枚ごとの減点
+    "grimmsnarl_surplus_base":  3500,  # オーロンゲ2エネ確保後の基礎点
+    "grimmsnarl_surplus_slope":  100,  # 同・エネ1枚ごとの減点
+    "fezandipiti_base":         5000,  # キチキギスの基礎点
+    "fezandipiti_slope":         500,  # 同・エネ1枚ごとの減点
+    "morpeko_base":             4500,  # モルペコの基礎点
+    "morpeko_slope":             200,  # 同・エネ1枚ごとの減点
+}
+
 # ==================== アタックID（_build_card_table で設定）====================
 Shadow_Bullet_ID: int = 0
 Cruel_Arrow_ID: int = 0
@@ -277,19 +293,19 @@ def _score_attach(pokemon: "Pokemon", area: AreaType, card_id: int, fs: FieldSta
         )
         if pokemon.id == Grimmsnarl_ex:
             if energy_count < 2:
-                return 9000 - energy_count * 1000
+                return TUNABLE_WEIGHTS["grimmsnarl_base"] - energy_count * TUNABLE_WEIGHTS["grimmsnarl_slope"]
             # シャドーバレット（悪悪=2エネ）は追加投資しても威力が変わらないため、
             # 確保後はキチキギスex・モルペコへの配分を優先する
-            return 3500 - energy_count * 100
+            return TUNABLE_WEIGHTS["grimmsnarl_surplus_base"] - energy_count * TUNABLE_WEIGHTS["grimmsnarl_surplus_slope"]
         if pokemon.id == Fezandipiti_ex and energy_count < 3 and grimmsnarl_ready_or_absent:
             # クルーエルアローの実際のコストは無色3（本デッキは全て悪エネルギーのため
             # 悪3枚で支払える）
-            return 5000 - energy_count * 500
+            return TUNABLE_WEIGHTS["fezandipiti_base"] - energy_count * TUNABLE_WEIGHTS["fezandipiti_slope"]
         if pokemon.id == Marnie_Morpeko and grimmsnarl_ready_or_absent:
             # スパイキーホイールは装着した悪エネルギー数に比例して際限なくダメージが伸びる
             # （20+悪エネルギー×40）ため上限を設けず、グリムスナールexの攻撃分確保後は
             # 積極的に投資する
-            return 4500 - energy_count * 200
+            return TUNABLE_WEIGHTS["morpeko_base"] - energy_count * TUNABLE_WEIGHTS["morpeko_slope"]
         return -1
     return 3000
 

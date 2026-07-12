@@ -381,6 +381,53 @@ class TestScoreAttach:
         assert score > 0
 
 
+# ==================== TUNABLE_WEIGHTS ====================
+class TestTunableWeights:
+    """TUNABLE_WEIGHTS辞書（進化探索のチューニング対象、エネルギー配分8個）の検証"""
+
+    EXPECTED_KEYS = {
+        "grimmsnarl_base", "grimmsnarl_slope",
+        "grimmsnarl_surplus_base", "grimmsnarl_surplus_slope",
+        "fezandipiti_base", "fezandipiti_slope",
+        "morpeko_base", "morpeko_slope",
+    }
+
+    def _make_fs(self):
+        return gm.FieldState(
+            field_counts=defaultdict(int, {gm.Grimmsnarl_ex: 1}), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), grimmsnarl_active=True,
+            grimmsnarl_energy_count=0, impidimp_bench_idx=-1,
+            morpeko_bench_idx=-1, morpeko_energy_count=0, rare_candy_in_hand=False,
+            my_active_hp=200, my_active_id=0, op_active_hp=200, op_active_id=0, op_bench_hp=[],
+        )
+
+    def test_tunable_weights_has_exactly_energy_allocation_keys(self):
+        """チューニング対象は設計書の8キーちょうど（増減したら設計書と不整合）"""
+        assert set(gm.TUNABLE_WEIGHTS) == self.EXPECTED_KEYS
+
+    def test_tunable_weights_defaults_match_handwritten_values(self):
+        """デフォルト値＝手書きの現行値（挙動不変の根拠）"""
+        assert gm.TUNABLE_WEIGHTS == {
+            "grimmsnarl_base": 9000, "grimmsnarl_slope": 1000,
+            "grimmsnarl_surplus_base": 3500, "grimmsnarl_surplus_slope": 100,
+            "fezandipiti_base": 5000, "fezandipiti_slope": 500,
+            "morpeko_base": 4500, "morpeko_slope": 200,
+        }
+
+    def test_score_attach_reflects_overridden_weights(self):
+        """辞書を差し替えるとスコアが変わること（ノートブックからの差し替え運用の担保）"""
+        grimmsnarl = make_pokemon(id=gm.Grimmsnarl_ex, energies=[])
+        fs = self._make_fs()
+        saved = dict(gm.TUNABLE_WEIGHTS)
+        try:
+            gm.TUNABLE_WEIGHTS["grimmsnarl_base"] = 12000
+            score = gm._score_attach(grimmsnarl, AreaType.ACTIVE, gm.Basic_D_Energy, fs)
+            assert score == 12000
+        finally:
+            gm.TUNABLE_WEIGHTS.clear()
+            gm.TUNABLE_WEIGHTS.update(saved)
+
+
 # ==================== _score_attack ====================
 class TestScoreAttack:
     def _make_fs(self, op_hp=200, op_bench_hp=None, op_active_id=0):
