@@ -41,6 +41,7 @@ Night_Stretcher        = 1097
 Spikemuth_Gym          = 1259
 Boss_Orders            = 1182
 Team_Rocket_Petrel     = 1219
+Secret_Box             = 1092
 
 Basic_D_Energy = 7
 
@@ -261,6 +262,31 @@ def _collect_field_state(my_state, op_state) -> FieldState:
     )
 
 
+# ==================== 山札セーフティ（battlecore B方式） ====================
+def _safe_draws(fs: FieldState) -> int:
+    """安全に消費できる山札枚数。残りプライズ数を残りターン数の見積もりとして使い、
+    毎ターンの必須ドロー分を温存する（デッキアウト防止。実ログ85541203が直接の動機）"""
+    return fs.my_deck_count - fs.my_prize_left - 1
+
+
+def _deck_consumption(card_id: int, fs: FieldState) -> "int | None":
+    """このカードを使った場合の山札の正味消費枚数。山札を消費しない札はNone"""
+    if card_id == Lillie_Determination:
+        draws = 8 if fs.my_prize_left == 6 else 6
+        # 手札（本札自身を除く）を山札に戻してから引くため、戻す分を差し引く。
+        # 手札が多いときは山札がむしろ回復するので消費0として扱う
+        return max(0, draws - (fs.my_hand_count - 1))
+    if card_id == Cheren:
+        return 3
+    if card_id == Secret_Box:
+        return 4
+    if card_id == Buddy_Buddy_Poffin:
+        return 2
+    if card_id in (Poke_Pad, Team_Rocket_Petrel, Grimsley_Move):
+        return 1
+    return None
+
+
 # ==================== スコアリング ====================
 def _score_play(
     card_id: int,
@@ -269,6 +295,10 @@ def _score_play(
     rng: "random.Random | None" = None,
 ) -> int:
     """PLAY コンテキスト：手札からカードを使う際のスコア"""
+    if FEATURE_FLAGS["deck_safety"]:
+        consumption = _deck_consumption(card_id, fs)
+        if consumption is not None and consumption > _safe_draws(fs):
+            return -1  # 山札温存（デッキアウト防止、battlecore B方式）
     if card_id == Rare_Candy:
         has_impidimp     = fs.field_counts[Impidimp] >= 1
         grimmsnarl_ready = fs.hand_counts[Grimmsnarl_ex] >= 1

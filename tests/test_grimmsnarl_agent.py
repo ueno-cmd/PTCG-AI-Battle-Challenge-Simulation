@@ -341,6 +341,84 @@ class TestScorePlay:
         assert gm._score_play(gm.Boss_Orders, fs, prize_count=6) == 8800
 
 
+# ==================== 山札セーフティ（battlecore B方式） ====================
+class TestDeckSafety:
+    def _make_fs(self, **kwargs):
+        defaults = dict(
+            field_counts=defaultdict(int),
+            hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int),
+            grimmsnarl_active=False,
+            grimmsnarl_energy_count=0,
+            impidimp_bench_idx=-1,
+            morpeko_bench_idx=-1,
+            morpeko_energy_count=0,
+            rare_candy_in_hand=False,
+            my_active_hp=200,
+            my_active_id=0,
+            op_active_hp=200,
+            op_active_id=0,
+            op_bench_hp=[],
+        )
+        defaults.update(kwargs)
+        return gm.FieldState(**defaults)
+
+    def test_safe_draws_formula(self):
+        """safe_draws = 山札残 − 残りプライズ − 1（残りプライズ≒残りターン数の必須ドロー分を温存）"""
+        fs = self._make_fs(my_deck_count=12, my_prize_left=4)
+        assert gm._safe_draws(fs) == 7
+
+    def test_cheren_suppressed_when_deck_thin(self):
+        """チェレン（3枚ドロー）はsafe_drawsが3未満なら温存"""
+        fs = self._make_fs(my_deck_count=5, my_prize_left=4)  # safe_draws=0
+        assert gm._score_play(gm.Cheren, fs, prize_count=4) == -1
+
+    def test_cheren_allowed_when_deck_healthy(self):
+        fs = self._make_fs(my_deck_count=30, my_prize_left=4)
+        assert gm._score_play(gm.Cheren, fs, prize_count=4) == 2200
+
+    def test_lillie_big_hand_replenishes_deck_so_not_gated(self):
+        """リーリエは手札を山札に戻してから引くため、手札が多いなら山札が痩せず温存不要
+        （実ログ85541203：手札11枚のままデッキアウトした状況では、むしろ使うべきだった）"""
+        fs = self._make_fs(my_deck_count=5, my_prize_left=3, my_hand_count=11)
+        # 消費 = max(0, 6 - (11-1)) = 0 → ゲート発動せず通常スコア
+        assert gm._score_play(gm.Lillie_Determination, fs, prize_count=3) == 3500
+
+    def test_lillie_small_hand_gated_when_deck_thin(self):
+        """手札が少ないリーリエは実質大量ドロー。山札が細ければ温存"""
+        fs = self._make_fs(my_deck_count=5, my_prize_left=3, my_hand_count=2)
+        # 消費 = max(0, 6 - (2-1)) = 5 > safe_draws=1 → 温存
+        assert gm._score_play(gm.Lillie_Determination, fs, prize_count=3) == -1
+
+    def test_lillie_draws_8_when_six_prizes(self):
+        """残りプライズ6ならリーリエは8枚ドローとして消費を計算"""
+        fs = self._make_fs(my_deck_count=10, my_prize_left=6, my_hand_count=2)
+        # 消費 = max(0, 8 - 1) = 7 > safe_draws=3 → 温存
+        assert gm._score_play(gm.Lillie_Determination, fs, prize_count=6) == -1
+
+    def test_secret_box_gated(self):
+        fs = self._make_fs(my_deck_count=7, my_prize_left=3)  # safe_draws=3 < 消費4
+        assert gm._score_play(gm.Secret_Box, fs, prize_count=3) == -1
+
+    def test_pokepad_gated_only_at_the_very_end(self):
+        """サーチ1枚系（ポケパッド等）は消費1なので、safe_drawsが1以上なら使える"""
+        fs_ok  = self._make_fs(my_deck_count=5, my_prize_left=3)  # safe_draws=1
+        fs_ng  = self._make_fs(my_deck_count=4, my_prize_left=3)  # safe_draws=0
+        assert gm._score_play(gm.Poke_Pad, fs_ok, prize_count=3) == 4000
+        assert gm._score_play(gm.Poke_Pad, fs_ng, prize_count=3) == -1
+
+    def test_night_stretcher_never_gated(self):
+        """ナイトストレッチャーはトラッシュ回収で山札を消費しないため対象外"""
+        fs = self._make_fs(my_deck_count=1, my_prize_left=6)
+        assert gm._score_play(gm.Night_Stretcher, fs, prize_count=6) == 2000
+
+    def test_deck_safety_flag_off_keeps_current(self, monkeypatch):
+        """deck_safety=Falseなら山札が細くても現行挙動"""
+        monkeypatch.setitem(gm.FEATURE_FLAGS, "deck_safety", False)
+        fs = self._make_fs(my_deck_count=5, my_prize_left=4)
+        assert gm._score_play(gm.Cheren, fs, prize_count=4) == 2200
+
+
 # ==================== _score_attach ====================
 class TestScoreAttach:
     def test_basic_d_energy_to_grimmsnarl_low_energy_preferred(self):
