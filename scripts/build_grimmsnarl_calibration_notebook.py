@@ -255,9 +255,11 @@ out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding=
 print(f"saved: {out_path}")'''
 
 PLOT_CODE = '''# ==================== 累積勝率の推移 ====================
-import matplotlib.pyplot as plt
+# matplotlibはKaggle上で日本語フォントを持たず凡例が文字化けするため、
+# ブラウザフォントで描画するplotly（Kaggle標準搭載）を使う
+import plotly.graph_objects as go
 
-fig, ax = plt.subplots(figsize=(9, 5))
+fig = go.Figure()
 for series in (series_ab, series_aa):
     results = series["results"]
     cum_rate = []
@@ -266,15 +268,20 @@ for series in (series_ab, series_aa):
         if r > 0:
             wins += 1
         cum_rate.append(wins / i)
-    ax.plot(range(1, len(results) + 1), cum_rate, label=series["label"])
-ax.axhline(0.5, linestyle="--", linewidth=1)
-ax.axhline(0.6, linestyle=":", linewidth=1)
-ax.set_xlabel("games")
-ax.set_ylabel("cumulative win rate of A")
-ax.set_title("Calibration: how many games until the stronger setting is visible?")
-ax.legend()
-ax.grid(True, alpha=0.3)
-plt.show()'''
+    fig.add_trace(go.Scatter(
+        x=list(range(1, len(results) + 1)), y=cum_rate,
+        mode="lines", name=series["label"],
+    ))
+fig.add_hline(y=0.5, line_dash="dash", line_width=1)
+fig.add_hline(y=0.6, line_dash="dot", line_width=1)
+fig.update_layout(
+    title="校正実験：何試合で強い設定が見分けられるか",
+    xaxis_title="試合数",
+    yaxis_title="Aの累積勝率",
+    legend={"orientation": "h", "yanchor": "bottom", "y": 1.02},
+    width=900, height=500,
+)
+fig.show()'''
 
 
 def main() -> None:
