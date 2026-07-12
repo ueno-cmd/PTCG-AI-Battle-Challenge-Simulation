@@ -49,6 +49,18 @@ NOTE_MD = """# グリムスナールex 校正実験（ハイブリッドチュ�
 持ち帰り（チューニング対象の再選定）になる。
 
 設計書: docs/superpowers/specs/2026-07-12-grimmsnarl-hybrid-tuning-design.md
+
+## v2追記（2026-07-12・影武者カウント）
+
+初回実行の結果はA vs Bが200試合で勝率50.0%（差なし）だった
+（`data/experiments/20260712_grimmsnarl_calibration.json`）。原因を切り分けるため、
+設定Aで実戦しながら毎手番「設定Bなら何を選んだか」を裏で数える計測を追加した。
+
+`shadow_stats` の見方：
+- `attach_score_diff = 0` なのに `attach_calls > 0` → 重みの差し替えが効いていない（バグ）
+- `grimmsnarl_morpeko_both ≈ 0` → 競合場面がそもそもない（8定数は意思決定に無関係）
+- `select_diff` が多いのに勝率50% → 選択は変わるが勝敗に効かない（ダイヤルとして無価値）
+いずれの場合もステップ1のチューニング対象は選び直しになる。
 """
 
 DECK_CODE = f'''# 既存の提出ノートブック群と同じglobパターンで、アップロード済みの
@@ -113,7 +125,76 @@ def play_game(agent_a, agent_b, deck_a, deck_b, max_steps=MAX_STEPS_PER_GAME) ->
         return -1
     return 0'''
 
-CALIBRATION_CODE = '''# ==================== 校正実験 ====================
+SHADOW_CODE = '''# ==================== 影武者カウント計測 ====================
+# 設定Aで実戦しながら、毎手番「設定Bなら何を選んだか」を裏で計算して数える。
+# 判定したいこと：
+#   1. attach_score_diff > 0         → 重みの差し替えはスコアに反映されている（バグではない）
+#   2. grimmsnarl_morpeko_both       → オーロンゲとモルペコがエネ付与先として競合する頻度
+#   3. select_diff / attach_top_diff → 8定数が実際の意思決定を変えているか
+# 裏の計算後に乱数状態と重みを復元するため、ゲーム進行には影響しない。
+
+SHADOW_STATS = {
+    "calls": 0,                    # 計測エージェントの呼び出し総数（=手番数）
+    "select_diff": 0,              # AとBで最終選択が変わった手番数
+    "attach_calls": 0,             # 付与スコア計算が発生した手番数
+    "attach_score_diff": 0,        # 同じ候補の付与スコアがAとBで異なった手番数
+    "attach_top_diff": 0,          # 付与先トップ候補がAとBで変わった手番数
+    "grimmsnarl_morpeko_both": 0,  # 基本悪エネの付与先候補にオーロンゲとモルペコが同時に並んだ手番数
+}
+
+_ATTACH_LOG = []  # 直近のagent()呼び出し中に記録した (pokemon_id, card_id, score)
+_orig_score_attach = _score_attach
+
+
+def _recording_score_attach(pokemon, area, card_id, fs):
+    score = _orig_score_attach(pokemon, area, card_id, fs)
+    _ATTACH_LOG.append((pokemon.id, card_id, score))
+    return score
+
+
+# agent() はグローバル名 _score_attach を参照するため、名前の付け替えで記録が効く
+_score_attach = _recording_score_attach
+
+
+def _call_with_weights(weights, obs_dict):
+    """重みを差し替えてagent()を1回呼び、(選択結果, 付与スコアのログ) を返す"""
+    TUNABLE_WEIGHTS.clear()
+    TUNABLE_WEIGHTS.update(weights)
+    _ATTACH_LOG.clear()
+    selected = agent(obs_dict)
+    return selected, list(_ATTACH_LOG)
+
+
+def make_shadow_agent(weights_main, weights_shadow, stats=SHADOW_STATS):
+    """weights_mainで実戦しつつ、weights_shadowでの選択を裏で計測するエージェント"""
+    def _agent(obs_dict):
+        rng_state = _rng.getstate()
+        sel_main, log_main = _call_with_weights(weights_main, obs_dict)
+        rng_after_main = _rng.getstate()
+        _rng.setstate(rng_state)  # 影武者にも本線と同じ乱数系列を見せる（ε探索の差を消す）
+        sel_shadow, log_shadow = _call_with_weights(weights_shadow, obs_dict)
+        _rng.setstate(rng_after_main)  # 本線の乱数消費はA側の1回分だけにする
+        TUNABLE_WEIGHTS.clear()
+        TUNABLE_WEIGHTS.update(weights_main)
+
+        stats["calls"] += 1
+        if sel_main != sel_shadow:
+            stats["select_diff"] += 1
+        if log_main:
+            stats["attach_calls"] += 1
+            if [s for (_, _, s) in log_main] != [s for (_, _, s) in log_shadow]:
+                stats["attach_score_diff"] += 1
+            top_main = max(range(len(log_main)), key=lambda i: log_main[i][2])
+            top_shadow = max(range(len(log_shadow)), key=lambda i: log_shadow[i][2])
+            if log_main[top_main][:2] != log_shadow[top_shadow][:2]:
+                stats["attach_top_diff"] += 1
+            energy_targets = {pid for (pid, cid, _) in log_main if cid == Basic_D_Energy}
+            if Grimmsnarl_ex in energy_targets and Marnie_Morpeko in energy_targets:
+                stats["grimmsnarl_morpeko_both"] += 1
+        return sel_main
+    return _agent'''
+
+CALIBRATION_CODE = '''# ==================== 校正実験（影武者カウント付き） ====================
 import time
 
 GAMES = 200
@@ -127,10 +208,8 @@ BROKEN_WEIGHTS["grimmsnarl_base"], BROKEN_WEIGHTS["morpeko_base"] = (
 print("設定B（壊した設定）:", BROKEN_WEIGHTS)
 
 
-def run_series(weights_a, weights_b, games, label):
-    """weights_a側の視点で対戦を繰り返す。先手後手の偏りを消すため1試合ごとに座席を交代する"""
-    agent_a = make_weighted_agent(weights_a)
-    agent_b = make_weighted_agent(weights_b)
+def run_series(agent_a, agent_b, games, label):
+    """agent_a側の視点で対戦を繰り返す。先手後手の偏りを消すため1試合ごとに座席を交代する"""
     results = []
     t0 = time.time()
     for i in range(games):
@@ -149,8 +228,18 @@ def run_series(weights_a, weights_b, games, label):
     return {"label": label, "results": results, "elapsed_sec": elapsed}
 
 
-series_ab = run_series(DEFAULT_TUNABLE, BROKEN_WEIGHTS, GAMES, "A(手書き) vs B(壊した設定)")
-series_aa = run_series(DEFAULT_TUNABLE, DEFAULT_TUNABLE, GAMES, "A vs A (ノイズ基準線)")'''
+series_ab = run_series(
+    make_shadow_agent(DEFAULT_TUNABLE, BROKEN_WEIGHTS),
+    make_weighted_agent(BROKEN_WEIGHTS),
+    GAMES, "A(手書き・影武者計測) vs B(壊した設定)",
+)
+shadow_stats_ab = dict(SHADOW_STATS)  # A vs Bシリーズ分のスナップショット
+print("影武者カウント（A vs B）:", shadow_stats_ab)
+
+series_aa = run_series(
+    make_weighted_agent(DEFAULT_TUNABLE), make_weighted_agent(DEFAULT_TUNABLE),
+    GAMES, "A vs A (ノイズ基準線)",
+)'''
 
 SAVE_CODE = '''# ==================== 結果の保存 ====================
 OUT_DIR = Path("/kaggle/working")
@@ -159,8 +248,9 @@ payload = {
     "broken_weights": BROKEN_WEIGHTS,
     "games": GAMES,
     "series": [series_ab, series_aa],
+    "shadow_stats": shadow_stats_ab,
 }
-out_path = OUT_DIR / "calibration_results.json"
+out_path = OUT_DIR / "calibration_shadow_results.json"
 out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 print(f"saved: {out_path}")'''
 
@@ -216,6 +306,7 @@ def main() -> None:
             code_cell("deck-load", DECK_CODE),
             code_cell("agent-body", agent_cell_src),
             code_cell("battle-harness", HARNESS_CODE),
+            code_cell("shadow-agent", SHADOW_CODE),
             code_cell("calibration-run", CALIBRATION_CODE),
             code_cell("save-results", SAVE_CODE),
             code_cell("plot-curve", PLOT_CODE),
