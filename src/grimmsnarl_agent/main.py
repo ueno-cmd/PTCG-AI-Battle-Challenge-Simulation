@@ -71,6 +71,16 @@ TUNABLE_WEIGHTS = {
     "morpeko_slope":             200,  # 同・エネ1枚ごとの減点
 }
 
+# ==================== 新ルールのON/OFFフラグ（セルフ対戦A/B用） ====================
+# 855系ログ12件の敗因分析で特定した構造欠落への対策。全てTrueが本番設定。
+# A/B実験ノートブック側からこの辞書を clear()+update() で差し替えて効果を実測する。
+# 設計書: docs/superpowers/specs/2026-07-12-grimmsnarl-promotion-deck-safety-design.md
+FEATURE_FLAGS = {
+    "attacker_promotion": True,  # 交代先選出の攻撃準備度優先＋RETREAT昇格（修正①②）
+    "boss_attack_gate":   True,  # ボスの指令の攻撃可否ゲート（修正③）
+    "deck_safety":        True,  # 山札セーフティ（修正④）
+}
+
 # ==================== アタックID（_build_card_table で設定）====================
 Shadow_Bullet_ID: int = 0
 Cruel_Arrow_ID: int = 0
@@ -158,6 +168,11 @@ class FieldState:
     op_active_hp:            int
     op_active_id:            int
     op_bench_hp:             list
+    my_active_ready:         bool = False
+    bench_ready_attacker:    bool = False
+    my_deck_count:           int  = 60
+    my_prize_left:           int  = 6
+    my_hand_count:           int  = 0
 
 
 def _collect_field_state(my_state, op_state) -> FieldState:
@@ -216,6 +231,13 @@ def _collect_field_state(my_state, op_state) -> FieldState:
 
     rare_candy_in_hand = hand_counts[Rare_Candy] >= 1
 
+    my_active_ready = any(
+        _is_attack_ready(card) for card in my_state.active if card is not None
+    )
+    bench_ready_attacker = any(
+        _is_attack_ready(card) for card in my_state.bench if card is not None
+    )
+
     return FieldState(
         field_counts=field_counts,
         hand_counts=hand_counts,
@@ -231,6 +253,11 @@ def _collect_field_state(my_state, op_state) -> FieldState:
         op_active_hp=op_active_hp,
         op_active_id=op_active_id,
         op_bench_hp=op_bench_hp,
+        my_active_ready=my_active_ready,
+        bench_ready_attacker=bench_ready_attacker,
+        my_deck_count=my_state.deckCount,
+        my_prize_left=len(my_state.prize),
+        my_hand_count=sum(1 for card in my_state.hand if card is not None),
     )
 
 
@@ -313,6 +340,36 @@ def _score_attach(pokemon: "Pokemon", area: AreaType, card_id: int, fs: FieldSta
 CRUEL_ARROW_DAMAGE = 100  # クルーエルアローの与ダメージ（相手1匹を選んで攻撃・ベンチも弱点抵抗力無視で狙える）
 SPIKY_WHEEL_BASE_DAMAGE       = 20  # スパイキーホイールの基礎ダメージ
 SPIKY_WHEEL_DAMAGE_PER_ENERGY = 40  # 装着した悪エネルギー1枚ごとの追加ダメージ
+
+CLUTCH_DAMAGE = 20  # Yveltalのわしづかみ（Clutch {D}）の与ダメージ
+
+# ==================== 攻撃準備度（交代・撤退・ボス判断の共通語彙） ====================
+# ワザの必要エネルギー数（本デッキは全て悪エネルギーで支払える。EN_Card_Data.csvで実測確認済み）
+ATTACK_COSTS = {
+    Grimmsnarl_ex:  2,  # Shadow Bullet {D}{D}
+    Fezandipiti_ex: 3,  # Cruel Arrow ●●●
+    Marnie_Morpeko: 3,  # Spiky Wheel ●●●
+    Yveltal:        1,  # Clutch {D}
+}
+
+
+def _is_attack_ready(pokemon: "Pokemon") -> bool:
+    """このポケモンは装着済みエネルギーで攻撃できるか"""
+    need = ATTACK_COSTS.get(pokemon.id)
+    return need is not None and len(pokemon.energies) >= need
+
+
+def _expected_damage(pokemon: "Pokemon") -> int:
+    """交代先の同点比較用の期待ダメージ（実ダメージ計算はシミュレータが行う）"""
+    if pokemon.id == Grimmsnarl_ex:
+        return SHADOW_BULLET_DAMAGE
+    if pokemon.id == Fezandipiti_ex:
+        return CRUEL_ARROW_DAMAGE
+    if pokemon.id == Marnie_Morpeko:
+        return SPIKY_WHEEL_BASE_DAMAGE + len(pokemon.energies) * SPIKY_WHEEL_DAMAGE_PER_ENERGY
+    if pokemon.id == Yveltal:
+        return CLUTCH_DAMAGE
+    return 0
 
 
 def _score_attack(attack_id: int, fs: FieldState) -> int:

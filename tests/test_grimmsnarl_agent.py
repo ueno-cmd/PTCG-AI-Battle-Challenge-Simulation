@@ -132,6 +132,93 @@ class TestCollectFieldState:
         assert fs.discard_counts[gm.Basic_D_Energy] == 1
 
 
+# ==================== 攻撃準備度ヘルパー ====================
+class TestAttackReadiness:
+    def test_grimmsnarl_ready_with_2_energies(self):
+        """Shadow Bulletは{D}{D}=2エネ（EN_Card_Data.csvで実測確認済み）"""
+        assert gm._is_attack_ready(make_pokemon(id=gm.Grimmsnarl_ex, energies=[7, 7])) is True
+
+    def test_grimmsnarl_not_ready_with_1_energy(self):
+        assert gm._is_attack_ready(make_pokemon(id=gm.Grimmsnarl_ex, energies=[7])) is False
+
+    def test_fezandipiti_needs_3_energies(self):
+        """Cruel Arrowは無色3"""
+        assert gm._is_attack_ready(make_pokemon(id=gm.Fezandipiti_ex, energies=[7, 7])) is False
+        assert gm._is_attack_ready(make_pokemon(id=gm.Fezandipiti_ex, energies=[7, 7, 7])) is True
+
+    def test_morpeko_needs_3_energies(self):
+        """Spiky Wheelは無色3（従来想定の2ではない）"""
+        assert gm._is_attack_ready(make_pokemon(id=gm.Marnie_Morpeko, energies=[7, 7])) is False
+        assert gm._is_attack_ready(make_pokemon(id=gm.Marnie_Morpeko, energies=[7, 7, 7])) is True
+
+    def test_yveltal_ready_with_1_energy(self):
+        """Clutch（わしづかみ）は{D}=1エネ"""
+        assert gm._is_attack_ready(make_pokemon(id=gm.Yveltal, energies=[7])) is True
+
+    def test_non_attacker_never_ready(self):
+        """コスト表にないポケモン（特性専用等）はエネルギーがあっても準備完了扱いしない"""
+        assert gm._is_attack_ready(make_pokemon(id=gm.Shaymin, energies=[7, 7, 7, 7])) is False
+
+
+class TestExpectedDamage:
+    def test_grimmsnarl_expected_damage(self):
+        assert gm._expected_damage(make_pokemon(id=gm.Grimmsnarl_ex, energies=[7, 7])) == 180
+
+    def test_fezandipiti_expected_damage(self):
+        assert gm._expected_damage(make_pokemon(id=gm.Fezandipiti_ex, energies=[7, 7, 7])) == 100
+
+    def test_morpeko_expected_damage_scales_with_energy(self):
+        """スパイキーホイール: 20+40×装着エネ数"""
+        assert gm._expected_damage(make_pokemon(id=gm.Marnie_Morpeko, energies=[7, 7, 7])) == 140
+
+    def test_yveltal_expected_damage(self):
+        assert gm._expected_damage(make_pokemon(id=gm.Yveltal, energies=[7])) == 20
+
+    def test_unknown_pokemon_expected_damage_is_zero(self):
+        assert gm._expected_damage(make_pokemon(id=gm.Shaymin)) == 0
+
+
+class TestFieldStateReadiness:
+    def test_active_e0_bench_ready_detected(self):
+        """実ログ85534500の状況：アクティブがエネ0、ベンチにエネ6のオーロンゲ"""
+        fezandipiti = make_pokemon(id=gm.Fezandipiti_ex, hp=210, energies=[])
+        grimmsnarl  = make_pokemon(id=gm.Grimmsnarl_ex, hp=320, energies=[7] * 6)
+        my_ps = make_player_state(active_pokemon=fezandipiti, bench=[grimmsnarl])
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=1, hp=200))
+        fs = gm._collect_field_state(my_ps, op_ps)
+        assert fs.my_active_ready is False
+        assert fs.bench_ready_attacker is True
+
+    def test_active_ready_detected(self):
+        my_ps = make_player_state(active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex, energies=[7, 7]))
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=1, hp=200))
+        fs = gm._collect_field_state(my_ps, op_ps)
+        assert fs.my_active_ready is True
+        assert fs.bench_ready_attacker is False
+
+    def test_deck_prize_hand_counts_collected(self):
+        my_ps = make_player_state(
+            active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex),
+            hand=[Card(id=gm.Rare_Candy, serial=1, playerIndex=0)],
+            deck_count=12,
+            prize_count=4,
+        )
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=1, hp=200))
+        fs = gm._collect_field_state(my_ps, op_ps)
+        assert fs.my_deck_count == 12
+        assert fs.my_prize_left == 4
+        assert fs.my_hand_count == 1
+
+    def test_hand_count_ignores_none_entries(self):
+        my_ps = make_player_state(
+            active_pokemon=make_pokemon(id=gm.Grimmsnarl_ex),
+            hand=[None, Card(id=gm.Rare_Candy, serial=1, playerIndex=0)],
+        )
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=1, hp=200))
+        fs = gm._collect_field_state(my_ps, op_ps)
+        assert fs.my_hand_count == 1
+
+
 # ==================== _score_play ====================
 class TestScorePlay:
     def _make_fs(self, **kwargs):
