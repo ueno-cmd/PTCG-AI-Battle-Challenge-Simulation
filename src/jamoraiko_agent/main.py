@@ -31,6 +31,12 @@ Basic_Fighting_Energy       = 6
 
 IONO_POKEMON_IDS = {Iono_Voltorb, Iono_Tadbulb, Iono_Bellibolt_ex, Iono_Wattrel, Iono_Kilowattrel}
 
+def _safe_draws(my_state) -> int:
+    """安全に消費できる山札枚数。残りプライズ数を残りターン数の見積もりとして使い、
+    毎ターンの必須ドロー分を温存する（デッキアウト防止）"""
+    return my_state.deckCount - len(my_state.prize) - 1
+
+
 # ==================== フィールド状態 ====================
 @dataclass
 class FieldState:
@@ -84,6 +90,91 @@ def _collect_field_state(my_state) -> FieldState:
         iono_lightning_on_board=iono_lightning_on_board,
         own_board_basic_energy_total=own_board_basic_energy_total,
         active_energy_count=active_energy_count,
+    )
+
+
+# ==================== アタッカーテーブル ====================
+@dataclass(frozen=True)
+class Attacker:
+    id: int
+    attack_name: str
+    energy_required: int
+    damage_fn: Callable[[FieldState], int]
+    locks_next_turn: bool = False
+    is_utility: bool = False
+
+
+ATTACKERS: list[Attacker] = [
+    Attacker(id=Iono_Voltorb, attack_name="Voltaic Chain", energy_required=2,
+             damage_fn=lambda fs: 20 + 20 * fs.iono_lightning_on_board),
+    Attacker(id=Iono_Bellibolt_ex, attack_name="Thunderous Bolt", energy_required=4,
+             damage_fn=lambda fs: 230, locks_next_turn=True),
+    Attacker(id=Iono_Kilowattrel, attack_name="Mach Bolt", energy_required=3,
+             damage_fn=lambda fs: 70),
+    Attacker(id=Raging_Bolt_ex, attack_name="Bellowing Thunder", energy_required=2,
+             damage_fn=lambda fs: 70 * fs.own_board_basic_energy_total),
+    Attacker(id=Raging_Bolt_ex, attack_name="Burst Roar", energy_required=1,
+             damage_fn=lambda fs: 0, is_utility=True),
+]
+
+
+# ==================== 攻撃プラン計算 ====================
+@dataclass
+class AttackPlan:
+    attacker_id: int = -1
+    attack_id:   int = -1
+    damage:      int = 0
+    is_lethal:   bool = False
+
+
+def calc_attack_plan(my_active: "Pokemon | None", op_active_hp: int,
+                      fs: FieldState, my_state) -> AttackPlan:
+    """アクティブなポケモンについて、テーブル上の候補技から最適な1つを選ぶ。
+
+    優先順位：
+    1. 確定KOできる技があれば、場のエネルギーを消費しない技を優先
+       （きょくらいごうは他に確定KO手段がない場合のみ使用）
+    2. 確定KOがなければ最大ダメージを選ぶが、次ターン技封じの技は減点評価
+    3. はじけるほうこう（is_utility）はダメージ0のため、
+       他に使える技がない場合のみ自然に選ばれる
+    """
+    if my_active is None:
+        return AttackPlan()
+
+    candidates = []
+    for atk in ATTACKERS:
+        if atk.id != my_active.id:
+            continue
+        if fs.active_energy_count < atk.energy_required:
+            continue
+        if atk.is_utility and 6 > _safe_draws(my_state):
+            continue  # 山札温存（Task 6で_safe_drawsを実装）
+        damage = atk.damage_fn(fs)
+        is_lethal = (not atk.is_utility) and damage >= op_active_hp
+        candidates.append((atk, damage, is_lethal))
+
+    if not candidates:
+        return AttackPlan()
+
+    lethal = [c for c in candidates if c[2]]
+    if lethal:
+        # テーブル上、同一ポケモンが同時に2つ以上の確定KO可能技を持つことはない
+        # （タケルライコexのはじけるほうこうはダメージ0固定でis_lethalに絶対ならない）ため、
+        # 複数のlethal候補から選別するロジックは不要。先頭を採用すれば十分
+        chosen = lethal[0]
+    else:
+        def effective_damage(c):
+            atk, damage, _ = c
+            return damage - (150 if atk.locks_next_turn else 0)
+        chosen = max(candidates, key=effective_damage)
+
+    atk, damage, is_lethal = chosen
+    attack_id = _attack_id_by_name(atk.attack_name)
+    return AttackPlan(
+        attacker_id=atk.id,
+        attack_id=attack_id if attack_id is not None else -1,
+        damage=damage,
+        is_lethal=is_lethal,
     )
 
 

@@ -1,4 +1,9 @@
 # tests/test_jamoraiko_agent.py
+from collections import defaultdict
+from dataclasses import dataclass as _dc
+
+import pytest
+
 import jamoraiko_agent.main as jm
 
 from tests.conftest import make_pokemon, make_player_state
@@ -41,3 +46,84 @@ class TestCollectFieldState:
         fs = jm._collect_field_state(my_state)
         assert fs.field_counts[jm.Iono_Voltorb] == 1
         assert fs.hand_counts[jm.Canari] == 1
+
+
+@_dc
+class MockAttack:
+    """テスト用 Attack 代替クラス（cg.api.Attack と同一フィールドのみ定義）"""
+    attackId: int
+    name: str
+    text: str = ""
+    damage: int = 0
+    energies: list = None
+
+
+@pytest.fixture(autouse=True)
+def mock_attack_table(monkeypatch):
+    table = {
+        1001: MockAttack(attackId=1001, name="Voltaic Chain"),
+        1002: MockAttack(attackId=1002, name="Thunderous Bolt"),
+        1003: MockAttack(attackId=1003, name="Mach Bolt"),
+        1004: MockAttack(attackId=1004, name="Bellowing Thunder"),
+        1005: MockAttack(attackId=1005, name="Burst Roar"),
+    }
+    monkeypatch.setattr(jm, "attack_table", table)
+    return table
+
+
+class TestCalcAttackPlan:
+    def _fs(self, **overrides):
+        base = dict(
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), iono_lightning_on_board=0,
+            own_board_basic_energy_total=0, active_energy_count=0,
+        )
+        base.update(overrides)
+        return jm.FieldState(**base)
+
+    def test_voltaic_chain_damage_scales_with_iono_lightning_on_board(self):
+        voltorb = make_pokemon(id=jm.Iono_Voltorb, energies=[4, 4])
+        fs = self._fs(active_energy_count=2, iono_lightning_on_board=5)
+        my_state = make_player_state(active_pokemon=voltorb, deck_count=40, prize_count=6)
+        plan = jm.calc_attack_plan(voltorb, op_active_hp=999, fs=fs, my_state=my_state)
+        assert plan.damage == 20 + 20 * 5
+
+    def test_lethal_attack_is_preferred_over_non_lethal(self):
+        voltorb = make_pokemon(id=jm.Iono_Voltorb, energies=[4, 4])
+        fs = self._fs(active_energy_count=2, iono_lightning_on_board=10)  # 20+200=220ダメ
+        my_state = make_player_state(active_pokemon=voltorb, deck_count=40, prize_count=6)
+        plan = jm.calc_attack_plan(voltorb, op_active_hp=200, fs=fs, my_state=my_state)
+        assert plan.is_lethal is True
+
+    def test_bellowing_thunder_chosen_when_lethal_and_only_damaging_option(self):
+        """タケルライコexの技はきょくらいごう(ダメージ技)とはじけるほうこう(ダメージ0)の2つのみのため、
+        同一ポケモンが同時に2つの確定KO可能技を持つことは構造上ありえない。
+        きょくらいごうが確定KO可能なら、それがそのまま選ばれることを確認する"""
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 6])
+        fs = self._fs(active_energy_count=2, own_board_basic_energy_total=10)  # きょくらいごうは700ダメ
+        my_state = make_player_state(active_pokemon=raging_bolt, deck_count=40, prize_count=6)
+        plan = jm.calc_attack_plan(raging_bolt, op_active_hp=50, fs=fs, my_state=my_state)
+        assert plan.is_lethal is True
+        assert plan.attacker_id == jm.Raging_Bolt_ex
+
+    def test_thunderous_bolt_penalised_when_not_lethal(self):
+        """確定KOでない場合、次ターン技封じのサンダーボルトより他技を優先する"""
+        bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4, 4])
+        fs = self._fs(active_energy_count=4, iono_lightning_on_board=4)
+        my_state = make_player_state(active_pokemon=bellibolt, deck_count=40, prize_count=6)
+        plan = jm.calc_attack_plan(bellibolt, op_active_hp=9999, fs=fs, my_state=my_state)
+        # サンダーボルト(230)一択のはずだが、ペナルティが付いていても他に選択肢がないので選ばれる
+        assert plan.attacker_id == jm.Iono_Bellibolt_ex
+
+    def test_burst_roar_only_chosen_when_no_other_attack_available(self):
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4])  # 闘エネなし＝きょくらいごう不可
+        fs = self._fs(active_energy_count=1, own_board_basic_energy_total=1)
+        my_state = make_player_state(active_pokemon=raging_bolt, deck_count=40, prize_count=6)
+        plan = jm.calc_attack_plan(raging_bolt, op_active_hp=200, fs=fs, my_state=my_state)
+        assert plan.attack_id == 1005  # Burst Roar
+
+    def test_no_active_pokemon_returns_empty_plan(self):
+        fs = self._fs()
+        my_state = make_player_state(active_pokemon=None, deck_count=40, prize_count=6)
+        plan = jm.calc_attack_plan(None, op_active_hp=100, fs=fs, my_state=my_state)
+        assert plan.attacker_id == -1
