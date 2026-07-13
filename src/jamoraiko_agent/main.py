@@ -115,13 +115,9 @@ def agent(obs_dict: dict) -> list[int]:
     Returns:
         list[int]: 選択するオプションのインデックスリスト
     """
-    # 初回のデッキ選択時は select が None で、current/logs 等の必須フィールドが
-    # obs_dict に含まれない場合がある（to_observation_class は dataclass の必須
-    # フィールド欠落で例外を送出するため、変換前に select の有無を判定する）。
-    if obs_dict.get("select") is None:
-        return _load_deck()
-
     obs = to_observation_class(obs_dict)
+    if obs.select is None:
+        return _load_deck()
 
     _build_card_table()
     _build_attack_table()
