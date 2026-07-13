@@ -466,3 +466,75 @@ class TestScoreDiscardCandidate:
     def test_generic_card_gets_small_positive_score(self):
         fs = self._fs()
         assert jm._score_discard_candidate(999999, fs) == 10
+
+
+class TestScoreCardOptionDispatch:
+    def test_dispatches_setup_active_pokemon(self):
+        from cg.api import Option, SelectContext
+
+        voltorb = make_pokemon(id=jm.Iono_Voltorb)
+        my_state = make_player_state(hand=[voltorb], deck_count=40, prize_count=6)
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o = Option(type=OptionType.CARD, area=AreaType.HAND, index=0, playerIndex=0)
+        fs = jm._collect_field_state(my_state)
+        plan = jm.AttackPlan()
+        score = jm._score_card_option(obs, o, SelectContext.SETUP_ACTIVE_POKEMON, my_index=0, fs=fs, plan=plan)
+        assert score == jm._score_setup_active(jm.Iono_Voltorb)
+
+    def test_dispatches_switch_context(self):
+        from cg.api import Option, SelectContext
+
+        target = make_pokemon(id=999, hp=50)
+        op_state = make_player_state(active_pokemon=None, bench=[target])
+        obs = MagicMock()
+        obs.current.players = [make_player_state(), op_state]
+        o = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=1)
+        fs = jm._collect_field_state(make_player_state())
+        plan = jm.AttackPlan(attacker_id=jm.Iono_Voltorb, attack_id=1001, damage=60, is_lethal=False)
+        score = jm._score_card_option(obs, o, SelectContext.SWITCH, my_index=0, fs=fs, plan=plan)
+        assert score == jm._score_switch_target(target, o, my_index=0, plan=plan)
+
+    def test_dispatches_to_hand_and_to_bench_identically(self):
+        from cg.api import Option, SelectContext
+
+        voltorb = make_pokemon(id=jm.Iono_Voltorb)
+        my_state = make_player_state(deck_count=40, prize_count=6)
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o = Option(type=OptionType.CARD, area=AreaType.DECK, index=0, playerIndex=0)
+        obs.select.deck = [voltorb]
+        fs = jm._collect_field_state(my_state)
+        plan = jm.AttackPlan()
+        score_hand = jm._score_card_option(obs, o, SelectContext.TO_HAND, my_index=0, fs=fs, plan=plan)
+        score_bench = jm._score_card_option(obs, o, SelectContext.TO_BENCH, my_index=0, fs=fs, plan=plan)
+        assert score_hand == score_bench == jm._score_search_candidate(jm.Iono_Voltorb, fs)
+
+    def test_returns_zero_when_card_is_none(self):
+        from cg.api import Option, SelectContext
+
+        my_state = make_player_state()
+        my_state.active = [None]
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o = Option(type=OptionType.CARD, area=AreaType.ACTIVE, index=0, playerIndex=0)
+        fs = jm._collect_field_state(my_state)
+        plan = jm.AttackPlan()
+        score = jm._score_card_option(obs, o, SelectContext.SWITCH, my_index=0, fs=fs, plan=plan)
+        assert score == 0
+
+    def test_score_option_routes_card_type_through_dispatcher(self, mock_card_table):
+        from cg.api import Option, SelectContext
+
+        voltorb = make_pokemon(id=jm.Iono_Voltorb)
+        my_state = make_player_state(hand=[voltorb], deck_count=40, prize_count=6)
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o = Option(type=OptionType.CARD, area=AreaType.HAND, index=0, playerIndex=0)
+        fs = jm._collect_field_state(my_state)
+        plan = jm.AttackPlan()
+        score = jm._score_option(
+            obs, o, SelectContext.SETUP_ACTIVE_POKEMON, my_index=0,
+            state=None, my_state=my_state, fs=fs, plan=plan,
+        )
+        assert score == jm._score_setup_active(jm.Iono_Voltorb)

@@ -446,6 +446,24 @@ def _score_discard_candidate(card_id: int, fs: FieldState) -> int:
     return 10
 
 
+def _score_card_option(obs, o, context, my_index: int, fs: FieldState, plan: AttackPlan) -> int:
+    """OptionType.CARD のスコアをコンテキスト別に返す"""
+    card = get_card(obs, o.area, o.index, o.playerIndex)
+    if card is None:
+        return 0
+    match context:
+        case SelectContext.SETUP_ACTIVE_POKEMON:
+            return _score_setup_active(card.id)
+        case SelectContext.SWITCH | SelectContext.TO_ACTIVE:
+            return _score_switch_target(card, o, my_index, plan)
+        case SelectContext.TO_HAND | SelectContext.TO_BENCH:
+            return _score_search_candidate(card.id, fs)
+        case SelectContext.DISCARD:
+            return _score_discard_candidate(card.id, fs)
+        case _:
+            return 0
+
+
 # ==================== オプション全体のスコアリング ====================
 def _score_option(obs, o, context, my_index: int, state, my_state,
                   fs: FieldState, plan: AttackPlan) -> int:
@@ -455,6 +473,8 @@ def _score_option(obs, o, context, my_index: int, state, my_state,
             return o.number
         case OptionType.YES:
             return 1
+        case OptionType.CARD:
+            return _score_card_option(obs, o, context, my_index, fs, plan)
         case OptionType.PLAY:
             return _score_play_option(obs, o, my_index, fs, my_state, plan)
         case OptionType.ATTACH:
