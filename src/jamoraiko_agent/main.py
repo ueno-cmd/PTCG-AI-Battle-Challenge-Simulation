@@ -394,6 +394,11 @@ def _is_attack_ready(card_id: int, energy_count: int, fighting_count: int) -> bo
 
 def _score_switch_target(card, o, my_index: int, plan: AttackPlan) -> int:
     """OptionType.CARD / SelectContext.SWITCH・TO_ACTIVE のスコアを返す"""
+    if not isinstance(card, Pokemon):
+        # 当該コンテキストは仕様上Pokemonしか提示されないが、
+        # 想定外のCard型が来た場合にcard.hp/card.energies参照でAttributeError落ちしないための防御
+        # （grimmsnarl_agentのisinstanceガードと同じスタイル）
+        return 0
     if o.playerIndex != my_index:
         # ボスの指令：現在の攻撃プラン(plan.damage)で確定KOできるベンチを最優先、次に低HP
         score = -card.hp

@@ -322,6 +322,34 @@ class TestAgentEndToEnd:
         chosen = options[result[0]]
         assert chosen.type == OptionType.ATTACK
 
+    def test_agent_selects_card_option_for_setup_active_pokemon(self):
+        """SETUP_ACTIVE_POKEMONコンテキストでOptionType.CARDがagent()まで正しく配線されていることを検証する。
+
+        0.015事故は_score_optionのOptionType.CARD分岐そのものが未実装で
+        「配線が黙って無反応」になっていたことが原因だったため、
+        _score_option直呼びだけでなくagent(obs_dict)の入口から出口まで通す
+        スモークテストを1本用意し、この事故クラスの再発を防ぐ。
+        """
+        from cg.api import Card, Option, SelectContext, SelectType
+
+        hand = [
+            Card(id=jm.Iono_Voltorb, serial=1, playerIndex=0),    # ビリリダマ：設計上300点で最優先
+            Card(id=jm.Raging_Bolt_ex, serial=2, playerIndex=0),  # タケルライコex：200点
+        ]
+        my_state = make_player_state(hand=hand, hand_count=len(hand), deck_count=50, prize_count=6)
+        op_state = make_player_state(deck_count=50, prize_count=6)
+
+        options = [
+            Option(type=OptionType.CARD, area=AreaType.HAND, index=0, playerIndex=0),
+            Option(type=OptionType.CARD, area=AreaType.HAND, index=1, playerIndex=0),
+        ]
+        obs_dict = make_main_obs(
+            your_index=0, my_state=my_state, op_state=op_state, options=options,
+            context=SelectContext.SETUP_ACTIVE_POKEMON, select_type=SelectType.CARD,
+        )
+        result = jm.agent(obs_dict)
+        assert result == [0]
+
 
 class TestScoreSetupActive:
     def test_voltorb_outranks_raging_bolt_ex(self):
@@ -385,6 +413,19 @@ class TestScoreSwitchTarget:
         score_ready = jm._score_switch_target(ready, o, my_index=0, plan=plan)
         score_not_ready = jm._score_switch_target(not_ready, o, my_index=0, plan=plan)
         assert score_ready > score_not_ready
+
+    def test_non_pokemon_card_returns_zero_without_crashing(self):
+        """SWITCH/TO_ACTIVEコンテキストで想定外の非PokemonカードCard型が渡された場合、
+        card.hp/card.energiesへの無条件アクセスでAttributeErrorが起きないことを検証する。
+        grimmsnarl_agentのisinstance(card, Pokemon)ガードと同じ堅牢化。
+        """
+        from cg.api import Card, Option
+
+        non_pokemon = Card(id=999, serial=1, playerIndex=0)
+        o = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        plan = jm.AttackPlan()
+        score = jm._score_switch_target(non_pokemon, o, my_index=0, plan=plan)
+        assert score == 0
 
 
 class TestScoreSearchCandidate:

@@ -72,32 +72,45 @@ def make_main_obs(
     op_state: PlayerState = None,
     options: list = None,
     turn: int = 3,
+    context: SelectContext = SelectContext.MAIN,
+    select_type: SelectType = SelectType.MAIN,
 ) -> dict:
-    """MAINコンテキストのobs_dictを生成する（agent()に渡すdict形式）"""
+    """obs_dictを生成する（agent()に渡すdict形式）。
+
+    デフォルトはMAINコンテキストだが、context/select_typeを指定すれば
+    SETUP_ACTIVE_POKEMONなど他のコンテキストのobs_dictも生成できる。
+    """
     my = my_state or make_player_state(active_pokemon=make_pokemon(id=1, hp=300))
     op = op_state or make_player_state(active_pokemon=make_pokemon(id=2, hp=200))
     players = [my, op] if your_index == 0 else [op, my]
 
     def player_to_dict(ps: PlayerState) -> dict:
-        def poke_to_dict(p) -> dict:
+        def card_to_dict(p) -> dict:
             if p is None:
                 return None
+            if isinstance(p, Pokemon):
+                return {
+                    "id": p.id, "serial": p.serial,
+                    "hp": p.hp, "maxHp": p.maxHp,
+                    "appearThisTurn": p.appearThisTurn,
+                    "energies": [int(e) for e in p.energies],
+                    "energyCards": [], "tools": [], "preEvolution": [],
+                }
+            # Card（手札など、場に出ていないためHP/エネルギーを持たない実体）
             return {
-                "id": p.id, "serial": p.serial,
-                "hp": p.hp, "maxHp": p.maxHp,
-                "appearThisTurn": p.appearThisTurn,
-                "energies": [int(e) for e in p.energies],
-                "energyCards": [], "tools": [], "preEvolution": [],
+                "id": p.id,
+                "serial": getattr(p, "serial", p.id),
+                "playerIndex": getattr(p, "playerIndex", 0),
             }
         return {
-            "active": [poke_to_dict(p) for p in ps.active],
-            "bench": [poke_to_dict(p) for p in ps.bench],
+            "active": [card_to_dict(p) for p in ps.active],
+            "bench": [card_to_dict(p) for p in ps.bench],
             "benchMax": ps.benchMax,
             "deckCount": ps.deckCount,
             "discard": [],
             "prize": [None] * len(ps.prize),
             "handCount": ps.handCount,
-            "hand": [],
+            "hand": [card_to_dict(p) for p in ps.hand],
             "poisoned": False, "burned": False,
             "asleep": False, "paralyzed": False, "confused": False,
         }
@@ -116,8 +129,8 @@ def make_main_obs(
 
     return {
         "select": {
-            "type": int(SelectType.MAIN),
-            "context": int(SelectContext.MAIN),
+            "type": int(select_type),
+            "context": int(context),
             "minCount": 1,
             "maxCount": 1,
             "remainDamageCounter": 0,
