@@ -379,6 +379,36 @@ def _score_setup_active(card_id: int) -> int:
     return line.setup_active_priority if line else 0
 
 
+def _is_attack_ready(card_id: int, energy_count: int, fighting_count: int) -> bool:
+    """このポケモンが今すぐ攻撃可能な技を持つか（ATTACKERSテーブルの再利用）"""
+    for atk in ATTACKERS:
+        if atk.id != card_id or atk.is_utility:
+            continue
+        if energy_count < atk.energy_required:
+            continue
+        if atk.requires_fighting and fighting_count < 1:
+            continue
+        return True
+    return False
+
+
+def _score_switch_target(card, o, my_index: int, plan: AttackPlan) -> int:
+    """OptionType.CARD / SelectContext.SWITCH・TO_ACTIVE のスコアを返す"""
+    if o.playerIndex != my_index:
+        # ボスの指令：現在の攻撃プラン(plan.damage)で確定KOできるベンチを最優先、次に低HP
+        score = -card.hp
+        if plan.attacker_id != -1 and plan.damage >= card.hp:
+            score += 100000
+        return score
+    # 自分の交代先／強制昇格先
+    energy_count = len(card.energies)
+    fighting_count = card.energies.count(EnergyType.FIGHTING)
+    score = energy_count * 10
+    if _is_attack_ready(card.id, energy_count, fighting_count):
+        score += 5000
+    return score
+
+
 # ==================== オプション全体のスコアリング ====================
 def _score_option(obs, o, context, my_index: int, state, my_state,
                   fs: FieldState, plan: AttackPlan) -> int:

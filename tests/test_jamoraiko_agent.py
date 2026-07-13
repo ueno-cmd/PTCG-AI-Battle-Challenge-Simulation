@@ -332,3 +332,56 @@ class TestScoreSetupActive:
 
     def test_unknown_card_defaults_to_zero(self):
         assert jm._score_setup_active(999999) == 0
+
+
+class TestIsAttackReady:
+    def test_voltorb_ready_with_2_energy(self):
+        assert jm._is_attack_ready(jm.Iono_Voltorb, energy_count=2, fighting_count=0) is True
+
+    def test_voltorb_not_ready_with_1_energy(self):
+        assert jm._is_attack_ready(jm.Iono_Voltorb, energy_count=1, fighting_count=0) is False
+
+    def test_raging_bolt_ex_not_ready_without_fighting_energy(self):
+        # きょくらいごうは闘エネ必須。はじけるほうこうはis_utilityのため候補から除外される
+        assert jm._is_attack_ready(jm.Raging_Bolt_ex, energy_count=2, fighting_count=0) is False
+
+    def test_raging_bolt_ex_ready_with_fighting_energy(self):
+        assert jm._is_attack_ready(jm.Raging_Bolt_ex, energy_count=2, fighting_count=1) is True
+
+    def test_unknown_card_is_never_ready(self):
+        assert jm._is_attack_ready(999999, energy_count=10, fighting_count=10) is False
+
+
+class TestScoreSwitchTarget:
+    def test_opponent_bench_lethal_gets_large_bonus(self):
+        from cg.api import Option
+
+        target = make_pokemon(id=999, hp=50)
+        o = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=1)
+        plan = jm.AttackPlan(attacker_id=jm.Iono_Voltorb, attack_id=1001, damage=60, is_lethal=False)
+        score = jm._score_switch_target(target, o, my_index=0, plan=plan)
+        # スコアは -hp + 100000（このケースでは99950）。HPは最大でも数百程度なので
+        # 90000以上であれば確実に確定KOボーナス分岐が適用されたことを検証できる
+        assert score >= 90000
+
+    def test_opponent_bench_prefers_lower_hp_when_not_lethal(self):
+        from cg.api import Option
+
+        low_hp = make_pokemon(id=999, hp=50)
+        high_hp = make_pokemon(id=999, hp=200)
+        o = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=1)
+        plan = jm.AttackPlan(attacker_id=jm.Iono_Voltorb, attack_id=1001, damage=10, is_lethal=False)
+        score_low = jm._score_switch_target(low_hp, o, my_index=0, plan=plan)
+        score_high = jm._score_switch_target(high_hp, o, my_index=0, plan=plan)
+        assert score_low > score_high
+
+    def test_own_pokemon_ready_to_attack_outranks_not_ready(self):
+        from cg.api import Option
+
+        ready = make_pokemon(id=jm.Iono_Voltorb, energies=[4, 4])       # 2エネ=攻撃可能
+        not_ready = make_pokemon(id=jm.Iono_Voltorb, energies=[4])      # 1エネ=攻撃不可
+        o = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        plan = jm.AttackPlan()
+        score_ready = jm._score_switch_target(ready, o, my_index=0, plan=plan)
+        score_not_ready = jm._score_switch_target(not_ready, o, my_index=0, plan=plan)
+        assert score_ready > score_not_ready
