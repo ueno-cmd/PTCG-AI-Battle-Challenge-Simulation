@@ -5,11 +5,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from cg.api import AreaType, OptionType
+from cg.api import AreaType, CardType, OptionType
 
 import jamoraiko_agent.main as jm
 
-from tests.conftest import make_pokemon, make_player_state
+from tests.conftest import make_pokemon, make_player_state, make_main_obs
 
 
 class TestAgentDeckSelection:
@@ -71,6 +71,41 @@ def mock_attack_table(monkeypatch):
         1005: MockAttack(attackId=1005, name="Burst Roar"),
     }
     monkeypatch.setattr(jm, "attack_table", table)
+    return table
+
+
+@_dc
+class MockCardData:
+    """テスト用CardData代替クラス（cg.api.CardDataと同一フィールドのみ定義）"""
+    cardId:   int
+    name:     str      = ""
+    cardType: CardType = CardType.POKEMON
+
+
+@pytest.fixture(autouse=True)
+def mock_card_table(monkeypatch):
+    table = {
+        jm.Raging_Bolt_ex:          MockCardData(cardId=jm.Raging_Bolt_ex),
+        jm.Iono_Voltorb:            MockCardData(cardId=jm.Iono_Voltorb),
+        jm.Iono_Tadbulb:            MockCardData(cardId=jm.Iono_Tadbulb),
+        jm.Iono_Bellibolt_ex:       MockCardData(cardId=jm.Iono_Bellibolt_ex),
+        jm.Iono_Wattrel:            MockCardData(cardId=jm.Iono_Wattrel),
+        jm.Iono_Kilowattrel:        MockCardData(cardId=jm.Iono_Kilowattrel),
+        jm.Buddy_Buddy_Poffin:      MockCardData(cardId=jm.Buddy_Buddy_Poffin, cardType=CardType.ITEM),
+        jm.Night_Stretcher:         MockCardData(cardId=jm.Night_Stretcher, cardType=CardType.ITEM),
+        jm.Max_Rod:                 MockCardData(cardId=jm.Max_Rod, cardType=CardType.ITEM),
+        jm.Energy_Retrieval:        MockCardData(cardId=jm.Energy_Retrieval, cardType=CardType.ITEM),
+        jm.Energy_Search:           MockCardData(cardId=jm.Energy_Search, cardType=CardType.ITEM),
+        jm.Ultra_Ball:               MockCardData(cardId=jm.Ultra_Ball, cardType=CardType.ITEM),
+        jm.Switch:                   MockCardData(cardId=jm.Switch, cardType=CardType.ITEM),
+        jm.Boss_Orders:               MockCardData(cardId=jm.Boss_Orders, cardType=CardType.SUPPORTER),
+        jm.Lillie_Determination:       MockCardData(cardId=jm.Lillie_Determination, cardType=CardType.SUPPORTER),
+        jm.Canari:                     MockCardData(cardId=jm.Canari, cardType=CardType.SUPPORTER),
+        jm.Levincia:                   MockCardData(cardId=jm.Levincia, cardType=CardType.STADIUM),
+        jm.Basic_Lightning_Energy:      MockCardData(cardId=jm.Basic_Lightning_Energy, cardType=CardType.BASIC_ENERGY),
+        jm.Basic_Fighting_Energy:       MockCardData(cardId=jm.Basic_Fighting_Energy, cardType=CardType.BASIC_ENERGY),
+    }
+    monkeypatch.setattr(jm, "card_table", table)
     return table
 
 
@@ -207,3 +242,62 @@ class TestDeckSafety:
         )
         base.update(overrides)
         return jm.FieldState(**base)
+
+
+class TestScorePlayOption:
+    def _make_obs_with_hand_card(self, card_id, my_state):
+        from cg.api import Option
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o = Option(type=OptionType.PLAY, index=0)
+        return obs, o
+
+    def test_buddy_buddy_poffin_scores_positively(self, mock_card_table):
+        mock_card_table[jm.Buddy_Buddy_Poffin] = MockCardData(cardId=jm.Buddy_Buddy_Poffin, cardType=CardType.ITEM)
+        poffin = make_pokemon(id=jm.Buddy_Buddy_Poffin)
+        my_state = make_player_state(hand=[poffin], deck_count=40, prize_count=6)
+        obs, o = self._make_obs_with_hand_card(jm.Buddy_Buddy_Poffin, my_state)
+        fs = jm._collect_field_state(my_state)
+        plan = jm.AttackPlan()
+        score = jm._score_play_option(obs, o, my_index=0, fs=fs, my_state=my_state, plan=plan)
+        assert score > 0
+
+    def test_lillie_determination_blocked_when_deck_thin(self, mock_card_table):
+        mock_card_table[jm.Lillie_Determination] = MockCardData(cardId=jm.Lillie_Determination, cardType=CardType.SUPPORTER)
+        lillie = make_pokemon(id=jm.Lillie_Determination)
+        my_state = make_player_state(hand=[lillie], deck_count=5, prize_count=6)  # safe_draws = -2
+        obs, o = self._make_obs_with_hand_card(jm.Lillie_Determination, my_state)
+        fs = jm._collect_field_state(my_state)
+        plan = jm.AttackPlan()
+        score = jm._score_play_option(obs, o, my_index=0, fs=fs, my_state=my_state, plan=plan)
+        assert score == -1
+
+    def test_boss_orders_scores_high_when_lethal(self, mock_card_table):
+        mock_card_table[jm.Boss_Orders] = MockCardData(cardId=jm.Boss_Orders, cardType=CardType.SUPPORTER)
+        boss = make_pokemon(id=jm.Boss_Orders)
+        my_state = make_player_state(hand=[boss], deck_count=40, prize_count=6)
+        obs, o = self._make_obs_with_hand_card(jm.Boss_Orders, my_state)
+        fs = jm._collect_field_state(my_state)
+        plan = jm.AttackPlan(attacker_id=jm.Iono_Voltorb, attack_id=1001, damage=300, is_lethal=True)
+        score = jm._score_play_option(obs, o, my_index=0, fs=fs, my_state=my_state, plan=plan)
+        assert score >= 8000
+
+
+class TestAgentEndToEnd:
+    def test_agent_picks_lethal_attack_when_available(self):
+        from cg.api import Option
+
+        my_active = make_pokemon(id=jm.Iono_Voltorb, energies=[4, 4])
+        my_bench  = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4, 4, 4, 4, 4, 4])
+        my_state  = make_player_state(active_pokemon=my_active, bench=[my_bench], deck_count=40, prize_count=6)
+        op_active = make_pokemon(id=999, hp=50)
+        op_state  = make_player_state(active_pokemon=op_active, deck_count=40, prize_count=6)
+
+        options = [
+            Option(type=OptionType.RETREAT),
+            Option(type=OptionType.ATTACK, attackId=jm._attack_id_by_name("Voltaic Chain") or 1001),
+        ]
+        obs_dict = make_main_obs(your_index=0, my_state=my_state, op_state=op_state, options=options)
+        result = jm.agent(obs_dict)
+        chosen = options[result[0]]
+        assert chosen.type == OptionType.ATTACK

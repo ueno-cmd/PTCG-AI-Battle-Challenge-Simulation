@@ -306,6 +306,77 @@ def get_card(obs: Observation, area: AreaType, index: int, player_index: int) ->
             return None
 
 
+# ==================== PLAYオプションのスコアリング ====================
+def _score_play_option(obs, o, my_index: int, fs: FieldState, my_state, plan: AttackPlan) -> int:
+    """OptionType.PLAY のスコアを返す"""
+    card = get_card(obs, AreaType.HAND, o.index, my_index)
+    data = card_table[card.id]
+
+    if card.id == Lillie_Determination:
+        consumption = _deck_consumption(card.id, my_state, fs.hand_counts)
+        if consumption is not None and consumption > _safe_draws(my_state):
+            return -1
+        return 3100
+
+    if card.id == Boss_Orders:
+        return 8800 if plan.is_lethal else 500
+
+    if data.cardType == CardType.POKEMON:
+        return 20000
+
+    if card.id == Buddy_Buddy_Poffin:
+        return 8000
+    if card.id == Ultra_Ball:
+        return 6000
+    if card.id == Night_Stretcher:
+        return 4800
+    if card.id == Energy_Retrieval:
+        return 6100
+    if card.id == Energy_Search:
+        return 6050
+    if card.id == Max_Rod:
+        return 5500
+    if card.id == Switch:
+        return 2500
+    if card.id == Canari:
+        return 5900
+    if card.id == Levincia:
+        return 8500
+
+    return 1000
+
+
+# ==================== オプション全体のスコアリング ====================
+def _score_option(obs, o, context, my_index: int, state, my_state,
+                  fs: FieldState, plan: AttackPlan) -> int:
+    """1つのオプションにヒューリスティックスコアを付ける"""
+    match o.type:
+        case OptionType.NUMBER:
+            return o.number
+        case OptionType.YES:
+            return 1
+        case OptionType.PLAY:
+            return _score_play_option(obs, o, my_index, fs, my_state, plan)
+        case OptionType.ATTACH:
+            return _score_attach_option(obs, o, my_index)
+        case OptionType.EVOLVE:
+            return 9000
+        case OptionType.ABILITY:
+            card = get_card(obs, o.area, o.index, my_index)
+            if card.id == Iono_Bellibolt_ex:
+                return 9500  # エレキストリーマーは常に高優先
+            if card.id == Iono_Kilowattrel:
+                consumption = _flashing_draw_consumption(my_state, fs.hand_counts)
+                return 8000 if consumption <= _safe_draws(my_state) else -1
+            return -1
+        case OptionType.RETREAT:
+            return -1
+        case OptionType.ATTACK:
+            return 10000 if o.attackId == plan.attack_id else 100
+        case _:
+            return 0
+
+
 # ==================== メインエージェント ====================
 def agent(obs_dict: dict) -> list[int]:
     """Pokémon TCG エージェント（ジャモライコ）。
@@ -322,7 +393,21 @@ def agent(obs_dict: dict) -> list[int]:
 
     state    = obs.current
     select   = obs.select
+    context  = select.context
     my_index = state.yourIndex
+    my_state = state.players[my_index]
+    op_state = state.players[1 - my_index]
 
-    # Task 3以降でスコアリングを追加するまでは先頭を返す暫定実装
-    return list(range(select.minCount))
+    fs = _collect_field_state(my_state)
+
+    my_active = my_state.active[0] if my_state.active else None
+    op_active_hp = op_state.active[0].hp if op_state.active and op_state.active[0] is not None else 10000
+    plan = calc_attack_plan(my_active, op_active_hp, fs, my_state)
+
+    scores = [
+        _score_option(obs, o, context, my_index, state, my_state, fs, plan)
+        for o in select.option
+    ]
+
+    desc_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+    return desc_indices[:select.maxCount]
