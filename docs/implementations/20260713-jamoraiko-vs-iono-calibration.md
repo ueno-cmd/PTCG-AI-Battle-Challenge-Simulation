@@ -63,7 +63,7 @@ OK: all expected markers present
 
 1. Kaggle Notebookに`src/rl_experiments/jamoraiko_vs_iono_experiment.ipynb`をアップロードする
 2. **Add Inputでジャモライコのdeck.csvデータセットのみアタッチすればよい**（イオナサンプルのデッキ・エージェント本体はいずれもビルド時にコード内へ埋め込まれているため、追加データセットは不要）
-3. ノートブックを実行し、200試合の累積勝率推移と`calibration_results.json`（`/kaggle/working`）を確認する
+3. ノートブックを実行し、200試合の累積勝率推移と`jamoraiko_vs_iono_results.json`（`/kaggle/working`）を確認する
 
 なお、ジャモライコのデッキデータセット（`output/deck_jamoraiko_20260713.csv`相当）のKaggleへのアップロード作業は、ユーザーが別途進めている最中である。本タスクの範囲はローカルでのノートブック生成・検証までであり、Kaggle上でのアップロード完了・実行はユーザー作業として引き継ぐ。
 

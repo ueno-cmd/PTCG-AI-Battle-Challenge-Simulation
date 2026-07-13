@@ -75,7 +75,7 @@ series = run_series(
 ```
 
 ### 出力
-- `calibration_results.json`（`/kaggle/working`、対戦結果・試合数・所要時間）
+- `jamoraiko_vs_iono_results.json`（`/kaggle/working`、対戦結果・試合数・所要時間）
 - matplotlib（Kaggleでplotlyが表示されない実績があるため）で累積勝率の推移をプロット。50%ラインを基準線として描画
 
 ## テスト方針
