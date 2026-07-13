@@ -523,6 +523,19 @@ class TestScoreCardOptionDispatch:
         score = jm._score_card_option(obs, o, SelectContext.SWITCH, my_index=0, fs=fs, plan=plan)
         assert score == 0
 
+    def test_dispatches_discard(self):
+        from cg.api import Option, SelectContext
+
+        voltorb = make_pokemon(id=jm.Iono_Voltorb)
+        my_state = make_player_state(hand=[voltorb], deck_count=40, prize_count=6)
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o = Option(type=OptionType.CARD, area=AreaType.HAND, index=0, playerIndex=0)
+        fs = jm._collect_field_state(my_state)
+        plan = jm.AttackPlan()
+        score = jm._score_card_option(obs, o, SelectContext.DISCARD, my_index=0, fs=fs, plan=plan)
+        assert score == jm._score_discard_candidate(jm.Iono_Voltorb, fs)
+
     def test_score_option_routes_card_type_through_dispatcher(self, mock_card_table):
         from cg.api import Option, SelectContext
 
