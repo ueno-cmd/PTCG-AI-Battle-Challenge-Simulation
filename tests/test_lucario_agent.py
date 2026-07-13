@@ -920,7 +920,7 @@ class TestLunaCycleAbilityScore:
     def test_scores_high_when_deck_healthy(self, mock_card_table):
         obs, lunatone = self._obs_with_active_lunatone()
         obs.current.players[0].active = [lunatone]
-        my_state = make_player_state(deck_count=20)
+        my_state = make_player_state(deck_count=20, prize_count=6)
         score = lm._score_option(
             obs, Option(type=OptionType.ABILITY, area=lm.AreaType.ACTIVE, index=0),
             context=lm.SelectContext.MAIN, my_index=0, state=_make_state(),
@@ -932,10 +932,27 @@ class TestLunaCycleAbilityScore:
         )
         assert score == 8500
 
-    def test_suppressed_when_deck_low(self, mock_card_table):
+    def test_allowed_when_safe_draws_equals_3(self, mock_card_table):
+        """山札10枚・プライズ6枚ならsafe_draws=3。消費3枚と丁度一致→許可"""
         obs, lunatone = self._obs_with_active_lunatone()
         obs.current.players[0].active = [lunatone]
-        my_state = make_player_state(deck_count=10)
+        my_state = make_player_state(deck_count=10, prize_count=6)
+        score = lm._score_option(
+            obs, Option(type=OptionType.ABILITY, area=lm.AreaType.ACTIVE, index=0),
+            context=lm.SelectContext.MAIN, my_index=0, state=_make_state(),
+            my_state=my_state, op_state=make_player_state(),
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), can_attack=False,
+            stadium_id=0, ability_used_flag=False,
+        )
+        assert score == 8500
+
+    def test_suppressed_when_safe_draws_below_3(self, mock_card_table):
+        """山札9枚・プライズ6枚ならsafe_draws=2<消費3枚→抑制"""
+        obs, lunatone = self._obs_with_active_lunatone()
+        obs.current.players[0].active = [lunatone]
+        my_state = make_player_state(deck_count=9, prize_count=6)
         score = lm._score_option(
             obs, Option(type=OptionType.ABILITY, area=lm.AreaType.ACTIVE, index=0),
             context=lm.SelectContext.MAIN, my_index=0, state=_make_state(),

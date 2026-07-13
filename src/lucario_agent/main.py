@@ -31,9 +31,6 @@ Ciphermaniac_Codebreaking  = 1188
 Ogerpon_ex                 = 117
 Crustle                     = 345  # 特性「ふしぎな岩の宿」：相手の「ポケモン【ex】」の技ダメージを無効化する壁ポケモン
 
-# ==================== デッキ安全性定数 ====================
-DECK_SAFETY_THRESHOLD = 15  # 山札残数がこれ未満なら大量ドロー系を抑制
-
 EPSILON = 0.28  # 温存判断時に探索的先出しをする確率
 _rng    = random.Random()  # 本番用の実乱数。テストではスタブを注入する
 
@@ -583,7 +580,7 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
             if card.id == 1267:
                 return 1  # Lumiose City は低優先
             if card.id == Lunatone:
-                return 8500 if my_state.deckCount >= DECK_SAFETY_THRESHOLD else -1
+                return 8500 if _safe_draws(my_state) >= 3 else -1
             return 30000
         case OptionType.RETREAT:
             return 2000 if current_plan.attacker >= 1 else -1
