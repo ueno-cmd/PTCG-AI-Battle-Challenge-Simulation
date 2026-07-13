@@ -656,11 +656,12 @@ def calc_attack_plan(my_active: "Pokemon | None", op_active_hp: int,
     )
 ```
 
-`_safe_draws`はTask 6で実装するため、この時点では一時的なスタブを`FieldState`定義の直前に追加する（Task 6で本実装に置き換える）：
+`calc_attack_plan`が`_safe_draws`を参照するため、`FieldState`定義の直前に追加する（これが最終実装であり、Task 6で他の山札セーフティ関数を追加する際も本関数は変更しない）：
 
 ```python
 def _safe_draws(my_state) -> int:
-    """安全に消費できる山札枚数（Task 6で本実装に差し替える）"""
+    """安全に消費できる山札枚数。残りプライズ数を残りターン数の見積もりとして使い、
+    毎ターンの必須ドロー分を温存する（デッキアウト防止）"""
     return my_state.deckCount - len(my_state.prize) - 1
 ```
 
@@ -845,20 +846,13 @@ class TestDeckSafety:
 - [ ] **Step 2: テストを実行して失敗を確認する**
 
 Run: `uv run pytest tests/test_jamoraiko_agent.py::TestDeckSafety -v`
-Expected: FAIL（`AttributeError: ... has no attribute '_deck_consumption'`。`test_burst_roar_blocked_when_deck_thin`はTask 4のスタブ`_safe_draws`により既にPASSする可能性があるが、他が失敗するためタスク全体はFAILとして扱う）
+Expected: FAIL（`AttributeError: ... has no attribute '_deck_consumption'`。`test_burst_roar_blocked_when_deck_thin`はTask 4で実装済みの`_safe_draws`により既にPASSする可能性があるが、他が失敗するためタスク全体はFAILとして扱う）
 
-- [ ] **Step 3: 山札セーフティを実装する**
+- [ ] **Step 3: 残りの山札セーフティ関数を実装する**
 
-`src/jamoraiko_agent/main.py`のTask 4で追加した仮の`_safe_draws`スタブを、以下に置き換える：
+`_safe_draws`はTask 4で実装済みのため変更しない。`src/jamoraiko_agent/main.py`の`_safe_draws`定義の直後に以下を追加する：
 
 ```python
-# ==================== 山札セーフティ（lucario_agentの_safe_draws方式を踏襲） ====================
-def _safe_draws(my_state) -> int:
-    """安全に消費できる山札枚数。残りプライズ数を残りターン数の見積もりとして使い、
-    毎ターンの必須ドロー分を温存する（デッキアウト防止）"""
-    return my_state.deckCount - len(my_state.prize) - 1
-
-
 def _deck_consumption(card_id: int, my_state, hand_counts: defaultdict) -> "int | None":
     """このカードを使った場合の山札の正味消費枚数。山札を消費しない札はNone"""
     hand_count = sum(hand_counts.values())
@@ -1007,7 +1001,7 @@ def _score_play_option(obs, o, my_index: int, fs: FieldState, my_state, plan: At
     if card.id == Canari:
         return 5900
     if card.id == Levincia:
-        return 8500 if data.cardType == CardType.STADIUM else -1
+        return 8500
 
     return 1000
 
