@@ -425,7 +425,7 @@ git commit -m "feat: ジャモライコvsイオナサンプル校正ノートブ
 - [ ] **Step 1: ビルドスクリプトを実行してノートブックを生成する**
 
 Run: `uv run python scripts/build_jamoraiko_vs_iono_notebook.py`
-Expected: `wrote src/rl_experiments/jamoraiko_vs_iono_experiment.ipynb with 10 cells`
+Expected: `wrote src/rl_experiments/jamoraiko_vs_iono_experiment.ipynb with 11 cells`（Task 1実装時に実測済み：note1+コピー2+deck-load+agent-sources+load-helper+agent-load+battle-harness+calibration-run+save-results+plot-curve=11）
 
 - [ ] **Step 2: 生成されたノートブックの内容を検証する**
 
