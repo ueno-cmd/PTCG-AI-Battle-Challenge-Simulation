@@ -255,12 +255,17 @@ out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding=
 print(f"saved: {out_path}")'''
 
 PLOT_CODE = '''# ==================== 累積勝率の推移 ====================
-# matplotlibはKaggle上で日本語フォントを持たず凡例が文字化けするため、
-# ブラウザフォントで描画するplotly（Kaggle標準搭載）を使う
-import plotly.graph_objects as go
+# Kaggleではplotlyのグラフが表示されない実績があるため（2026-07-12実測）、
+# matplotlib＋英語凡例で描画する（Kaggleに日本語フォントが無く日本語凡例は文字化けする）
+import matplotlib.pyplot as plt
 
-fig = go.Figure()
-for series in (series_ab, series_aa):
+SERIES_STYLES = [
+    (series_ab, "A (strong config) vs B (broken config)", "#2a78d6"),
+    (series_aa, "A vs A (noise baseline)", "#8a8f98"),
+]
+
+fig, ax = plt.subplots(figsize=(9, 5))
+for series, label_en, color in SERIES_STYLES:
     results = series["results"]
     cum_rate = []
     wins = 0
@@ -268,20 +273,20 @@ for series in (series_ab, series_aa):
         if r > 0:
             wins += 1
         cum_rate.append(wins / i)
-    fig.add_trace(go.Scatter(
-        x=list(range(1, len(results) + 1)), y=cum_rate,
-        mode="lines", name=series["label"],
-    ))
-fig.add_hline(y=0.5, line_dash="dash", line_width=1)
-fig.add_hline(y=0.6, line_dash="dot", line_width=1)
-fig.update_layout(
-    title="校正実験：何試合で強い設定が見分けられるか",
-    xaxis_title="試合数",
-    yaxis_title="Aの累積勝率",
-    legend={"orientation": "h", "yanchor": "bottom", "y": 1.02},
-    width=900, height=500,
-)
-fig.show()'''
+    ax.plot(range(1, len(results) + 1), cum_rate, color=color, linewidth=2, label=label_en)
+ax.axhline(0.5, color="#b0b4ba", linestyle="--", linewidth=1)
+ax.axhline(0.6, color="#b0b4ba", linestyle=":", linewidth=1)
+ax.annotate("60% = detection target", xy=(1, 0.6), xycoords=("axes fraction", "data"),
+            xytext=(-8, 4), textcoords="offset points", ha="right", fontsize=9, color="#6b7075")
+ax.set_title("Calibration: games needed to tell the strong config apart")
+ax.set_xlabel("Games played")
+ax.set_ylabel("Cumulative win rate of A")
+ax.legend(loc="lower right")
+ax.grid(True, color="#e6e8eb", linewidth=0.8)
+ax.set_axisbelow(True)
+for spine in ("top", "right"):
+    ax.spines[spine].set_visible(False)
+plt.show()'''
 
 
 def main() -> None:
