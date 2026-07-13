@@ -532,13 +532,16 @@ class TestCalcAttackPlan:
         plan = jm.calc_attack_plan(voltorb, op_active_hp=200, fs=fs, my_state=my_state)
         assert plan.is_lethal is True
 
-    def test_lethal_non_bellowing_thunder_preferred_over_lethal_bellowing_thunder(self):
-        """確定KOが複数ある場合、場のエネルギーを消費しないきょくらいごう以外を優先する"""
+    def test_bellowing_thunder_chosen_when_lethal_and_only_damaging_option(self):
+        """タケルライコexの技はきょくらいごう(ダメージ技)とはじけるほうこう(ダメージ0)の2つのみのため、
+        同一ポケモンが同時に2つの確定KO可能技を持つことは構造上ありえない。
+        きょくらいごうが確定KO可能なら、それがそのまま選ばれることを確認する"""
         raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 6])
         fs = self._fs(active_energy_count=2, own_board_basic_energy_total=10)  # きょくらいごうは700ダメ
         my_state = make_player_state(active_pokemon=raging_bolt, deck_count=40, prize_count=6)
         plan = jm.calc_attack_plan(raging_bolt, op_active_hp=50, fs=fs, my_state=my_state)
-        assert plan.attack_id != 1004  # Bellowing Thunder ではない
+        assert plan.is_lethal is True
+        assert plan.attacker_id == jm.Raging_Bolt_ex
 
     def test_thunderous_bolt_penalised_when_not_lethal(self):
         """確定KOでない場合、次ターン技封じのサンダーボルトより他技を優先する"""
@@ -638,8 +641,10 @@ def calc_attack_plan(my_active: "Pokemon | None", op_active_hp: int,
 
     lethal = [c for c in candidates if c[2]]
     if lethal:
-        non_nuke = [c for c in lethal if c[0].id != Raging_Bolt_ex or c[0].attack_name != "Bellowing Thunder"]
-        chosen = non_nuke[0] if non_nuke else lethal[0]
+        # テーブル上、同一ポケモンが同時に2つ以上の確定KO可能技を持つことはない
+        # （タケルライコexのはじけるほうこうはダメージ0固定でis_lethalに絶対ならない）ため、
+        # 複数のlethal候補から選別するロジックは不要。先頭を採用すれば十分
+        chosen = lethal[0]
     else:
         def effective_damage(c):
             atk, damage, _ = c
