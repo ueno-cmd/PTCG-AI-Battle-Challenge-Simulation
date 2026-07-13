@@ -431,6 +431,21 @@ def _score_search_candidate(card_id: int, fs: FieldState) -> int:
     return 0
 
 
+def _score_discard_candidate(card_id: int, fs: FieldState) -> int:
+    """OptionType.CARD / SelectContext.DISCARD のスコアを返す"""
+    line = POKEMON_LINES.get(card_id)
+    if line is not None:
+        owned = fs.field_counts[card_id] + fs.hand_counts[card_id]
+        return 50 if owned > line.max_field_copies else -300
+    if card_id == Basic_Lightning_Energy:
+        return 30 if fs.hand_counts[Basic_Lightning_Energy] >= 3 else -50
+    if card_id == Basic_Fighting_Energy:
+        return -100  # 希少なので温存
+    if card_id in (Boss_Orders, Lillie_Determination, Max_Rod):
+        return -200  # キーカード・ACE SPECは温存
+    return 10
+
+
 # ==================== オプション全体のスコアリング ====================
 def _score_option(obs, o, context, my_index: int, state, my_state,
                   fs: FieldState, plan: AttackPlan) -> int:

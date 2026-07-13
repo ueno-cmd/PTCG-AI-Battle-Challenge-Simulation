@@ -430,3 +430,39 @@ class TestScoreSearchCandidate:
     def test_unknown_card_defaults_to_zero(self):
         fs = self._fs()
         assert jm._score_search_candidate(999999, fs) == 0
+
+
+class TestScoreDiscardCandidate:
+    def _fs(self, **overrides):
+        base = dict(
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), iono_lightning_on_board=0,
+            own_board_basic_energy_total=0, active_energy_count=0,
+            active_fighting_energy_count=0,
+        )
+        base.update(overrides)
+        return jm.FieldState(**base)
+
+    def test_surplus_pokemon_is_safe_to_discard(self):
+        fs = self._fs(hand_counts=defaultdict(int, {jm.Iono_Voltorb: 3}))  # 上限2を超過
+        assert jm._score_discard_candidate(jm.Iono_Voltorb, fs) > 0
+
+    def test_needed_pokemon_is_protected(self):
+        fs = self._fs()
+        assert jm._score_discard_candidate(jm.Iono_Voltorb, fs) < 0
+
+    def test_key_supporter_is_protected(self):
+        fs = self._fs()
+        assert jm._score_discard_candidate(jm.Boss_Orders, fs) < 0
+
+    def test_fighting_energy_is_protected(self):
+        fs = self._fs()
+        assert jm._score_discard_candidate(jm.Basic_Fighting_Energy, fs) < 0
+
+    def test_surplus_lightning_energy_is_safe_to_discard(self):
+        fs = self._fs(hand_counts=defaultdict(int, {jm.Basic_Lightning_Energy: 3}))
+        assert jm._score_discard_candidate(jm.Basic_Lightning_Energy, fs) > 0
+
+    def test_generic_card_gets_small_positive_score(self):
+        fs = self._fs()
+        assert jm._score_discard_candidate(999999, fs) == 10
