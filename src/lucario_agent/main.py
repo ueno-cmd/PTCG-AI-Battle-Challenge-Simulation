@@ -439,6 +439,28 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
             return 0
 
 
+# ==================== 山札セーフティ（battlecore B方式） ====================
+def _safe_draws(my_state) -> int:
+    """安全に消費できる山札枚数。残りプライズ数を残りターン数の見積もりとして使い、
+    毎ターンの必須ドロー分を温存する（デッキアウト防止。実ログ85626724が直接の動機）"""
+    return my_state.deckCount - len(my_state.prize) - 1
+
+
+def _deck_consumption(card_id: int, my_state, hand_counts: defaultdict) -> "int | None":
+    """このカードを使った場合の山札の正味消費枚数。山札を消費しない札はNone"""
+    hand_count = sum(hand_counts.values())
+    if card_id == Lillie_Determination:
+        draws = 8 if len(my_state.prize) == 6 else 6
+        return max(0, draws - (hand_count - 1))
+    if card_id == Judge:
+        return max(0, 4 - (hand_count - 1))
+    if card_id == Hilda:
+        return 2
+    if card_id in (Pokegear, Ultra_Ball, Poke_Pad):
+        return 1
+    return None
+
+
 def _score_play_option(obs, o, my_index, current_plan, can_attack,
                        state, my_state, hand_counts, field_counts, stadium_id,
                        attacker1: bool = False,

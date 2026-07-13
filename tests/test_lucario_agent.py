@@ -535,6 +535,82 @@ def _obs_with_hand(hand_cards, my_index=0, deck_count=50):
     return obs, players[my_index]
 
 
+# ==================== 山札セーフティヘルパー ====================
+class TestSafeDraws:
+    def test_healthy_deck(self):
+        my_state = make_player_state(deck_count=20, prize_count=6)
+        assert lm._safe_draws(my_state) == 13
+
+    def test_low_deck_with_few_prizes_left(self):
+        my_state = make_player_state(deck_count=5, prize_count=2)
+        assert lm._safe_draws(my_state) == 2
+
+    def test_can_go_negative(self):
+        """山札が残りプライズ数を下回っていれば負数（=即座に全ドロー系を止める）"""
+        my_state = make_player_state(deck_count=1, prize_count=6)
+        assert lm._safe_draws(my_state) == -6
+
+
+class TestDeckConsumption:
+    def test_lillie_determination_draws_8_when_6_prizes_left(self):
+        my_state = make_player_state(prize_count=6)
+        hand_counts = defaultdict(int, {lm.Lillie_Determination: 3})
+        assert lm._deck_consumption(lm.Lillie_Determination, my_state, hand_counts) == 6
+
+    def test_lillie_determination_draws_6_when_prizes_taken(self):
+        my_state = make_player_state(prize_count=3)
+        hand_counts = defaultdict(int, {lm.Lillie_Determination: 1})
+        assert lm._deck_consumption(lm.Lillie_Determination, my_state, hand_counts) == 6
+
+    def test_judge_draws_4(self):
+        my_state = make_player_state(prize_count=6)
+        hand_counts = defaultdict(int, {lm.Judge: 2})
+        assert lm._deck_consumption(lm.Judge, my_state, hand_counts) == 3
+
+    def test_hilda_is_fixed_2(self):
+        my_state = make_player_state(prize_count=6)
+        hand_counts = defaultdict(int, {lm.Hilda: 1})
+        assert lm._deck_consumption(lm.Hilda, my_state, hand_counts) == 2
+
+    def test_pokegear_is_fixed_1(self):
+        my_state = make_player_state(prize_count=6)
+        hand_counts = defaultdict(int, {lm.Pokegear: 1})
+        assert lm._deck_consumption(lm.Pokegear, my_state, hand_counts) == 1
+
+    def test_ultra_ball_is_fixed_1(self):
+        my_state = make_player_state(prize_count=6)
+        hand_counts = defaultdict(int, {lm.Ultra_Ball: 1})
+        assert lm._deck_consumption(lm.Ultra_Ball, my_state, hand_counts) == 1
+
+    def test_poke_pad_is_fixed_1(self):
+        my_state = make_player_state(prize_count=6)
+        hand_counts = defaultdict(int, {lm.Poke_Pad: 1})
+        assert lm._deck_consumption(lm.Poke_Pad, my_state, hand_counts) == 1
+
+    def test_ciphermaniac_codebreaking_is_not_gated(self):
+        """山札の一番上に戻すだけで山札枚数は変わらない"""
+        my_state = make_player_state(prize_count=6)
+        hand_counts = defaultdict(int, {lm.Ciphermaniac_Codebreaking: 1})
+        assert lm._deck_consumption(lm.Ciphermaniac_Codebreaking, my_state, hand_counts) is None
+
+    def test_wally_compassion_is_not_gated(self):
+        """山札に一切触れない効果"""
+        my_state = make_player_state(prize_count=6)
+        hand_counts = defaultdict(int, {lm.Wally_Compassion: 1})
+        assert lm._deck_consumption(lm.Wally_Compassion, my_state, hand_counts) is None
+
+    def test_night_stretcher_is_not_gated(self):
+        """捨て札から回収するだけで山札には触れない"""
+        my_state = make_player_state(prize_count=6)
+        hand_counts = defaultdict(int, {lm.Night_Stretcher: 1})
+        assert lm._deck_consumption(lm.Night_Stretcher, my_state, hand_counts) is None
+
+    def test_unrelated_card_returns_none(self):
+        my_state = make_player_state(prize_count=6)
+        hand_counts = defaultdict(int, {lm.Boss_Orders: 1})
+        assert lm._deck_consumption(lm.Boss_Orders, my_state, hand_counts) is None
+
+
 class TestDeckSafetyGate:
     def test_lillie_determination_scores_normally_when_deck_healthy(self):
         card = Card(id=lm.Lillie_Determination, serial=1, playerIndex=0)
