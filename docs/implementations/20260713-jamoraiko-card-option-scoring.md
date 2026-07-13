@@ -30,9 +30,9 @@
 
 ## テスト
 
-`tests/test_jamoraiko_agent.py`に28件のテストクラス（`TestScoreSetupActive`/
+`tests/test_jamoraiko_agent.py`に29件のテストケース（`TestScoreSetupActive`/
 `TestIsAttackReady`/`TestScoreSwitchTarget`/`TestScoreSearchCandidate`/
-`TestScoreDiscardCandidate`/`TestScoreCardOptionDispatch`）を追加。
+`TestScoreDiscardCandidate`/`TestScoreCardOptionDispatch`の6テストクラスにまたがる）を追加。
 リポジトリ全体`uv run pytest -q`で全件PASS。
 
 ## 未検証（次回以降）
