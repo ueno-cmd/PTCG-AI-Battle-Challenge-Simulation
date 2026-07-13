@@ -409,6 +409,28 @@ def _score_switch_target(card, o, my_index: int, plan: AttackPlan) -> int:
     return score
 
 
+def _score_search_candidate(card_id: int, fs: FieldState) -> int:
+    """OptionType.CARD / SelectContext.TO_HAND・TO_BENCH のスコアを返す"""
+    line = POKEMON_LINES.get(card_id)
+    if line is not None:
+        owned = fs.field_counts[card_id] + fs.hand_counts[card_id]
+        if owned >= line.max_field_copies:
+            return -1000  # もう十分
+        score = 300
+        if line.pre_evo_id is not None and fs.field_counts[line.pre_evo_id] == 0:
+            score -= 200  # 進化前が場にいないなら優先度を下げる
+        return score
+    if card_id == Basic_Lightning_Energy:
+        return 150
+    if card_id == Basic_Fighting_Energy:
+        raging_needs_fighting = (
+            fs.field_counts[Raging_Bolt_ex] > 0
+            and fs.active_fighting_energy_count < 1
+        )
+        return 180 if raging_needs_fighting else 20
+    return 0
+
+
 # ==================== オプション全体のスコアリング ====================
 def _score_option(obs, o, context, my_index: int, state, my_state,
                   fs: FieldState, plan: AttackPlan) -> int:

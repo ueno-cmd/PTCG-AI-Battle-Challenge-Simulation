@@ -385,3 +385,48 @@ class TestScoreSwitchTarget:
         score_ready = jm._score_switch_target(ready, o, my_index=0, plan=plan)
         score_not_ready = jm._score_switch_target(not_ready, o, my_index=0, plan=plan)
         assert score_ready > score_not_ready
+
+
+class TestScoreSearchCandidate:
+    def _fs(self, **overrides):
+        base = dict(
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), iono_lightning_on_board=0,
+            own_board_basic_energy_total=0, active_energy_count=0,
+            active_fighting_energy_count=0,
+        )
+        base.update(overrides)
+        return jm.FieldState(**base)
+
+    def test_pokemon_below_cap_scores_positive(self):
+        fs = self._fs()
+        assert jm._score_search_candidate(jm.Iono_Voltorb, fs) > 0
+
+    def test_pokemon_at_cap_is_deprioritised(self):
+        fs = self._fs(field_counts=defaultdict(int, {jm.Iono_Voltorb: 2}))
+        assert jm._score_search_candidate(jm.Iono_Voltorb, fs) < 0
+
+    def test_evolution_deprioritised_when_pre_evo_absent(self):
+        fs_no_pre_evo = self._fs()
+        fs_with_pre_evo = self._fs(field_counts=defaultdict(int, {jm.Iono_Tadbulb: 1}))
+        score_absent = jm._score_search_candidate(jm.Iono_Bellibolt_ex, fs_no_pre_evo)
+        score_present = jm._score_search_candidate(jm.Iono_Bellibolt_ex, fs_with_pre_evo)
+        assert score_present > score_absent
+
+    def test_lightning_energy_has_base_priority(self):
+        fs = self._fs()
+        assert jm._score_search_candidate(jm.Basic_Lightning_Energy, fs) == 150
+
+    def test_fighting_energy_prioritised_when_raging_bolt_ex_needs_it(self):
+        fs_needs = self._fs(
+            field_counts=defaultdict(int, {jm.Raging_Bolt_ex: 1}),
+            active_fighting_energy_count=0,
+        )
+        fs_not_needed = self._fs()
+        score_needs = jm._score_search_candidate(jm.Basic_Fighting_Energy, fs_needs)
+        score_not_needed = jm._score_search_candidate(jm.Basic_Fighting_Energy, fs_not_needed)
+        assert score_needs > score_not_needed
+
+    def test_unknown_card_defaults_to_zero(self):
+        fs = self._fs()
+        assert jm._score_search_candidate(999999, fs) == 0
