@@ -329,12 +329,16 @@ class TestAgentEndToEnd:
         「配線が黙って無反応」になっていたことが原因だったため、
         _score_option直呼びだけでなくagent(obs_dict)の入口から出口まで通す
         スモークテストを1本用意し、この事故クラスの再発を防ぐ。
+
+        識別力：低スコアカード(index 0)と高スコアカード(index 1)を配置し、
+        [1]を期待することで、配線崩壊時に両オプションが同点(0点)になり
+        安定ソート[0]が返されるため確実にREDになる。
         """
         from cg.api import Card, Option, SelectContext, SelectType
 
         hand = [
-            Card(id=jm.Iono_Voltorb, serial=1, playerIndex=0),    # ビリリダマ：設計上300点で最優先
-            Card(id=jm.Raging_Bolt_ex, serial=2, playerIndex=0),  # タケルライコex：200点
+            Card(id=jm.Raging_Bolt_ex, serial=1, playerIndex=0),  # タケルライコex：200点（低スコア）
+            Card(id=jm.Iono_Voltorb, serial=2, playerIndex=0),    # ビリリダマ：300点（高スコア、期待される選択肢）
         ]
         my_state = make_player_state(hand=hand, hand_count=len(hand), deck_count=50, prize_count=6)
         op_state = make_player_state(deck_count=50, prize_count=6)
@@ -348,7 +352,7 @@ class TestAgentEndToEnd:
             context=SelectContext.SETUP_ACTIVE_POKEMON, select_type=SelectType.CARD,
         )
         result = jm.agent(obs_dict)
-        assert result == [0]
+        assert result == [1]
 
 
 class TestScoreSetupActive:
