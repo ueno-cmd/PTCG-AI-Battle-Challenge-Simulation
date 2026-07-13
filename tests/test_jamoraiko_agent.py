@@ -115,6 +115,7 @@ class TestCalcAttackPlan:
             field_counts=defaultdict(int), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), iono_lightning_on_board=0,
             own_board_basic_energy_total=0, active_energy_count=0,
+            active_fighting_energy_count=0,
         )
         base.update(overrides)
         return jm.FieldState(**base)
@@ -138,7 +139,9 @@ class TestCalcAttackPlan:
         同一ポケモンが同時に2つの確定KO可能技を持つことは構造上ありえない。
         きょくらいごうが確定KO可能なら、それがそのまま選ばれることを確認する"""
         raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 6])
-        fs = self._fs(active_energy_count=2, own_board_basic_energy_total=10)  # きょくらいごうは700ダメ
+        # fs は my_active から自動導出されないため、雷1闘1の想定を active_fighting_energy_count=1 で明示する
+        fs = self._fs(active_energy_count=2, active_fighting_energy_count=1,
+                       own_board_basic_energy_total=10)  # きょくらいごうは700ダメ
         my_state = make_player_state(active_pokemon=raging_bolt, deck_count=40, prize_count=6)
         plan = jm.calc_attack_plan(raging_bolt, op_active_hp=50, fs=fs, my_state=my_state)
         assert plan.is_lethal is True
@@ -165,6 +168,22 @@ class TestCalcAttackPlan:
         my_state = make_player_state(active_pokemon=None, deck_count=40, prize_count=6)
         plan = jm.calc_attack_plan(None, op_active_hp=100, fs=fs, my_state=my_state)
         assert plan.attacker_id == -1
+
+    def test_bellowing_thunder_excluded_when_no_fighting_energy_even_if_lethal(self):
+        """タケルライコexに雷2枚・闘0枚がついている場合、きょくらいごうのダメージが
+        確定KO相当の量でも、闘エネルギーが0本のため候補から除外されるべき
+        （本数だけを見て属性を見ないと、雷2枚だけでも「使用可能」と誤判定してしまう）"""
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 4])  # 雷2、闘0
+        fs = self._fs(
+            active_energy_count=2, active_fighting_energy_count=0,
+            own_board_basic_energy_total=10,  # きょくらいごうなら700ダメ（確定KO相当）
+        )
+        my_state = make_player_state(active_pokemon=raging_bolt, deck_count=40, prize_count=6)
+        plan = jm.calc_attack_plan(raging_bolt, op_active_hp=50, fs=fs, my_state=my_state)
+        # きょくらいごう(1004)は選ばれない。闘エネがないので残る技ははじけるほうこう(1005)のみ、
+        # ダメージ0のためis_lethalにはならない
+        assert plan.attack_id != 1004
+        assert plan.is_lethal is False
 
 
 class TestEnergyScore:
@@ -239,6 +258,7 @@ class TestDeckSafety:
             field_counts=defaultdict(int), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), iono_lightning_on_board=0,
             own_board_basic_energy_total=0, active_energy_count=0,
+            active_fighting_energy_count=0,
         )
         base.update(overrides)
         return jm.FieldState(**base)

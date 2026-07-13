@@ -62,6 +62,7 @@ class FieldState:
     iono_lightning_on_board: int
     own_board_basic_energy_total: int
     active_energy_count: int
+    active_fighting_energy_count: int
 
 
 def _collect_field_state(my_state) -> FieldState:
@@ -77,6 +78,7 @@ def _collect_field_state(my_state) -> FieldState:
     iono_lightning_on_board = 0
     own_board_basic_energy_total = 0
     active_energy_count = 0
+    active_fighting_energy_count = 0
 
     active = my_state.active[0] if my_state.active else None
 
@@ -92,6 +94,7 @@ def _collect_field_state(my_state) -> FieldState:
 
     if active is not None:
         active_energy_count = len(active.energies)
+        active_fighting_energy_count = active.energies.count(EnergyType.FIGHTING)
 
     for card in my_state.hand:
         hand_counts[card.id] += 1
@@ -106,6 +109,7 @@ def _collect_field_state(my_state) -> FieldState:
         iono_lightning_on_board=iono_lightning_on_board,
         own_board_basic_energy_total=own_board_basic_energy_total,
         active_energy_count=active_energy_count,
+        active_fighting_energy_count=active_fighting_energy_count,
     )
 
 
@@ -118,6 +122,7 @@ class Attacker:
     damage_fn: Callable[[FieldState], int]
     locks_next_turn: bool = False
     is_utility: bool = False
+    requires_fighting: bool = False
 
 
 ATTACKERS: list[Attacker] = [
@@ -128,7 +133,7 @@ ATTACKERS: list[Attacker] = [
     Attacker(id=Iono_Kilowattrel, attack_name="Mach Bolt", energy_required=3,
              damage_fn=lambda fs: 70),
     Attacker(id=Raging_Bolt_ex, attack_name="Bellowing Thunder", energy_required=2,
-             damage_fn=lambda fs: 70 * fs.own_board_basic_energy_total),
+             damage_fn=lambda fs: 70 * fs.own_board_basic_energy_total, requires_fighting=True),
     Attacker(id=Raging_Bolt_ex, attack_name="Burst Roar", energy_required=1,
              damage_fn=lambda fs: 0, is_utility=True),
 ]
@@ -162,6 +167,8 @@ def calc_attack_plan(my_active: "Pokemon | None", op_active_hp: int,
         if atk.id != my_active.id:
             continue
         if fs.active_energy_count < atk.energy_required:
+            continue
+        if atk.requires_fighting and fs.active_fighting_energy_count < 1:
             continue
         if atk.is_utility and 6 > _safe_draws(my_state):
             continue  # 山札温存（Task 6で_safe_drawsを実装）
