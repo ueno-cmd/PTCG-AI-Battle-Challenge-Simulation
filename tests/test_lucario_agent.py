@@ -808,6 +808,65 @@ class TestPokePadDeckSafety:
         assert score == -1
 
 
+class TestNonGatedCardsIgnoreDeckSafety:
+    """山札が極端に少なくてもゲートされてはいけないカード群の回帰テスト"""
+
+    def test_ciphermaniac_codebreaking_not_suppressed_at_deck_count_1(self):
+        card = Card(id=lm.Ciphermaniac_Codebreaking, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=1, prize_count=6)
+        o = Option(type=OptionType.PLAY, index=0)
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == 5100
+
+    def test_wally_compassion_not_suppressed_at_deck_count_1(self):
+        card = Card(id=lm.Wally_Compassion, serial=1, playerIndex=0)
+        damaged_lucario = make_pokemon(id=lm.Mega_Lucario_ex, hp=100, max_hp=200)
+        obs, my_state = _obs_with_hand([card], deck_count=1, prize_count=6)
+        my_state.active = [damaged_lucario]
+        o = Option(type=OptionType.PLAY, index=0)
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == 6800
+
+    def test_night_stretcher_not_suppressed_at_deck_count_1(self):
+        card = Card(id=lm.Night_Stretcher, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=1, prize_count=6)
+        o = Option(type=OptionType.PLAY, index=0)
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == 4800
+
+
+class TestReplays85626724DeckOutLoss:
+    """実ログ85626724（T17、山札切れで敗北した対戦）の再現テスト。
+    実測：ポケギア3.0使用前=山札4枚・プライズ残3枚。新ゲートで温存されるべき"""
+
+    def test_pokegear_would_be_suppressed_at_the_critical_moment(self):
+        card = Card(id=lm.Pokegear, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=4, prize_count=3)
+        o = Option(type=OptionType.PLAY, index=0)
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == -1
+
+
 class TestSwitchContext:
     """SWITCH/TO_ACTIVEコンテキストでのオーガポンex優先度テスト"""
 
