@@ -468,6 +468,9 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
     """OptionType.PLAY のスコアを返す"""
     card = get_card(obs, AreaType.HAND, o.index, my_index)
     data = card_table[card.id]
+    consumption = _deck_consumption(card.id, my_state, hand_counts)
+    if consumption is not None and consumption > _safe_draws(my_state):
+        return -1  # 山札温存
     if data.cardType == CardType.POKEMON:
         if card.id in (Lunatone, Solrock):
             return -1 if field_counts[card.id] >= 1 else 20000
@@ -495,7 +498,7 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
             return 6000  # 探索的先出し
         return -1  # 温存
     if card.id == Lillie_Determination:
-        return 3100 if my_state.deckCount >= DECK_SAFETY_THRESHOLD else -1
+        return 3100
     if card.id == Ultra_Ball:
         already_found = (
             field_counts[Riolu] + field_counts[Mega_Lucario_ex] + field_counts[Ogerpon_ex]

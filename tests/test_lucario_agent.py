@@ -526,13 +526,21 @@ class TestAgent:
 from unittest.mock import MagicMock as _MM
 
 
-def _obs_with_hand(hand_cards, my_index=0, deck_count=50):
+def _obs_with_hand(hand_cards, my_index=0, deck_count=50, prize_count=6):
     obs = MagicMock()
-    my_ps = make_player_state(hand=hand_cards, deck_count=deck_count)
+    my_ps = make_player_state(hand=hand_cards, deck_count=deck_count, prize_count=prize_count)
     op_ps = make_player_state()
     players = [my_ps, op_ps] if my_index == 0 else [op_ps, my_ps]
     obs.current.players = players
     return obs, players[my_index]
+
+
+def _hand_counts(cards):
+    """テスト用：手札カードリストからhand_counts(defaultdict)を作る"""
+    counts = defaultdict(int)
+    for c in cards:
+        counts[c.id] += 1
+    return counts
 
 
 # ==================== 山札セーフティヘルパー ====================
@@ -621,7 +629,7 @@ class TestDeckSafetyGate:
         score = lm._score_play_option(
             obs, o, my_index=0, current_plan=lm.AttackPlan(),
             can_attack=False, state=state, my_state=my_state,
-            hand_counts=defaultdict(int), field_counts=defaultdict(int),
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
             stadium_id=0,
         )
         assert score == 3100
@@ -634,25 +642,170 @@ class TestDeckSafetyGate:
         score = lm._score_play_option(
             obs, o, my_index=0, current_plan=lm.AttackPlan(),
             can_attack=False, state=state, my_state=my_state,
-            hand_counts=defaultdict(int), field_counts=defaultdict(int),
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
             stadium_id=0,
         )
         assert score == -1
 
-    def test_threshold_boundary_is_inclusive(self):
-        """山札残数がちょうどしきい値なら通常スコア"""
+    def test_allowed_when_consumption_equals_safe_draws(self):
+        """手札1枚・プライズ6枚時のミツルの思いやりは消費8枚。山札15枚ならsafe_draws=8で丁度一致→許可"""
         card = Card(id=lm.Lillie_Determination, serial=1, playerIndex=0)
-        obs, my_state = _obs_with_hand([card], deck_count=lm.DECK_SAFETY_THRESHOLD)
+        obs, my_state = _obs_with_hand([card], deck_count=15)
         o = Option(type=OptionType.PLAY, index=0)
         state = _make_state()
         state.supporterPlayed = False
         score = lm._score_play_option(
             obs, o, my_index=0, current_plan=lm.AttackPlan(),
             can_attack=False, state=state, my_state=my_state,
-            hand_counts=defaultdict(int), field_counts=defaultdict(int),
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
             stadium_id=0,
         )
         assert score == 3100
+
+    def test_suppressed_when_consumption_exceeds_safe_draws(self):
+        """山札14枚ならsafe_draws=7<消費8枚→抑制"""
+        card = Card(id=lm.Lillie_Determination, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=14)
+        o = Option(type=OptionType.PLAY, index=0)
+        state = _make_state()
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=state, my_state=my_state,
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == -1
+
+
+class TestJudgeDeckSafety:
+    def test_scores_normally_when_deck_healthy(self):
+        card = Card(id=lm.Judge, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=12)
+        o = Option(type=OptionType.PLAY, index=0)
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == 7000
+
+    def test_suppressed_when_deck_low(self):
+        card = Card(id=lm.Judge, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=10)
+        o = Option(type=OptionType.PLAY, index=0)
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == -1
+
+
+class TestHildaDeckSafety:
+    def test_scores_normally_when_deck_healthy(self):
+        card = Card(id=lm.Hilda, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=10)
+        o = Option(type=OptionType.PLAY, index=0)
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == 5300
+
+    def test_suppressed_when_deck_low(self):
+        card = Card(id=lm.Hilda, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=8)
+        o = Option(type=OptionType.PLAY, index=0)
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == -1
+
+
+class TestPokegearDeckSafety:
+    def test_scores_normally_when_deck_healthy(self):
+        card = Card(id=lm.Pokegear, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=8)
+        o = Option(type=OptionType.PLAY, index=0)
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == 5200
+
+    def test_suppressed_when_deck_low(self):
+        card = Card(id=lm.Pokegear, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=7)
+        o = Option(type=OptionType.PLAY, index=0)
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == -1
+
+
+class TestUltraBallDeckSafety:
+    def test_scores_normally_when_deck_healthy(self):
+        card = Card(id=lm.Ultra_Ball, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=8)
+        o = Option(type=OptionType.PLAY, index=0)
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == 6000
+
+    def test_suppressed_when_deck_low(self):
+        card = Card(id=lm.Ultra_Ball, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=7)
+        o = Option(type=OptionType.PLAY, index=0)
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == -1
+
+
+class TestPokePadDeckSafety:
+    def test_scores_normally_when_deck_healthy(self):
+        """Poké Padは専用スコアリングが無く汎用デフォルト10000にフォールバックする"""
+        card = Card(id=lm.Poke_Pad, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=8)
+        o = Option(type=OptionType.PLAY, index=0)
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == 10000
+
+    def test_suppressed_when_deck_low(self):
+        card = Card(id=lm.Poke_Pad, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=7)
+        o = Option(type=OptionType.PLAY, index=0)
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts([card]), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+        assert score == -1
 
 
 class TestSwitchContext:
