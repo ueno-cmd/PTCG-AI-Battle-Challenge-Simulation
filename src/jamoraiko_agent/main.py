@@ -139,6 +139,25 @@ ATTACKERS: list[Attacker] = [
 ]
 
 
+# ==================== ポケモンライン優先度テーブル ====================
+@dataclass(frozen=True)
+class PokemonLine:
+    id: int
+    pre_evo_id: "int | None" = None   # 進化前のID（自身が進化ポケモンの場合）
+    max_field_copies: int = 1         # 場+手札に置きたい上限（これ以上のサーチ優先度は下げる）
+    setup_active_priority: int = 0    # 初期アクティブ選択時の基礎優先度
+
+
+POKEMON_LINES: dict[int, PokemonLine] = {
+    Iono_Voltorb:      PokemonLine(id=Iono_Voltorb, max_field_copies=2, setup_active_priority=300),
+    Iono_Tadbulb:      PokemonLine(id=Iono_Tadbulb, max_field_copies=1, setup_active_priority=50),
+    Iono_Bellibolt_ex: PokemonLine(id=Iono_Bellibolt_ex, pre_evo_id=Iono_Tadbulb, max_field_copies=1),
+    Iono_Wattrel:      PokemonLine(id=Iono_Wattrel, max_field_copies=1, setup_active_priority=50),
+    Iono_Kilowattrel:  PokemonLine(id=Iono_Kilowattrel, pre_evo_id=Iono_Wattrel, max_field_copies=1),
+    Raging_Bolt_ex:    PokemonLine(id=Raging_Bolt_ex, max_field_copies=1, setup_active_priority=200),
+}
+
+
 # ==================== 攻撃プラン計算 ====================
 @dataclass
 class AttackPlan:
@@ -351,6 +370,13 @@ def _score_play_option(obs, o, my_index: int, fs: FieldState, my_state, plan: At
         return 8500
 
     return 1000
+
+
+# ==================== CARDオプションのスコアリング ====================
+def _score_setup_active(card_id: int) -> int:
+    """OptionType.CARD / SelectContext.SETUP_ACTIVE_POKEMON のスコアを返す"""
+    line = POKEMON_LINES.get(card_id)
+    return line.setup_active_priority if line else 0
 
 
 # ==================== オプション全体のスコアリング ====================

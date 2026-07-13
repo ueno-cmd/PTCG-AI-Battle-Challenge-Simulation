@@ -321,3 +321,14 @@ class TestAgentEndToEnd:
         result = jm.agent(obs_dict)
         chosen = options[result[0]]
         assert chosen.type == OptionType.ATTACK
+
+
+class TestScoreSetupActive:
+    def test_voltorb_outranks_raging_bolt_ex(self):
+        assert jm._score_setup_active(jm.Iono_Voltorb) > jm._score_setup_active(jm.Raging_Bolt_ex)
+
+    def test_raging_bolt_ex_outranks_tadbulb(self):
+        assert jm._score_setup_active(jm.Raging_Bolt_ex) > jm._score_setup_active(jm.Iono_Tadbulb)
+
+    def test_unknown_card_defaults_to_zero(self):
+        assert jm._score_setup_active(999999) == 0
