@@ -7,6 +7,7 @@ Kaggle実行用ノートブックを生成する。main.py改修後はこのス�
 
 Usage: uv run python scripts/build_jamoraiko_vs_iono_notebook.py
 """
+import inspect
 import json
 import sys
 import types
@@ -241,10 +242,7 @@ def main() -> None:
     load_helper_src = (
         "# ==================== 名前空間分離ヘルパー ====================\n"
         "import types\n\n\n"
-        "def load_agent_module(name: str, source: str):\n"
-        "    mod = types.ModuleType(name)\n"
-        "    exec(compile(source, name, \"exec\"), mod.__dict__)\n"
-        "    return mod\n"
+        + inspect.getsource(load_agent_module)
     )
 
     nb = {
