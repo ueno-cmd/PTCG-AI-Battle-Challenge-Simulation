@@ -143,7 +143,7 @@ ATTACKERS: list[Attacker] = [
 @dataclass(frozen=True)
 class PokemonLine:
     id: int
-    pre_evo_id: "int | None" = None   # 進化前のID（自身が進化ポケモンの場合）
+    pre_evo_id: int | None = None     # 進化前のID（自身が進化ポケモンの場合）
     max_field_copies: int = 1         # 場+手札に置きたい上限（これ以上のサーチ優先度は下げる）
     setup_active_priority: int = 0    # 初期アクティブ選択時の基礎優先度
 

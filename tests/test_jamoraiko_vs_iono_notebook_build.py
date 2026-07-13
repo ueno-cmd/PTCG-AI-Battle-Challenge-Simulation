@@ -31,6 +31,20 @@ class TestLoadAgentModule:
         assert mod_a.card_table != mod_b.card_table
 
 
+class TestLoadAgentModuleWithRealSources:
+    """load_agent_moduleはsys.modulesに未登録のモジュール名前空間でexec()するため、
+    dataclassフィールドに文字列型注釈(例: "int | None")があると
+    AttributeError: 'NoneType' object has no attribute '__dict__'でクラッシュする
+    （Kaggle実行時にjamoraiko_agentのPokemonLineで実際に発生した事故の再発防止）。
+    ここではsrc/jamoraiko_agent/main.pyの実ソースをそのままexec()して検証する。
+    """
+
+    def test_jamoraiko_agent_source_loads_without_crashing(self):
+        source = (Path(__file__).resolve().parent.parent / "src" / "jamoraiko_agent" / "main.py").read_text()
+        mod = _mod.load_agent_module("jamoraiko_agent_module_regression", source)
+        assert callable(mod.agent)
+
+
 class TestStripWritefileMagic:
     def test_removes_leading_writefile_line(self):
         source = "%%writefile main.py\nimport os\nprint('hi')\n"
