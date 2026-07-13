@@ -153,7 +153,9 @@ class TestScoreSwitchTarget:
         o = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=1)
         plan = jm.AttackPlan(attacker_id=jm.Iono_Voltorb, attack_id=1001, damage=60, is_lethal=False)
         score = jm._score_switch_target(target, o, my_index=0, plan=plan)
-        assert score >= 100000
+        # スコアは -hp + 100000（このケースでは99950）。HPは最大でも数百程度なので
+        # 90000以上であれば確実に確定KOボーナス分岐が適用されたことを検証できる
+        assert score >= 90000
 
     def test_opponent_bench_prefers_lower_hp_when_not_lethal(self):
         from cg.api import Option
