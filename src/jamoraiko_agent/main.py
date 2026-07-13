@@ -31,6 +31,62 @@ Basic_Fighting_Energy       = 6
 
 IONO_POKEMON_IDS = {Iono_Voltorb, Iono_Tadbulb, Iono_Bellibolt_ex, Iono_Wattrel, Iono_Kilowattrel}
 
+# ==================== フィールド状態 ====================
+@dataclass
+class FieldState:
+    field_counts: defaultdict
+    hand_counts: defaultdict
+    discard_counts: defaultdict
+    iono_lightning_on_board: int
+    own_board_basic_energy_total: int
+    active_energy_count: int
+
+
+def _collect_field_state(my_state) -> FieldState:
+    """バトル場・ベンチ・手札・捨て山のカード枚数と、
+    チェインボルト/きょくらいごうのダメージ計算に必要なエネルギー集計を返す。
+
+    own_board_basic_energy_total は雷・闘の基本エネルギーのみを数える
+    （本デッキは基本エネルギー2種のみ採用のためv1はこれで正確）。
+    """
+    field_counts   = defaultdict(int)
+    hand_counts    = defaultdict(int)
+    discard_counts = defaultdict(int)
+    iono_lightning_on_board = 0
+    own_board_basic_energy_total = 0
+    active_energy_count = 0
+
+    active = my_state.active[0] if my_state.active else None
+
+    for card in my_state.active + my_state.bench:
+        if card is None:
+            continue
+        field_counts[card.id] += 1
+        lightning = card.energies.count(EnergyType.LIGHTNING)
+        fighting  = card.energies.count(EnergyType.FIGHTING)
+        if card.id in IONO_POKEMON_IDS:
+            iono_lightning_on_board += lightning
+        own_board_basic_energy_total += lightning + fighting
+
+    if active is not None:
+        active_energy_count = len(active.energies)
+
+    for card in my_state.hand:
+        hand_counts[card.id] += 1
+
+    for card in my_state.discard:
+        discard_counts[card.id] += 1
+
+    return FieldState(
+        field_counts=field_counts,
+        hand_counts=hand_counts,
+        discard_counts=discard_counts,
+        iono_lightning_on_board=iono_lightning_on_board,
+        own_board_basic_energy_total=own_board_basic_energy_total,
+        active_energy_count=active_energy_count,
+    )
+
+
 # ==================== カードメタデータ（遅延初期化）====================
 card_table: dict = {}
 attack_table: dict = {}
