@@ -71,6 +71,52 @@ def _strip_writefile_magic(source: str) -> str:
     return source
 
 
+# イオナサンプルのデッキ読み込みブロック（原文）。
+# モジュールレベルでtry/exceptなしにopen()するため、Kaggle対話セッション等で
+# deck.csvが存在しないと exec() 実行時点で FileNotFoundError となりノートブック
+# 全体がクラッシュする（Critical指摘）。ビルド時にこの文字列を検索して安全な
+# フォールバック付きバージョンに書き換える。
+_IONO_DECK_LOAD_ORIGINAL = '''file_path = "deck.csv"
+if not os.path.exists(file_path):
+    file_path = "/kaggle_simulations/agent/" + file_path
+with open(file_path, "r") as file:
+    csv = file.read().split("\\n")
+my_deck = []
+for i in range(60):
+    my_deck.append(int(csv[i]))'''
+
+
+def _patch_iono_deck_load(iono_source: str, iono_deck: list[int]) -> str:
+    """イオナサンプルのモジュールレベルデッキ読み込みコードを、
+    try/except FileNotFoundError + ビルド時埋め込み定数へのフォールバック付き
+    バージョンに書き換える。
+
+    元コードと完全一致しない場合（サンプルノートブックの実装が変更された等）は
+    無言でフォールバックせず RuntimeError を送出する。
+    """
+    if _IONO_DECK_LOAD_ORIGINAL not in iono_source:
+        raise RuntimeError(
+            "イオナサンプルのデッキ読み込みコードが想定と異なります。"
+            "src/sample_notebook/a-sample-rule-based-agent-iono-s-deck.ipynb の内容が"
+            "変更された可能性があります。ソースを確認してください。"
+        )
+
+    patched_block = f'''file_path = "deck.csv"
+if not os.path.exists(file_path):
+    file_path = "/kaggle_simulations/agent/" + file_path
+try:
+    with open(file_path, "r") as file:
+        csv = file.read().split("\\n")
+    my_deck = []
+    for i in range(60):
+        my_deck.append(int(csv[i]))
+except FileNotFoundError:
+    # Kaggle対話セッションではdeck.csvが存在しないため、ビルド時埋め込みのIONO_DECKにフォールバックする
+    my_deck = {iono_deck!r}'''
+
+    return iono_source.replace(_IONO_DECK_LOAD_ORIGINAL, patched_block)
+
+
 def code_cell(cell_id: str, source: str) -> dict:
     return {
         "cell_type": "code", "id": cell_id, "metadata": {},
@@ -231,6 +277,7 @@ def main() -> None:
     if IONO_CELL_ID not in iono_cells:
         raise RuntimeError(f"iono sample cell not found: {IONO_CELL_ID}")
     iono_source = _strip_writefile_magic(iono_cells[IONO_CELL_ID]["source"])
+    iono_source = _patch_iono_deck_load(iono_source, IONO_DECK)
 
     sources_cell_src = (
         "# ==================== エージェントのソースコード（ビルド時に埋め込み） ====================\n"

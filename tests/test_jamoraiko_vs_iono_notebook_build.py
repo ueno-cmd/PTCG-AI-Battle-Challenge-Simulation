@@ -67,3 +67,58 @@ class TestJamoraikoDeckExpansion:
         from decks.jamoraiko_20260713 import DECK
         expanded = _mod.expand_deck(DECK)
         assert expanded.count(63) == 2  # タケルライコex
+
+
+class TestPatchIonoDeckLoad:
+    """Critical指摘の修正対象：イオナサンプルのモジュールレベルdeck.csv読み込みを
+    try/except + ビルド時埋め込み定数へのフォールバックに書き換えるロジックのテスト。
+    """
+
+    def _build_fake_iono_source(self) -> str:
+        """イオナサンプルのソース構造を模した最小のソース文字列
+        （デッキ読み込みブロックの前後にモジュールレベルコードとagent関数を持つ）"""
+        return (
+            "import os\n"
+            "\n"
+            "# Load deck.csv in the dataset\n"
+            + _mod._IONO_DECK_LOAD_ORIGINAL
+            + "\n\n"
+            "def agent(obs_dict):\n"
+            "    return my_deck\n"
+        )
+
+    def test_patched_source_contains_except_filenotfounderror(self):
+        source = self._build_fake_iono_source()
+        patched = _mod._patch_iono_deck_load(source, _mod.IONO_DECK)
+        assert "except FileNotFoundError" in patched
+
+    def test_patched_source_execs_and_returns_60_card_deck_without_deck_csv(self, tmp_path, monkeypatch):
+        """deck.csvが存在しないカレントディレクトリでexec()しても
+        FileNotFoundErrorを送出せず、60枚のデッキを返すことを実際に検証する。"""
+        monkeypatch.chdir(tmp_path)
+        assert not (tmp_path / "deck.csv").exists()
+
+        source = self._build_fake_iono_source()
+        patched = _mod._patch_iono_deck_load(source, _mod.IONO_DECK)
+
+        mod = _mod.load_agent_module("test_iono_patched", patched)
+        result = mod.agent({"select": None})
+
+        assert len(result) == 60
+        assert result == _mod.IONO_DECK
+
+    def test_raises_runtime_error_when_source_does_not_match_expected_block(self):
+        unexpected_source = (
+            "import os\n"
+            "\n"
+            "# デッキ読み込みブロックが想定と異なる（例：サンプル側の実装が変更された）\n"
+            "my_deck = [1, 2, 3]\n"
+            "\n"
+            "def agent(obs_dict):\n"
+            "    return my_deck\n"
+        )
+        try:
+            _mod._patch_iono_deck_load(unexpected_source, _mod.IONO_DECK)
+            assert False, "RuntimeErrorが送出されるはず"
+        except RuntimeError as exc:
+            assert "想定と異なります" in str(exc)
