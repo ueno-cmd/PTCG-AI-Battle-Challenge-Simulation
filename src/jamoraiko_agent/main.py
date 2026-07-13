@@ -37,6 +37,22 @@ def _safe_draws(my_state) -> int:
     return my_state.deckCount - len(my_state.prize) - 1
 
 
+def _deck_consumption(card_id: int, my_state, hand_counts: defaultdict) -> "int | None":
+    """このカードを使った場合の山札の正味消費枚数。山札を消費しない札はNone"""
+    hand_count = sum(hand_counts.values())
+    if card_id == Lillie_Determination:
+        draws = 8 if len(my_state.prize) == 6 else 6
+        return max(0, draws - (hand_count - 1))
+    return None
+
+
+def _flashing_draw_consumption(my_state, hand_counts: defaultdict) -> int:
+    """タイカイデンの特性「フラッシュドロー」による山札消費枚数
+    （自身の雷エネ1個をコストにトラッシュし、手札が6枚になるまでドロー）"""
+    hand_count = sum(hand_counts.values())
+    return max(0, 6 - hand_count)
+
+
 # ==================== フィールド状態 ====================
 @dataclass
 class FieldState:

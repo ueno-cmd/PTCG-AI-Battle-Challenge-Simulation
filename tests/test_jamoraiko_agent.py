@@ -167,3 +167,43 @@ class TestScoreAttachOption:
         o = Option(type=OptionType.ATTACH, index=0, inPlayArea=AreaType.ACTIVE, inPlayIndex=0)
         score = jm._score_attach_option(obs, o, my_index=0)
         assert score > 1000  # タケルライコexへの初回闘エネは高優先
+
+
+class TestDeckSafety:
+    def test_safe_draws_reserves_one_draw_per_remaining_prize(self):
+        my_state = make_player_state(deck_count=20, prize_count=6)
+        assert jm._safe_draws(my_state) == 20 - 6 - 1
+
+    def test_lillie_determination_consumption_scales_with_prize(self):
+        hand_counts = defaultdict(int, {jm.Lillie_Determination: 1})
+        my_state_full_prize = make_player_state(deck_count=40, prize_count=6)
+        my_state_low_prize  = make_player_state(deck_count=40, prize_count=2)
+        assert jm._deck_consumption(jm.Lillie_Determination, my_state_full_prize, hand_counts) == 8 - 0
+        assert jm._deck_consumption(jm.Lillie_Determination, my_state_low_prize, hand_counts) == 6 - 0
+
+    def test_deck_consumption_returns_none_for_unrelated_card(self):
+        hand_counts = defaultdict(int, {jm.Canari: 1})
+        my_state = make_player_state(deck_count=40, prize_count=6)
+        assert jm._deck_consumption(jm.Canari, my_state, hand_counts) is None
+
+    def test_flashing_draw_consumption_fills_hand_to_6(self):
+        hand_counts = defaultdict(int, {jm.Canari: 2})  # 手札2枚
+        my_state = make_player_state(deck_count=40, prize_count=6)
+        assert jm._flashing_draw_consumption(my_state, hand_counts) == 4
+
+    def test_burst_roar_blocked_when_deck_thin(self):
+        """山札が薄い時、はじけるほうこう(6枚ドロー固定)は選ばれない"""
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4])
+        fs = self._fs(active_energy_count=1, own_board_basic_energy_total=1)
+        my_state = make_player_state(active_pokemon=raging_bolt, deck_count=5, prize_count=6)  # safe_draws = -2
+        plan = jm.calc_attack_plan(raging_bolt, op_active_hp=200, fs=fs, my_state=my_state)
+        assert plan.attacker_id == -1  # 使える技がない
+
+    def _fs(self, **overrides):
+        base = dict(
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), iono_lightning_on_board=0,
+            own_board_basic_energy_total=0, active_energy_count=0,
+        )
+        base.update(overrides)
+        return jm.FieldState(**base)
