@@ -1,8 +1,11 @@
 # tests/test_jamoraiko_agent.py
 from collections import defaultdict
 from dataclasses import dataclass as _dc
+from unittest.mock import MagicMock
 
 import pytest
+
+from cg.api import AreaType, OptionType
 
 import jamoraiko_agent.main as jm
 
@@ -127,3 +130,40 @@ class TestCalcAttackPlan:
         my_state = make_player_state(active_pokemon=None, deck_count=40, prize_count=6)
         plan = jm.calc_attack_plan(None, op_active_hp=100, fs=fs, my_state=my_state)
         assert plan.attacker_id == -1
+
+
+class TestEnergyScore:
+    def test_active_slot_gets_bonus(self):
+        p = make_pokemon(id=jm.Iono_Voltorb, energies=[])
+        assert jm.energy_score(p, True) > jm.energy_score(p, False)
+
+    def test_voltorb_prioritised_below_2_energy(self):
+        no_e  = make_pokemon(id=jm.Iono_Voltorb, energies=[])
+        two_e = make_pokemon(id=jm.Iono_Voltorb, energies=[4, 4])
+        assert jm.energy_score(no_e, False) > jm.energy_score(two_e, False)
+
+    def test_bellibolt_ex_prioritised_below_4_energy(self):
+        low  = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4])
+        full = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4, 4])
+        assert jm.energy_score(low, False) > jm.energy_score(full, False)
+
+    def test_kilowattrel_prioritised_below_3_energy(self):
+        low  = make_pokemon(id=jm.Iono_Kilowattrel, energies=[4])
+        full = make_pokemon(id=jm.Iono_Kilowattrel, energies=[4, 4, 4])
+        assert jm.energy_score(low, False) > jm.energy_score(full, False)
+
+
+class TestScoreAttachOption:
+    def test_fighting_energy_prioritises_raging_bolt_ex_without_fighting(self):
+        from cg.api import Option
+
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4])
+        energy_card = make_pokemon(id=jm.Basic_Fighting_Energy)
+        my_state = make_player_state(
+            active_pokemon=raging_bolt, hand=[energy_card],
+        )
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o = Option(type=OptionType.ATTACH, index=0, inPlayArea=AreaType.ACTIVE, inPlayIndex=0)
+        score = jm._score_attach_option(obs, o, my_index=0)
+        assert score > 1000  # タケルライコexへの初回闘エネは高優先

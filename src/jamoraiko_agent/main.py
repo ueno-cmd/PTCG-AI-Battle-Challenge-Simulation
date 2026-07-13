@@ -178,6 +178,41 @@ def calc_attack_plan(my_active: "Pokemon | None", op_active_hp: int,
     )
 
 
+# ==================== エネルギー装填スコアリング ====================
+def energy_score(pokemon: Pokemon, active: bool) -> int:
+    """雷エネルギー装填先の優先度スコアを返す（攻撃射程に近いほど高スコア）"""
+    lightning_count = pokemon.energies.count(EnergyType.LIGHTNING)
+    score = 8000
+    if active:
+        score += 10
+    if pokemon.id == Iono_Voltorb:
+        if lightning_count < 2:
+            score += 100
+    elif pokemon.id == Iono_Bellibolt_ex:
+        if lightning_count < 4:
+            score += 60
+    elif pokemon.id == Iono_Kilowattrel:
+        if lightning_count < 3:
+            score += 40
+    return score
+
+
+def _score_attach_option(obs, o, my_index: int) -> int:
+    """OptionType.ATTACH のスコアを返す"""
+    card = get_card(obs, AreaType.HAND, o.index, my_index)
+    pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
+    if pokemon is None or card is None:
+        return 0
+    if card.id == Basic_Fighting_Energy:
+        if pokemon.id == Raging_Bolt_ex:
+            fighting_count = pokemon.energies.count(EnergyType.FIGHTING)
+            return 7000 if fighting_count < 1 else 100
+        return 50  # タケルライコex以外への闘エネは低優先
+    if card.id == Basic_Lightning_Energy:
+        return energy_score(pokemon, o.inPlayArea == AreaType.ACTIVE)
+    return 0
+
+
 # ==================== カードメタデータ（遅延初期化）====================
 card_table: dict = {}
 attack_table: dict = {}
