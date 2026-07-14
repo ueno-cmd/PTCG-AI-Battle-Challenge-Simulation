@@ -303,6 +303,25 @@ class EnergyPolicy:
             return 500 if card.energies.count(EnergyType.LIGHTNING) < 1 else -500
         return 0
 
+    def switch_source_score(self, obs, o, my_index: int) -> int:
+        """SelectContext.SWITCH_ENERGY_CARD（エネルギーつけかえで動かす元の
+        エネルギーカードを選ぶ）のスコアを返す"""
+        card = get_card(obs, o.area, o.index, o.playerIndex)
+        if not isinstance(card, Pokemon):
+            return 0
+        if card.id == Raging_Bolt_ex:
+            return -1000  # タケルライコex自身のエネルギーは動かさない
+        threshold = self.SURPLUS_THRESHOLD.get(card.id)
+        if threshold is None:
+            return 0
+        lightning_count = card.energies.count(EnergyType.LIGHTNING)
+        return 500 if lightning_count >= threshold else -500
+
+    def discard_for_damage_score(self) -> int:
+        """SelectContext.DISCARD_ENERGY_CARD（きょくらいごうの追加ダメージ用エネルギー破棄）
+        のスコアを返す。貪欲方針：提示されたエネルギーは常に破棄する"""
+        return 9000
+
 
 ENERGY_POLICY = EnergyPolicy()
 
@@ -519,20 +538,6 @@ def _score_discard_candidate(card_id: int, fs: FieldState) -> int:
     return 10
 
 
-def _score_energy_switch_source_candidate(card) -> int:
-    """OptionType.CARD / SelectContext.DETACH_FROM のスコアを返す
-    （エネルギーつけかえで雷エネルギーを外す元のポケモンを選ぶ）"""
-    if not isinstance(card, Pokemon):
-        return 0
-    if card.id == Raging_Bolt_ex:
-        return -1000  # タケルライコex自身からは外さない
-    threshold = ENERGY_POLICY.SURPLUS_THRESHOLD.get(card.id)
-    if threshold is None:
-        return 0
-    lightning_count = card.energies.count(EnergyType.LIGHTNING)
-    return 500 if lightning_count >= threshold else -500
-
-
 def _score_card_option(obs, o, context, my_index: int, fs: FieldState, plan: AttackPlan) -> int:
     """OptionType.CARD のスコアをコンテキスト別に返す"""
     card = get_card(obs, o.area, o.index, o.playerIndex)
@@ -547,10 +552,19 @@ def _score_card_option(obs, o, context, my_index: int, fs: FieldState, plan: Att
             return _score_search_candidate(card.id, fs)
         case SelectContext.DISCARD:
             return _score_discard_candidate(card.id, fs)
-        case SelectContext.DETACH_FROM:
-            return _score_energy_switch_source_candidate(card)
         case SelectContext.ATTACH_FROM:
             return ENERGY_POLICY.switch_destination_score(card)
+        case _:
+            return 0
+
+
+def _score_energy_card_option(obs, o, context, my_index: int) -> int:
+    """OptionType.ENERGY_CARD のスコアをコンテキスト別に返す"""
+    match context:
+        case SelectContext.SWITCH_ENERGY_CARD:
+            return ENERGY_POLICY.switch_source_score(obs, o, my_index)
+        case SelectContext.DISCARD_ENERGY_CARD:
+            return ENERGY_POLICY.discard_for_damage_score()
         case _:
             return 0
 
@@ -582,8 +596,8 @@ def _score_option(obs, o, context, my_index: int, state, my_state,
                 consumption = _flashing_draw_consumption(my_state, fs.hand_counts)
                 return 8000 if consumption <= _safe_draws(my_state) else -1
             return -1
-        case OptionType.ENERGY:
-            return 9000  # きょくらいごうの追加ダメージ用：提示された基本エネルギーは常に捨てる
+        case OptionType.ENERGY_CARD:
+            return _score_energy_card_option(obs, o, context, my_index)
         case OptionType.RETREAT:
             return -1
         case OptionType.ATTACK:

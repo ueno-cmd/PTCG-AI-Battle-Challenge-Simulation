@@ -298,6 +298,59 @@ class TestEnergyPolicy:
         my_state = make_player_state(active_pokemon=None, bench=[])
         assert jm.ENERGY_POLICY.needs_lightning(my_state) is False
 
+    def test_switch_source_score_avoids_raging_bolt_ex_itself(self):
+        from cg.api import Option
+
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 6])
+        my_state = make_player_state(active_pokemon=raging_bolt, bench=[])
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o = Option(type=OptionType.ENERGY_CARD, area=AreaType.ACTIVE, index=0, playerIndex=0, energyIndex=0)
+        assert jm.ENERGY_POLICY.switch_source_score(obs, o, my_index=0) == -1000
+
+    def test_switch_source_score_prefers_surplus_bench_pokemon(self):
+        from cg.api import Option
+
+        bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4, 4])  # 雷4=余剰あり
+        my_state = make_player_state(active_pokemon=None, bench=[bellibolt])
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o = Option(type=OptionType.ENERGY_CARD, area=AreaType.BENCH, index=0, playerIndex=0, energyIndex=0)
+        assert jm.ENERGY_POLICY.switch_source_score(obs, o, my_index=0) == 500
+
+    def test_switch_source_score_penalises_non_surplus_bench_pokemon(self):
+        from cg.api import Option
+
+        bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4])  # 雷1=余剰なし
+        my_state = make_player_state(active_pokemon=None, bench=[bellibolt])
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o = Option(type=OptionType.ENERGY_CARD, area=AreaType.BENCH, index=0, playerIndex=0, energyIndex=0)
+        assert jm.ENERGY_POLICY.switch_source_score(obs, o, my_index=0) == -500
+
+    def test_switch_source_score_neutral_for_unrelated_pokemon(self):
+        from cg.api import Option
+
+        voltorb = make_pokemon(id=jm.Iono_Voltorb, energies=[4, 4])
+        my_state = make_player_state(active_pokemon=None, bench=[voltorb])
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o = Option(type=OptionType.ENERGY_CARD, area=AreaType.BENCH, index=0, playerIndex=0, energyIndex=0)
+        assert jm.ENERGY_POLICY.switch_source_score(obs, o, my_index=0) == 0
+
+    def test_switch_source_score_returns_zero_when_card_missing(self):
+        from cg.api import Option
+
+        my_state = make_player_state(active_pokemon=None, bench=[])
+        my_state.active = [None]
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o = Option(type=OptionType.ENERGY_CARD, area=AreaType.ACTIVE, index=0, playerIndex=0, energyIndex=0)
+        assert jm.ENERGY_POLICY.switch_source_score(obs, o, my_index=0) == 0
+
+    def test_discard_for_damage_score_always_high(self):
+        assert jm.ENERGY_POLICY.discard_for_damage_score() == 9000
+
 
 class TestScoreAttachOption:
     def test_fighting_energy_prioritises_raging_bolt_ex_without_fighting(self):
@@ -718,22 +771,6 @@ class TestScoreCardOptionDispatch:
         )
         assert score == jm._score_setup_active(jm.Iono_Voltorb)
 
-    def test_dispatches_detach_from_prefers_surplus_source_over_raging_bolt_ex(self):
-        from cg.api import Option, SelectContext
-
-        bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4, 4])  # 雷4=余剰あり
-        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 6])
-        my_state = make_player_state(active_pokemon=raging_bolt, bench=[bellibolt])
-        obs = MagicMock()
-        obs.current.players = [my_state]
-        o_bellibolt = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
-        o_raging = Option(type=OptionType.CARD, area=AreaType.ACTIVE, index=0, playerIndex=0)
-        fs = jm._collect_field_state(my_state)
-        plan = jm.AttackPlan()
-        score_bellibolt = jm._score_card_option(obs, o_bellibolt, SelectContext.DETACH_FROM, my_index=0, fs=fs, plan=plan)
-        score_raging = jm._score_card_option(obs, o_raging, SelectContext.DETACH_FROM, my_index=0, fs=fs, plan=plan)
-        assert score_bellibolt > score_raging
-
     def test_dispatches_attach_from_prefers_raging_bolt_ex_needing_lightning(self):
         from cg.api import Option, SelectContext
 
@@ -749,6 +786,33 @@ class TestScoreCardOptionDispatch:
         score_raging = jm._score_card_option(obs, o_raging, SelectContext.ATTACH_FROM, my_index=0, fs=fs, plan=plan)
         score_other = jm._score_card_option(obs, o_other, SelectContext.ATTACH_FROM, my_index=0, fs=fs, plan=plan)
         assert score_raging > score_other
+
+
+class TestScoreEnergyCardOptionDispatch:
+    def test_dispatches_switch_energy_card(self):
+        from cg.api import Option, SelectContext
+
+        bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4, 4])
+        my_state = make_player_state(active_pokemon=None, bench=[bellibolt])
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o = Option(type=OptionType.ENERGY_CARD, area=AreaType.BENCH, index=0, playerIndex=0, energyIndex=0)
+        score = jm._score_energy_card_option(obs, o, SelectContext.SWITCH_ENERGY_CARD, my_index=0)
+        assert score == jm.ENERGY_POLICY.switch_source_score(obs, o, my_index=0)
+
+    def test_dispatches_discard_energy_card(self):
+        from cg.api import Option, SelectContext
+
+        o = Option(type=OptionType.ENERGY_CARD, area=AreaType.ACTIVE, index=0, playerIndex=0, energyIndex=0)
+        score = jm._score_energy_card_option(obs=MagicMock(), o=o, context=SelectContext.DISCARD_ENERGY_CARD, my_index=0)
+        assert score == 9000
+
+    def test_unknown_context_defaults_to_zero(self):
+        from cg.api import Option, SelectContext
+
+        o = Option(type=OptionType.ENERGY_CARD, area=AreaType.ACTIVE, index=0, playerIndex=0, energyIndex=0)
+        score = jm._score_energy_card_option(obs=MagicMock(), o=o, context=SelectContext.MAIN, my_index=0)
+        assert score == 0
 
 
 class TestScoreOptionKilowattrelAbility:
@@ -798,11 +862,11 @@ class TestScoreOptionKilowattrelAbility:
         assert score == 8000
 
 
-class TestScoreOptionEnergyType:
-    def test_energy_option_always_scores_high(self):
+class TestScoreOptionEnergyCardType:
+    def test_routes_energy_card_type_through_dispatcher(self):
         from cg.api import Option, SelectContext
 
-        o = Option(type=OptionType.ENERGY, area=AreaType.ACTIVE, index=0, energyIndex=0, count=1)
+        o = Option(type=OptionType.ENERGY_CARD, area=AreaType.ACTIVE, index=0, playerIndex=0, energyIndex=0)
         fs = jm.FieldState(
             field_counts=defaultdict(int), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), iono_lightning_on_board=0,
@@ -811,7 +875,7 @@ class TestScoreOptionEnergyType:
         )
         plan = jm.AttackPlan()
         score = jm._score_option(
-            obs=MagicMock(), o=o, context=SelectContext.DISCARD_ENERGY, my_index=0,
+            obs=MagicMock(), o=o, context=SelectContext.DISCARD_ENERGY_CARD, my_index=0,
             state=None, my_state=make_player_state(), fs=fs, plan=plan,
         )
         assert score == 9000
