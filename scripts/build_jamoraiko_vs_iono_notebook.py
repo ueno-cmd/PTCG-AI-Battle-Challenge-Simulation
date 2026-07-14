@@ -15,7 +15,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))  # decksパッケージをimportするため
 from decks.jamoraiko_20260713 import DECK as JAMORAIKO_DECK_TUPLES  # noqa: E402
-from cg.api import Option as _Option, Card as _Card  # noqa: E402
 
 REF_NB = Path("src/rl_references/ptcg-tiny-rl-to-submission-baseline-guide.ipynb")
 JAMORAIKO_PY = Path("src/jamoraiko_agent/main.py")
@@ -60,16 +59,7 @@ def load_agent_module(name: str, source: str) -> types.ModuleType:
     """ソースコードを別名前空間のモジュールとしてロードする
     （複数エージェントが同名のグローバル変数(agent, card_table等)を持っていても衝突しない）"""
     mod = types.ModuleType(name)
-    # dataclass型注釈解決のために必要な型をnamespaceに追加
-    mod.__dict__['Option'] = _Option
-    mod.__dict__['PlayerState'] = type(None)  # プレースホルダー（実際にはexec()内で定義される）
-    # dataclass型解決時にsys.modulesでモジュールを検索できるよう登録
-    sys.modules[name] = mod
-    try:
-        exec(compile(source, name, "exec"), mod.__dict__)
-    finally:
-        # exec完了後、必要があれば削除（通常は登録したまま）
-        pass
+    exec(compile(source, name, "exec"), mod.__dict__)
     return mod
 
 

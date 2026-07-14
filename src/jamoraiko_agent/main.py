@@ -7,6 +7,7 @@ from typing import Callable
 from cg.api import (
     AreaType, CardType, EnergyType, Observation, SelectContext,
     OptionType, Card, Pokemon, all_card_data, all_attack, to_observation_class,
+    Option, PlayerState,
 )
 
 # ==================== カードID定数 ====================
@@ -426,10 +427,10 @@ class PlayScoringContext:
     """OptionType.PLAY のスコアリングに必要な情報をまとめる。
     将来カードが増えても、ポリシークラス側のシグネチャを変えずに済む"""
     obs: Observation
-    o: "Option"
+    o: Option
     my_index: int
     fs: FieldState
-    my_state: "PlayerState"
+    my_state: PlayerState
     plan: AttackPlan
 
 
