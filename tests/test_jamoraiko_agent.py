@@ -197,6 +197,47 @@ class TestCalcAttackPlan:
         assert plan.attack_id != 1004
         assert plan.is_lethal is False
 
+    def test_burst_roar_suppressed_when_hand_has_lightning_energy(self):
+        """手札に雷エネがまだあり、きょくらいごうへの伸びしろが残っている間は
+        はじけるほうこう（ダメージ0・手札全トラッシュ）を選ばせない"""
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[6])  # 雷0闘1＝はじけるほうこうのみ発動可能
+        fs = self._fs(
+            active_energy_count=1, active_fighting_energy_count=1,
+            own_board_basic_energy_total=1,
+            hand_counts=defaultdict(int, {jm.Basic_Lightning_Energy: 1}),
+        )
+        my_state = make_player_state(active_pokemon=raging_bolt, deck_count=40, prize_count=6)
+        plan = jm.calc_attack_plan(raging_bolt, op_active_hp=200, fs=fs, my_state=my_state)
+        assert plan.attacker_id == -1  # 温存のため候補なし
+
+    def test_burst_roar_allowed_when_no_growth_path_remains(self):
+        """手札に闘・雷どちらも無く、エネルギーつけかえの供給元も無い時は
+        従来通りはじけるほうこうが選ばれる（山札に余裕がある前提）"""
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[6])
+        fs = self._fs(
+            active_energy_count=1, active_fighting_energy_count=1,
+            own_board_basic_energy_total=1,
+        )
+        my_state = make_player_state(active_pokemon=raging_bolt, deck_count=40, prize_count=6)
+        plan = jm.calc_attack_plan(raging_bolt, op_active_hp=200, fs=fs, my_state=my_state)
+        assert plan.attack_id == 1005  # Burst Roar
+
+    def test_burst_roar_suppressed_when_energy_switch_source_available(self):
+        """手札にエネルギーつけかえがあり、ベンチに供給元があるなら
+        まだ伸びる見込みがあるため温存する"""
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[6])
+        fs = self._fs(
+            active_energy_count=1, active_fighting_energy_count=1,
+            own_board_basic_energy_total=1,
+            hand_counts=defaultdict(int, {jm.Energy_Switch: 1}),
+        )
+        bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4, 4])  # 供給元あり
+        my_state = make_player_state(
+            active_pokemon=raging_bolt, bench=[bellibolt], deck_count=40, prize_count=6,
+        )
+        plan = jm.calc_attack_plan(raging_bolt, op_active_hp=200, fs=fs, my_state=my_state)
+        assert plan.attacker_id == -1
+
 
 class TestEnergyScore:
     def test_active_slot_gets_bonus(self):

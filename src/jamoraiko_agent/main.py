@@ -193,6 +193,8 @@ def calc_attack_plan(my_active: "Pokemon | None", op_active_hp: int,
             continue
         if atk.is_utility and 6 > _safe_draws(my_state):
             continue  # 山札温存（Task 6で_safe_drawsを実装）
+        if atk.is_utility and atk.id == Raging_Bolt_ex and _raging_bolt_ex_has_growth_path(fs, my_state):
+            continue  # きょくらいごうへの伸びしろが残っている間ははじけるほうこうを温存
         damage = atk.damage_fn(fs)
         is_lethal = (not atk.is_utility) and damage >= op_active_hp
         candidates.append((atk, damage, is_lethal))
@@ -289,6 +291,16 @@ def _raging_bolt_ex_needs_lightning(my_state) -> bool:
         if card is not None and card.id == Raging_Bolt_ex:
             if card.energies.count(EnergyType.LIGHTNING) < 1:
                 return True
+    return False
+
+
+def _raging_bolt_ex_has_growth_path(fs: FieldState, my_state) -> bool:
+    """タケルライコexがまだきょくらいごう着地に伸びる見込みがあるか
+    （手札に闘/雷の基本エネルギーがある、またはエネルギーつけかえの供給元がある）"""
+    if fs.hand_counts[Basic_Fighting_Energy] > 0 or fs.hand_counts[Basic_Lightning_Energy] > 0:
+        return True
+    if fs.hand_counts[Energy_Switch] > 0 and _find_energy_switch_source(my_state) is not None:
+        return True
     return False
 
 
