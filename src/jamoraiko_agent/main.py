@@ -1,4 +1,5 @@
 import os
+from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Callable
@@ -419,44 +420,83 @@ def get_card(obs: Observation, area: AreaType, index: int, player_index: int) ->
             return None
 
 
+# ==================== PLAYスコアリングのポリシー登録制 ====================
+@dataclass
+class PlayScoringContext:
+    """OptionType.PLAY のスコアリングに必要な情報をまとめる。
+    将来カードが増えても、ポリシークラス側のシグネチャを変えずに済む"""
+    obs: Observation
+    o: "Option"
+    my_index: int
+    fs: FieldState
+    my_state: "PlayerState"
+    plan: AttackPlan
+
+
+class TrainerCardPolicy(ABC):
+    """1枚のトレーナーズカード（サポート/グッズ/スタジアム）のPLAY判断を表す"""
+    @abstractmethod
+    def play_score(self, ctx: PlayScoringContext) -> int: ...
+
+
+class FixedScorePolicy(TrainerCardPolicy):
+    """固定スコアを返すだけのカード用（ハイパーボール等、条件分岐が無いもの）"""
+    def __init__(self, score: int):
+        self._score = score
+
+    def play_score(self, ctx: PlayScoringContext) -> int:
+        return self._score
+
+
+class LillieDeterminationPolicy(TrainerCardPolicy):
+    def play_score(self, ctx: PlayScoringContext) -> int:
+        consumption = _deck_consumption(Lillie_Determination, ctx.my_state, ctx.fs.hand_counts)
+        if consumption is not None and consumption > _safe_draws(ctx.my_state):
+            return -1
+        return 3100
+
+
+class BossOrdersPolicy(TrainerCardPolicy):
+    def play_score(self, ctx: PlayScoringContext) -> int:
+        return 8800 if ctx.plan.is_lethal else 500
+
+
+class EnergySwitchPolicy(TrainerCardPolicy):
+    """既存のENERGY_POLICYに委譲する（EnergyPolicy自体は変更しない）"""
+    def play_score(self, ctx: PlayScoringContext) -> int:
+        return ENERGY_POLICY.play_score(ctx.my_state)
+
+
+TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {
+    Lillie_Determination: LillieDeterminationPolicy(),
+    Boss_Orders: BossOrdersPolicy(),
+    Energy_Switch: EnergySwitchPolicy(),
+    Buddy_Buddy_Poffin: FixedScorePolicy(8000),
+    Ultra_Ball: FixedScorePolicy(6000),
+    Night_Stretcher: FixedScorePolicy(4800),
+    Energy_Retrieval: FixedScorePolicy(6100),
+    Max_Rod: FixedScorePolicy(5500),
+    Switch: FixedScorePolicy(2500),
+    Canari: FixedScorePolicy(5900),
+    Levincia: FixedScorePolicy(8500),
+}
+
+
 # ==================== PLAYオプションのスコアリング ====================
 def _score_play_option(obs, o, my_index: int, fs: FieldState, my_state, plan: AttackPlan) -> int:
     """OptionType.PLAY のスコアを返す"""
     card = get_card(obs, AreaType.HAND, o.index, my_index)
     data = card_table[card.id]
 
-    if card.id == Lillie_Determination:
-        consumption = _deck_consumption(card.id, my_state, fs.hand_counts)
-        if consumption is not None and consumption > _safe_draws(my_state):
-            return -1
-        return 3100
-
-    if card.id == Boss_Orders:
-        return 8800 if plan.is_lethal else 500
-
     if data.cardType == CardType.POKEMON:
         return 20000
 
-    if card.id == Buddy_Buddy_Poffin:
-        return 8000
-    if card.id == Ultra_Ball:
-        return 6000
-    if card.id == Night_Stretcher:
-        return 4800
-    if card.id == Energy_Retrieval:
-        return 6100
-    if card.id == Energy_Switch:
-        return ENERGY_POLICY.play_score(my_state)
-    if card.id == Max_Rod:
-        return 5500
-    if card.id == Switch:
-        return 2500
-    if card.id == Canari:
-        return 5900
-    if card.id == Levincia:
-        return 8500
+    policy = TRAINER_CARD_POLICIES.get(card.id)
+    if policy is None:
+        return 1000
 
-    return 1000
+    ctx = PlayScoringContext(obs=obs, o=o, my_index=my_index, fs=fs, my_state=my_state, plan=plan)
+    return policy.play_score(ctx)
 
 
 # ==================== CARDオプションのスコアリング ====================

@@ -409,6 +409,54 @@ class TestDeckSafety:
         return jm.FieldState(**base)
 
 
+class TestTrainerCardPolicies:
+    def test_fixed_score_policy_returns_constant(self):
+        policy = jm.FixedScorePolicy(1234)
+        ctx = jm.PlayScoringContext(obs=None, o=None, my_index=0, fs=None, my_state=None, plan=None)
+        assert policy.play_score(ctx) == 1234
+
+    def test_lillie_determination_policy_blocked_when_deck_thin(self):
+        my_state = make_player_state(deck_count=5, prize_count=6)  # safe_draws = -2
+        fs = jm._collect_field_state(my_state)
+        ctx = jm.PlayScoringContext(obs=None, o=None, my_index=0, fs=fs, my_state=my_state, plan=jm.AttackPlan())
+        policy = jm.LillieDeterminationPolicy()
+        assert policy.play_score(ctx) == -1
+
+    def test_lillie_determination_policy_scores_high_when_safe(self):
+        my_state = make_player_state(deck_count=40, prize_count=6)
+        fs = jm._collect_field_state(my_state)
+        ctx = jm.PlayScoringContext(obs=None, o=None, my_index=0, fs=fs, my_state=my_state, plan=jm.AttackPlan())
+        policy = jm.LillieDeterminationPolicy()
+        assert policy.play_score(ctx) == 3100
+
+    def test_boss_orders_policy_scores_high_when_lethal(self):
+        plan = jm.AttackPlan(attacker_id=jm.Iono_Voltorb, attack_id=1001, damage=300, is_lethal=True)
+        ctx = jm.PlayScoringContext(obs=None, o=None, my_index=0, fs=None, my_state=None, plan=plan)
+        policy = jm.BossOrdersPolicy()
+        assert policy.play_score(ctx) == 8800
+
+    def test_boss_orders_policy_scores_low_when_not_lethal(self):
+        ctx = jm.PlayScoringContext(obs=None, o=None, my_index=0, fs=None, my_state=None, plan=jm.AttackPlan())
+        policy = jm.BossOrdersPolicy()
+        assert policy.play_score(ctx) == 500
+
+    def test_energy_switch_policy_delegates_to_energy_policy(self):
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[6])  # 雷0闘1
+        bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4, 4])  # 供給可能
+        my_state = make_player_state(active_pokemon=raging_bolt, bench=[bellibolt])
+        ctx = jm.PlayScoringContext(obs=None, o=None, my_index=0, fs=None, my_state=my_state, plan=jm.AttackPlan())
+        policy = jm.EnergySwitchPolicy()
+        assert policy.play_score(ctx) == jm.ENERGY_POLICY.play_score(my_state)
+
+    def test_trainer_card_policies_registers_all_expected_cards(self):
+        expected_ids = {
+            jm.Lillie_Determination, jm.Boss_Orders, jm.Energy_Switch,
+            jm.Buddy_Buddy_Poffin, jm.Ultra_Ball, jm.Night_Stretcher,
+            jm.Energy_Retrieval, jm.Max_Rod, jm.Switch, jm.Canari, jm.Levincia,
+        }
+        assert set(jm.TRAINER_CARD_POLICIES.keys()) == expected_ids
+
+
 class TestScorePlayOption:
     def _make_obs_with_hand_card(self, card_id, my_state):
         from cg.api import Option
@@ -475,6 +523,16 @@ class TestScorePlayOption:
         plan = jm.AttackPlan()
         score = jm._score_play_option(obs, o, my_index=0, fs=fs, my_state=my_state, plan=plan)
         assert score < 7000
+
+    def test_unregistered_card_defaults_to_1000(self, mock_card_table):
+        mock_card_table[999999] = MockCardData(cardId=999999, cardType=CardType.ITEM)
+        unknown = make_pokemon(id=999999)
+        my_state = make_player_state(hand=[unknown], deck_count=40, prize_count=6)
+        obs, o = self._make_obs_with_hand_card(999999, my_state)
+        fs = jm._collect_field_state(my_state)
+        plan = jm.AttackPlan()
+        score = jm._score_play_option(obs, o, my_index=0, fs=fs, my_state=my_state, plan=plan)
+        assert score == 1000
 
 
 class TestAgentEndToEnd:
