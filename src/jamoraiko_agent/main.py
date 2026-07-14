@@ -238,6 +238,9 @@ def energy_score(pokemon: Pokemon, active: bool) -> int:
     elif pokemon.id == Iono_Kilowattrel:
         if lightning_count < 3:
             score += 40
+    elif pokemon.id == Raging_Bolt_ex:
+        if lightning_count < 1:
+            score += 90
     return score
 
 

@@ -218,6 +218,16 @@ class TestEnergyScore:
         full = make_pokemon(id=jm.Iono_Kilowattrel, energies=[4, 4, 4])
         assert jm.energy_score(low, False) > jm.energy_score(full, False)
 
+    def test_raging_bolt_ex_prioritised_below_1_energy(self):
+        no_e  = make_pokemon(id=jm.Raging_Bolt_ex, energies=[])
+        one_e = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4])
+        assert jm.energy_score(no_e, False) > jm.energy_score(one_e, False)
+
+    def test_raging_bolt_ex_no_bonus_once_at_1_energy(self):
+        one_e = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4])
+        two_e = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 4])
+        assert jm.energy_score(one_e, False) == jm.energy_score(two_e, False)
+
 
 class TestScoreAttachOption:
     def test_fighting_energy_prioritises_raging_bolt_ex_without_fighting(self):
