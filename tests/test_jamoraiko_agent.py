@@ -239,35 +239,64 @@ class TestCalcAttackPlan:
         assert plan.attacker_id == -1
 
 
-class TestEnergyScore:
+class TestEnergyPolicy:
     def test_active_slot_gets_bonus(self):
         p = make_pokemon(id=jm.Iono_Voltorb, energies=[])
-        assert jm.energy_score(p, True) > jm.energy_score(p, False)
+        assert jm.ENERGY_POLICY.attach_priority(p, True) > jm.ENERGY_POLICY.attach_priority(p, False)
 
     def test_voltorb_prioritised_below_2_energy(self):
         no_e  = make_pokemon(id=jm.Iono_Voltorb, energies=[])
         two_e = make_pokemon(id=jm.Iono_Voltorb, energies=[4, 4])
-        assert jm.energy_score(no_e, False) > jm.energy_score(two_e, False)
+        assert jm.ENERGY_POLICY.attach_priority(no_e, False) > jm.ENERGY_POLICY.attach_priority(two_e, False)
 
     def test_bellibolt_ex_prioritised_below_4_energy(self):
         low  = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4])
         full = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4, 4])
-        assert jm.energy_score(low, False) > jm.energy_score(full, False)
+        assert jm.ENERGY_POLICY.attach_priority(low, False) > jm.ENERGY_POLICY.attach_priority(full, False)
 
     def test_kilowattrel_prioritised_below_3_energy(self):
         low  = make_pokemon(id=jm.Iono_Kilowattrel, energies=[4])
         full = make_pokemon(id=jm.Iono_Kilowattrel, energies=[4, 4, 4])
-        assert jm.energy_score(low, False) > jm.energy_score(full, False)
+        assert jm.ENERGY_POLICY.attach_priority(low, False) > jm.ENERGY_POLICY.attach_priority(full, False)
 
     def test_raging_bolt_ex_prioritised_below_1_energy(self):
         no_e  = make_pokemon(id=jm.Raging_Bolt_ex, energies=[])
         one_e = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4])
-        assert jm.energy_score(no_e, False) > jm.energy_score(one_e, False)
+        assert jm.ENERGY_POLICY.attach_priority(no_e, False) > jm.ENERGY_POLICY.attach_priority(one_e, False)
 
     def test_raging_bolt_ex_no_bonus_once_at_1_energy(self):
         one_e = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4])
         two_e = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 4])
-        assert jm.energy_score(one_e, False) == jm.energy_score(two_e, False)
+        assert jm.ENERGY_POLICY.attach_priority(one_e, False) == jm.ENERGY_POLICY.attach_priority(two_e, False)
+
+    def test_find_surplus_source_returns_bellibolt_ex_when_surplus_lightning(self):
+        bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4, 4])  # 雷4=閾値到達
+        my_state = make_player_state(active_pokemon=None, bench=[bellibolt])
+        assert jm.ENERGY_POLICY.find_surplus_source(my_state) is bellibolt
+
+    def test_find_surplus_source_returns_none_when_below_threshold(self):
+        bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4])  # 雷3=閾値未満
+        my_state = make_player_state(active_pokemon=None, bench=[bellibolt])
+        assert jm.ENERGY_POLICY.find_surplus_source(my_state) is None
+
+    def test_find_surplus_source_ignores_raging_bolt_ex_itself(self):
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 4, 4, 4, 4])
+        my_state = make_player_state(active_pokemon=raging_bolt, bench=[])
+        assert jm.ENERGY_POLICY.find_surplus_source(my_state) is None
+
+    def test_needs_lightning_true_when_no_lightning_attached(self):
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[6])  # 闘1のみ
+        my_state = make_player_state(active_pokemon=raging_bolt, bench=[])
+        assert jm.ENERGY_POLICY.needs_lightning(my_state) is True
+
+    def test_needs_lightning_false_when_lightning_already_attached(self):
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 6])
+        my_state = make_player_state(active_pokemon=raging_bolt, bench=[])
+        assert jm.ENERGY_POLICY.needs_lightning(my_state) is False
+
+    def test_needs_lightning_false_when_raging_bolt_ex_not_on_board(self):
+        my_state = make_player_state(active_pokemon=None, bench=[])
+        assert jm.ENERGY_POLICY.needs_lightning(my_state) is False
 
 
 class TestScoreAttachOption:
@@ -720,39 +749,6 @@ class TestScoreCardOptionDispatch:
         score_raging = jm._score_card_option(obs, o_raging, SelectContext.ATTACH_FROM, my_index=0, fs=fs, plan=plan)
         score_other = jm._score_card_option(obs, o_other, SelectContext.ATTACH_FROM, my_index=0, fs=fs, plan=plan)
         assert score_raging > score_other
-
-
-class TestFindEnergySwitchSource:
-    def test_returns_bellibolt_ex_when_surplus_lightning(self):
-        bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4, 4])  # 雷4=閾値到達
-        my_state = make_player_state(active_pokemon=None, bench=[bellibolt])
-        assert jm._find_energy_switch_source(my_state) is bellibolt
-
-    def test_returns_none_when_below_threshold(self):
-        bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4])  # 雷3=閾値未満
-        my_state = make_player_state(active_pokemon=None, bench=[bellibolt])
-        assert jm._find_energy_switch_source(my_state) is None
-
-    def test_ignores_raging_bolt_ex_itself(self):
-        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 4, 4, 4, 4])
-        my_state = make_player_state(active_pokemon=raging_bolt, bench=[])
-        assert jm._find_energy_switch_source(my_state) is None
-
-
-class TestRagingBoltExNeedsLightning:
-    def test_true_when_no_lightning_attached(self):
-        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[6])  # 闘1のみ
-        my_state = make_player_state(active_pokemon=raging_bolt, bench=[])
-        assert jm._raging_bolt_ex_needs_lightning(my_state) is True
-
-    def test_false_when_lightning_already_attached(self):
-        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 6])
-        my_state = make_player_state(active_pokemon=raging_bolt, bench=[])
-        assert jm._raging_bolt_ex_needs_lightning(my_state) is False
-
-    def test_false_when_raging_bolt_ex_not_on_board(self):
-        my_state = make_player_state(active_pokemon=None, bench=[])
-        assert jm._raging_bolt_ex_needs_lightning(my_state) is False
 
 
 class TestScoreOptionKilowattrelAbility:
