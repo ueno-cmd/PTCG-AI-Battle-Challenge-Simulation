@@ -5,6 +5,7 @@
 writefileマジック除去）のみをテストする。
 """
 import importlib.util
+import json
 import types
 from pathlib import Path
 
@@ -303,3 +304,58 @@ class TestBuildTurnLogEntry:
         assert entry["turn"] == 2
         assert entry["player_index"] == 0
         assert entry["agent"] == "jamoraiko"
+
+
+class TestMainBuildsNotebookWithTurnLogging:
+    """main()が生成する全コードセルが構文的に正しいPythonであること、
+    および手番ログ配線が実際にノートブックへ反映されていることを検証する。
+    実行そのもの（cg依存）はローカルでは検証できない。"""
+
+    def test_all_code_cells_are_valid_python(self):
+        _mod.main()
+        nb = json.loads(_mod.DST.read_text(encoding="utf-8"))
+        for cell in nb["cells"]:
+            if cell["cell_type"] != "code":
+                continue
+            # nbformatの仕様上sourceは文字列のほか行リストでも許容される
+            # （参考ノートブックからコピーしたセルはリスト形式のまま）ため、
+            # compile()に渡す前に結合しておく
+            source = cell["source"]
+            if isinstance(source, list):
+                source = "".join(source)
+            compile(source, cell["id"], "exec")
+
+    def test_harness_cell_wires_turn_log_sink(self):
+        _mod.main()
+        nb = json.loads(_mod.DST.read_text(encoding="utf-8"))
+        cells = {c["id"]: c for c in nb["cells"]}
+        assert "turn_log_sink" in cells["battle-harness"]["source"]
+        assert "build_turn_log_entry" in cells["battle-harness"]["source"]
+
+    def test_turn_log_helpers_cell_defines_build_turn_log_entry(self):
+        _mod.main()
+        nb = json.loads(_mod.DST.read_text(encoding="utf-8"))
+        cells = {c["id"]: c for c in nb["cells"]}
+        assert "def build_turn_log_entry" in cells["turn-log-helpers"]["source"]
+        assert "SELECT_TYPE_NAMES" in cells["turn-log-helpers"]["source"]
+
+    def test_calibration_cell_logs_first_n_games(self):
+        _mod.main()
+        nb = json.loads(_mod.DST.read_text(encoding="utf-8"))
+        cells = {c["id"]: c for c in nb["cells"]}
+        assert "LOG_FIRST_N" in cells["calibration-run"]["source"]
+        assert "log_first_n" in cells["calibration-run"]["source"]
+
+    def test_save_turn_log_cell_writes_expected_filename(self):
+        _mod.main()
+        nb = json.loads(_mod.DST.read_text(encoding="utf-8"))
+        cells = {c["id"]: c for c in nb["cells"]}
+        assert "jamoraiko_vs_iono_turn_log.json" in cells["save-turn-log"]["source"]
+
+    def test_cell_order_places_helpers_before_harness_before_calibration(self):
+        _mod.main()
+        nb = json.loads(_mod.DST.read_text(encoding="utf-8"))
+        ids = [c["id"] for c in nb["cells"]]
+        assert ids.index("turn-log-helpers") < ids.index("battle-harness")
+        assert ids.index("battle-harness") < ids.index("calibration-run")
+        assert ids.index("save-results") < ids.index("save-turn-log")

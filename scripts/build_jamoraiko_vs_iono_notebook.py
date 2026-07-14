@@ -228,7 +228,11 @@ NOTE_MD = """# ジャモライコ vs イオナサンプル 校正実験
 `output/deck_jamoraiko_20260713.csv`データセットのみをAdd Inputすればよい。
 イオナサンプル側はコード内蔵のため追加データセット不要）。
 
-設計書: docs/superpowers/specs/2026-07-13-jamoraiko-vs-iono-calibration-design.md
+最初の`LOG_FIRST_N`試合（デフォルト10試合）は、対戦中の手番選択（OptionType/
+選択肢一覧/盤面/イベントログ）を`jamoraiko_vs_iono_turn_log.json`として
+別途保存する。勝率が想定通り伸びない場合の負け試合深掘り調査に使う。
+
+設計書: docs/superpowers/specs/2026-07-14-jamoraiko-vs-iono-turn-logging-design.md
 """
 
 DECK_CODE = f'''# ジャモライコのデッキ（decks/jamoraiko_20260713.py の DECK をビルド時に展開）
@@ -246,8 +250,12 @@ from cg.game import battle_finish, battle_select, battle_start
 MAX_STEPS_PER_GAME = 700
 
 
-def play_game(agent_a, agent_b, deck_a, deck_b, max_steps=MAX_STEPS_PER_GAME) -> int:
-    """1試合対戦する。agent_a勝ち=+1 / 負け=-1 / 引き分け・打ち切り=0"""
+def play_game(agent_a, agent_b, deck_a, deck_b, max_steps=MAX_STEPS_PER_GAME,
+              turn_log_sink=None, agent_a_name="A", agent_b_name="B", game_index=0) -> int:
+    """1試合対戦する。agent_a勝ち=+1 / 負け=-1 / 引き分け・打ち切り=0
+
+    turn_log_sinkにlistを渡すと、各手番のbuild_turn_log_entry()の結果を追記する。
+    """
     obs, start_data = battle_start(deck_a, deck_b)
     if getattr(start_data, "errorPlayer", -1) >= 0:
         raise ValueError(f"deck error: player={start_data.errorPlayer}, type={start_data.errorType}")
@@ -255,7 +263,14 @@ def play_game(agent_a, agent_b, deck_a, deck_b, max_steps=MAX_STEPS_PER_GAME) ->
     try:
         while obs["current"]["result"] < 0 and steps < max_steps:
             your_index = obs["current"]["yourIndex"]
-            selected = agent_a(obs) if your_index == 0 else agent_b(obs)
+            if your_index == 0:
+                selected = agent_a(obs)
+                acting_agent_name = agent_a_name
+            else:
+                selected = agent_b(obs)
+                acting_agent_name = agent_b_name
+            if turn_log_sink is not None:
+                turn_log_sink.append(build_turn_log_entry(obs, selected, game_index, steps, acting_agent_name))
             obs = battle_select(selected)
             steps += 1
         result = obs["current"]["result"]
@@ -280,18 +295,31 @@ import time
 
 GAMES = 200
 CHECKPOINTS = [10, 20, 40, 80, 120, 160, 200]
+LOG_FIRST_N = 10
 
 
-def run_series(agent_a, agent_b, deck_a, deck_b, games, label):
-    """agent_a側の視点で対戦を繰り返す。先手後手の偏りを消すため1試合ごとに座席を交代する"""
+def run_series(agent_a, agent_b, deck_a, deck_b, games, label, log_first_n=0):
+    """agent_a側の視点で対戦を繰り返す。先手後手の偏りを消すため1試合ごとに座席を交代する。
+
+    log_first_nを指定すると、最初のlog_first_n試合だけ手番選択ログを記録し、
+    2つ目の戻り値（turn_log_games）として返す。
+    """
     results = []
+    turn_log_games = []
     t0 = time.time()
     for i in range(games):
+        game_log = [] if i < log_first_n else None
         if i % 2 == 0:
-            r = play_game(agent_a, agent_b, deck_a, deck_b)
+            r = play_game(agent_a, agent_b, deck_a, deck_b,
+                          turn_log_sink=game_log, agent_a_name="jamoraiko", agent_b_name="iono", game_index=i)
+            seat_first = "jamoraiko"
         else:
-            r = -play_game(agent_b, agent_a, deck_b, deck_a)
+            r = -play_game(agent_b, agent_a, deck_b, deck_a,
+                           turn_log_sink=game_log, agent_a_name="iono", agent_b_name="jamoraiko", game_index=i)
+            seat_first = "iono"
         results.append(r)
+        if game_log is not None:
+            turn_log_games.append({"game_index": i, "seat_first": seat_first, "result": r, "turns": game_log})
         n = i + 1
         if n in CHECKPOINTS:
             wins = sum(1 for x in results if x > 0)
@@ -299,13 +327,14 @@ def run_series(agent_a, agent_b, deck_a, deck_b, games, label):
             print(f"[{label}] {n:>3}試合: A勝={wins:>3} A負={losses:>3} 引分={n - wins - losses:>3} A勝率={wins / n:.3f}")
     elapsed = time.time() - t0
     print(f"[{label}] 計{games}試合 {elapsed:.1f}秒（{elapsed / games * 1000:.0f}ms/試合）")
-    return {"label": label, "results": results, "elapsed_sec": elapsed}
+    return {"label": label, "results": results, "elapsed_sec": elapsed}, turn_log_games
 
 
-series = run_series(
+series, turn_log_games = run_series(
     jamoraiko_mod.agent, iono_mod.agent,
     JAMORAIKO_DECK, IONO_DECK,
     GAMES, "Jamoraiko vs Iono Sample",
+    log_first_n=LOG_FIRST_N,
 )'''
 
 SAVE_CODE = '''# ==================== 結果の保存 ====================
@@ -316,6 +345,12 @@ payload = {"games": GAMES, "series": series}
 out_path = OUT_DIR / "jamoraiko_vs_iono_results.json"
 out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 print(f"saved: {out_path}")'''
+
+SAVE_LOG_CODE = '''# ==================== 手番選択ログの保存 ====================
+log_payload = {"num_games_logged": len(turn_log_games), "games": turn_log_games}
+log_out_path = OUT_DIR / "jamoraiko_vs_iono_turn_log.json"
+log_out_path.write_text(json.dumps(log_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+print(f"saved: {log_out_path}")'''
 
 PLOT_CODE = '''# ==================== 累積勝率の推移 ====================
 # Kaggleではplotlyのグラフが表示されない実績があるため、matplotlib＋英語凡例で描画する
@@ -378,6 +413,17 @@ def main() -> None:
         + inspect.getsource(load_agent_module)
     )
 
+    turn_log_helpers_src = (
+        "# ==================== 手番選択ログ用ヘルパー ====================\n"
+        f"SELECT_TYPE_NAMES = {SELECT_TYPE_NAMES!r}\n\n"
+        f"SELECT_CONTEXT_NAMES = {SELECT_CONTEXT_NAMES!r}\n\n\n"
+        + inspect.getsource(compact_option) + "\n\n"
+        + inspect.getsource(compact_log_entry) + "\n\n"
+        + inspect.getsource(_pokemon_summary) + "\n\n"
+        + inspect.getsource(board_snapshot) + "\n\n"
+        + inspect.getsource(build_turn_log_entry)
+    )
+
     nb = {
         "cells": [
             md_cell("calibration-note", NOTE_MD),
@@ -386,9 +432,11 @@ def main() -> None:
             code_cell("agent-sources", sources_cell_src),
             code_cell("load-helper", load_helper_src),
             code_cell("agent-load", AGENT_LOAD_CODE),
+            code_cell("turn-log-helpers", turn_log_helpers_src),
             code_cell("battle-harness", HARNESS_CODE),
             code_cell("calibration-run", CALIBRATION_CODE),
             code_cell("save-results", SAVE_CODE),
+            code_cell("save-turn-log", SAVE_LOG_CODE),
             code_cell("plot-curve", PLOT_CODE),
         ],
         "metadata": ref.get("metadata", {}),
