@@ -117,6 +117,39 @@ except FileNotFoundError:
     return iono_source.replace(_IONO_DECK_LOAD_ORIGINAL, patched_block)
 
 
+SELECT_TYPE_NAMES: dict[int, str] = {
+    0: "MAIN", 1: "CARD", 2: "ATTACHED_CARD", 3: "CARD_OR_ATTACHED_CARD",
+    4: "ENERGY", 5: "SKILL", 6: "ATTACK", 7: "EVOLVE", 8: "COUNT",
+    9: "YES_NO", 10: "SPECIAL_CONDITION",
+}
+
+SELECT_CONTEXT_NAMES: dict[int, str] = {
+    0: "MAIN", 1: "SETUP_ACTIVE_POKEMON", 2: "SETUP_BENCH_POKEMON", 3: "SWITCH",
+    4: "TO_ACTIVE", 5: "TO_BENCH", 6: "TO_FIELD", 7: "TO_HAND", 8: "DISCARD",
+    9: "TO_DECK", 10: "TO_DECK_BOTTOM", 11: "TO_PRIZE", 12: "NOT_MOVE",
+    13: "DAMAGE_COUNTER", 14: "DAMAGE_COUNTER_ANY", 15: "DAMAGE",
+    16: "REMOVE_DAMAGE_COUNTER", 17: "HEAL", 18: "EVOLVES_FROM", 19: "EVOLVES_TO",
+    20: "DEVOLVE", 21: "ATTACH_FROM", 22: "ATTACH_TO", 23: "DETACH_FROM", 24: "LOOK",
+    25: "EFFECT_TARGET", 26: "DISCARD_ENERGY_CARD", 27: "DISCARD_TOOL_CARD",
+    28: "SWITCH_ENERGY_CARD", 29: "DISCARD_CARD_OR_ATTACHED_CARD", 30: "DISCARD_ENERGY",
+    31: "TO_HAND_ENERGY", 32: "TO_DECK_ENERGY", 33: "SWITCH_ENERGY", 34: "SKILL_ORDER",
+    35: "ATTACK", 36: "DISABLE_ATTACK", 37: "EVOLVE", 38: "DRAW_COUNT",
+    39: "DAMAGE_COUNTER_COUNT", 40: "REMOVE_DAMAGE_COUNTER_COUNT", 41: "IS_FIRST",
+    42: "MULLIGAN", 43: "ACTIVATE", 44: "FIRST_EFFECT", 45: "MORE_DEVOLVE",
+    46: "COIN_HEAD", 47: "AFFECT_SPECIAL_CONDITION", 48: "RECOVER_SPECIAL_CONDITION",
+}
+
+
+def compact_option(option: dict) -> dict:
+    """Option dictからNoneのフィールドを除いたコンパクトな辞書を返す"""
+    return {k: v for k, v in option.items() if v is not None}
+
+
+def compact_log_entry(log: dict) -> dict:
+    """Log dictからNoneのフィールドを除いたコンパクトな辞書を返す"""
+    return {k: v for k, v in log.items() if v is not None}
+
+
 def code_cell(cell_id: str, source: str) -> dict:
     return {
         "cell_type": "code", "id": cell_id, "metadata": {},

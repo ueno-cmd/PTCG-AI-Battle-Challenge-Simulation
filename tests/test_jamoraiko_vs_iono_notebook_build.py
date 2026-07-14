@@ -136,3 +136,35 @@ class TestPatchIonoDeckLoad:
             assert False, "RuntimeErrorが送出されるはず"
         except RuntimeError as exc:
             assert "想定と異なります" in str(exc)
+
+
+class TestEnumNameMaps:
+    def test_select_type_names_cover_card_and_main(self):
+        assert _mod.SELECT_TYPE_NAMES[0] == "MAIN"
+        assert _mod.SELECT_TYPE_NAMES[1] == "CARD"
+
+    def test_select_context_names_cover_switch_and_to_hand(self):
+        assert _mod.SELECT_CONTEXT_NAMES[3] == "SWITCH"
+        assert _mod.SELECT_CONTEXT_NAMES[7] == "TO_HAND"
+        assert _mod.SELECT_CONTEXT_NAMES[48] == "RECOVER_SPECIAL_CONDITION"
+
+
+class TestCompactOption:
+    def test_removes_none_fields(self):
+        option = {"type": 3, "area": 5, "index": 0, "playerIndex": 0, "cardId": 63,
+                   "number": None, "toolIndex": None, "attackId": None}
+        result = _mod.compact_option(option)
+        assert result == {"type": 3, "area": 5, "index": 0, "playerIndex": 0, "cardId": 63}
+
+    def test_keeps_falsy_but_non_none_fields(self):
+        option = {"type": 13, "attackId": 0, "index": None}
+        result = _mod.compact_option(option)
+        assert result == {"type": 13, "attackId": 0}
+
+
+class TestCompactLogEntry:
+    def test_removes_none_fields(self):
+        log = {"type": 16, "playerIndex": 0, "cardId": 63, "value": -30,
+               "serial": None, "putDamageCounter": None}
+        result = _mod.compact_log_entry(log)
+        assert result == {"type": 16, "playerIndex": 0, "cardId": 63, "value": -30}
