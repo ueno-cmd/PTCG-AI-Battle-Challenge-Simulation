@@ -50,6 +50,18 @@ class TestCollectFieldState:
         assert fs.field_counts[jm.Iono_Voltorb] == 1
         assert fs.hand_counts[jm.Canari] == 1
 
+    def test_hand_has_basic_lightning_energy_true_when_present(self):
+        energy_card = make_pokemon(id=jm.Basic_Lightning_Energy)
+        my_state = make_player_state(hand=[energy_card])
+        fs = jm._collect_field_state(my_state)
+        assert fs.hand_has_basic_lightning_energy is True
+
+    def test_hand_has_basic_lightning_energy_false_when_absent(self):
+        canari = make_pokemon(id=jm.Canari)
+        my_state = make_player_state(hand=[canari])
+        fs = jm._collect_field_state(my_state)
+        assert fs.hand_has_basic_lightning_energy is False
+
 
 @_dc
 class MockAttack:
@@ -596,3 +608,50 @@ class TestScoreCardOptionDispatch:
             state=None, my_state=my_state, fs=fs, plan=plan,
         )
         assert score == jm._score_setup_active(jm.Iono_Voltorb)
+
+
+class TestScoreOptionKilowattrelAbility:
+    def _fs(self, **overrides):
+        base = dict(
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), iono_lightning_on_board=0,
+            own_board_basic_energy_total=0, active_energy_count=0,
+            active_fighting_energy_count=0, hand_has_basic_lightning_energy=False,
+        )
+        base.update(overrides)
+        return jm.FieldState(**base)
+
+    def test_kilowattrel_ability_suppressed_when_hand_has_lightning_energy(self, mock_card_table):
+        from cg.api import Option, SelectContext
+
+        kilowattrel = make_pokemon(id=jm.Iono_Kilowattrel)
+        my_state = make_player_state(active_pokemon=kilowattrel, deck_count=40, prize_count=6)
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o = Option(type=OptionType.ABILITY, area=AreaType.ACTIVE, index=0)
+        fs = self._fs(hand_has_basic_lightning_energy=True)
+        plan = jm.AttackPlan()
+        score = jm._score_option(
+            obs, o, SelectContext.MAIN, my_index=0,
+            state=None, my_state=my_state, fs=fs, plan=plan,
+        )
+        assert score == -1
+
+    def test_kilowattrel_ability_allowed_when_hand_has_no_lightning_energy_and_deck_safe(self, mock_card_table):
+        from cg.api import Option, SelectContext
+
+        kilowattrel = make_pokemon(id=jm.Iono_Kilowattrel)
+        my_state = make_player_state(active_pokemon=kilowattrel, deck_count=40, prize_count=6)
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o = Option(type=OptionType.ABILITY, area=AreaType.ACTIVE, index=0)
+        fs = self._fs(
+            hand_has_basic_lightning_energy=False,
+            hand_counts=defaultdict(int, {jm.Canari: 6}),
+        )
+        plan = jm.AttackPlan()
+        score = jm._score_option(
+            obs, o, SelectContext.MAIN, my_index=0,
+            state=None, my_state=my_state, fs=fs, plan=plan,
+        )
+        assert score == 8000

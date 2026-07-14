@@ -63,6 +63,7 @@ class FieldState:
     own_board_basic_energy_total: int
     active_energy_count: int
     active_fighting_energy_count: int
+    hand_has_basic_lightning_energy: bool = False
 
 
 def _collect_field_state(my_state) -> FieldState:
@@ -110,6 +111,7 @@ def _collect_field_state(my_state) -> FieldState:
         own_board_basic_energy_total=own_board_basic_energy_total,
         active_energy_count=active_energy_count,
         active_fighting_energy_count=active_fighting_energy_count,
+        hand_has_basic_lightning_energy=hand_counts[Basic_Lightning_Energy] > 0,
     )
 
 
@@ -491,6 +493,8 @@ def _score_option(obs, o, context, my_index: int, state, my_state,
             if card.id == Iono_Bellibolt_ex:
                 return 9500  # エレキストリーマーは常に高優先
             if card.id == Iono_Kilowattrel:
+                if fs.hand_has_basic_lightning_energy:
+                    return -1  # 手札にまだ雷エネがあるなら伸ばせる見込みがあるため自滅ループ防止で温存
                 consumption = _flashing_draw_consumption(my_state, fs.hand_counts)
                 return 8000 if consumption <= _safe_draws(my_state) else -1
             return -1
