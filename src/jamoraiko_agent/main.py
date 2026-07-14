@@ -19,7 +19,7 @@ Buddy_Buddy_Poffin      = 1086  # なかよしポフィン
 Night_Stretcher         = 1097  # 夜のタンカ
 Max_Rod                 = 1110  # つりざおMAX (ACE SPEC)
 Energy_Retrieval        = 1118  # エネルギー回収
-Energy_Search           = 1119  # エネルギー転送（山札から基本エネルギー1枚サーチ）
+Energy_Switch            = 1116  # エネルギーつけかえ（自分の場のポケモン間で基本エネルギー1個を付け替え）
 Ultra_Ball               = 1121  # ハイパーボール
 Switch                   = 1123  # ポケモンいれかえ
 Boss_Orders               = 1182  # ボスの指令
@@ -360,8 +360,6 @@ def _score_play_option(obs, o, my_index: int, fs: FieldState, my_state, plan: At
         return 4800
     if card.id == Energy_Retrieval:
         return 6100
-    if card.id == Energy_Search:
-        return 6050
     if card.id == Max_Rod:
         return 5500
     if card.id == Switch:

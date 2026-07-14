@@ -107,7 +107,7 @@ def mock_card_table(monkeypatch):
         jm.Night_Stretcher:         MockCardData(cardId=jm.Night_Stretcher, cardType=CardType.ITEM),
         jm.Max_Rod:                 MockCardData(cardId=jm.Max_Rod, cardType=CardType.ITEM),
         jm.Energy_Retrieval:        MockCardData(cardId=jm.Energy_Retrieval, cardType=CardType.ITEM),
-        jm.Energy_Search:           MockCardData(cardId=jm.Energy_Search, cardType=CardType.ITEM),
+        jm.Energy_Switch:            MockCardData(cardId=jm.Energy_Switch, cardType=CardType.ITEM),
         jm.Ultra_Ball:               MockCardData(cardId=jm.Ultra_Ball, cardType=CardType.ITEM),
         jm.Switch:                   MockCardData(cardId=jm.Switch, cardType=CardType.ITEM),
         jm.Boss_Orders:               MockCardData(cardId=jm.Boss_Orders, cardType=CardType.SUPPORTER),

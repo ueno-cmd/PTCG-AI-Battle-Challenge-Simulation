@@ -41,7 +41,7 @@ def test_trainer_counts():
     assert counts[1086] == 4   # なかよしポフィン
     assert counts[1118] == 2   # エネルギー回収
     assert counts[1097] == 3   # 夜のタンカ
-    assert counts[1119] == 2   # エネルギー転送
+    assert counts[1116] == 2   # エネルギーつけかえ
     assert counts[1123] == 2   # ポケモンいれかえ
     assert counts[1110] == 1   # つりざおMAX
     assert counts[1227] == 3   # リーリエの決心
