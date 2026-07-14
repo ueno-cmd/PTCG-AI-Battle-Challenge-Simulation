@@ -168,3 +168,56 @@ class TestCompactLogEntry:
                "serial": None, "putDamageCounter": None}
         result = _mod.compact_log_entry(log)
         assert result == {"type": 16, "playerIndex": 0, "cardId": 63, "value": -30}
+
+
+class TestBoardSnapshot:
+    def _fake_pokemon(self, card_id, hp, max_hp, energy_count):
+        return {"id": card_id, "serial": 1, "hp": hp, "maxHp": max_hp,
+                "appearThisTurn": False, "energies": [4] * energy_count,
+                "energyCards": [], "tools": [], "preEvolution": []}
+
+    def test_extracts_id_hp_maxhp_energycount_for_active_and_bench(self):
+        state = {
+            "players": [
+                {
+                    "active": [self._fake_pokemon(63, 90, 190, 2)],
+                    "bench": [self._fake_pokemon(71, 130, 130, 1)],
+                },
+                {
+                    "active": [self._fake_pokemon(269, 150, 190, 3)],
+                    "bench": [],
+                },
+            ]
+        }
+        result = _mod.board_snapshot(state, my_index=0)
+        assert result == {
+            "mine": {
+                "active": [{"id": 63, "hp": 90, "maxHp": 190, "energyCount": 2}],
+                "bench": [{"id": 71, "hp": 130, "maxHp": 130, "energyCount": 1}],
+            },
+            "opponent": {
+                "active": [{"id": 269, "hp": 150, "maxHp": 190, "energyCount": 3}],
+                "bench": [],
+            },
+        }
+
+    def test_handles_empty_active_slot_without_crashing(self):
+        state = {
+            "players": [
+                {"active": [None], "bench": []},
+                {"active": [self._fake_pokemon(269, 150, 190, 3)], "bench": []},
+            ]
+        }
+        result = _mod.board_snapshot(state, my_index=0)
+        assert result["mine"]["active"] == [None]
+
+    def test_resolves_opponent_relative_to_my_index(self):
+        state = {
+            "players": [
+                {"active": [self._fake_pokemon(1, 100, 100, 0)], "bench": []},
+                {"active": [self._fake_pokemon(2, 100, 100, 0)], "bench": []},
+            ]
+        }
+        result = _mod.board_snapshot(state, my_index=1)
+        assert result["mine"]["active"][0]["id"] == 2
+        assert result["opponent"]["active"][0]["id"] == 1

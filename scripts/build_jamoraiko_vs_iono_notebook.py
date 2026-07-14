@@ -150,6 +150,35 @@ def compact_log_entry(log: dict) -> dict:
     return {k: v for k, v in log.items() if v is not None}
 
 
+def _pokemon_summary(pokemon: dict | None) -> dict | None:
+    """Pokemon dictからid・hp・maxHp・energyCountのみを抽出する（Noneならそのまま返す）"""
+    if pokemon is None:
+        return None
+    return {
+        "id": pokemon["id"],
+        "hp": pokemon["hp"],
+        "maxHp": pokemon["maxHp"],
+        "energyCount": len(pokemon["energies"]),
+    }
+
+
+def board_snapshot(state: dict, my_index: int) -> dict:
+    """obs['current']から両者のアクティブ/ベンチのid・hp・maxHp・energyCountのみを抽出する"""
+    players = state["players"]
+    mine = players[my_index]
+    opponent = players[1 - my_index]
+    return {
+        "mine": {
+            "active": [_pokemon_summary(p) for p in mine["active"]],
+            "bench": [_pokemon_summary(p) for p in mine["bench"]],
+        },
+        "opponent": {
+            "active": [_pokemon_summary(p) for p in opponent["active"]],
+            "bench": [_pokemon_summary(p) for p in opponent["bench"]],
+        },
+    }
+
+
 def code_cell(cell_id: str, source: str) -> dict:
     return {
         "cell_type": "code", "id": cell_id, "metadata": {},
