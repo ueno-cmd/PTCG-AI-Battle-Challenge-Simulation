@@ -179,6 +179,30 @@ def board_snapshot(state: dict, my_index: int) -> dict:
     }
 
 
+def build_turn_log_entry(obs: dict, selected: list[int], game_index: int, step: int, agent_name: str) -> dict:
+    """1手番分のログレコードを組み立てる"""
+    select = obs["select"]
+    state = obs["current"]
+    my_index = state["yourIndex"]
+    options = select["option"]
+    return {
+        "game_index": game_index,
+        "step": step,
+        "turn": state["turn"],
+        "player_index": my_index,
+        "agent": agent_name,
+        "select_type": select["type"],
+        "select_type_name": SELECT_TYPE_NAMES.get(select["type"], "?"),
+        "select_context": select["context"],
+        "select_context_name": SELECT_CONTEXT_NAMES.get(select["context"], "?"),
+        "options": [compact_option(o) for o in options],
+        "selected_indices": list(selected),
+        "selected_options": [compact_option(options[i]) for i in selected],
+        "board": board_snapshot(state, my_index),
+        "logs_since_last": [compact_log_entry(entry) for entry in obs.get("logs", [])],
+    }
+
+
 def code_cell(cell_id: str, source: str) -> dict:
     return {
         "cell_type": "code", "id": cell_id, "metadata": {},

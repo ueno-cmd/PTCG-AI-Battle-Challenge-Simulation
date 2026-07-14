@@ -221,3 +221,85 @@ class TestBoardSnapshot:
         result = _mod.board_snapshot(state, my_index=1)
         assert result["mine"]["active"][0]["id"] == 2
         assert result["opponent"]["active"][0]["id"] == 1
+
+
+class TestBuildTurnLogEntry:
+    def _fake_pokemon(self, card_id, hp, max_hp, energy_count):
+        return {"id": card_id, "serial": 1, "hp": hp, "maxHp": max_hp,
+                "appearThisTurn": False, "energies": [4] * energy_count,
+                "energyCards": [], "tools": [], "preEvolution": []}
+
+    def _fake_obs(self):
+        return {
+            "select": {
+                "type": 1,  # SelectType.CARD
+                "context": 3,  # SelectContext.SWITCH
+                "minCount": 1, "maxCount": 1,
+                "option": [
+                    {"type": 3, "area": 5, "index": 0, "playerIndex": 0, "cardId": 63,
+                     "number": None, "toolIndex": None, "energyIndex": None, "count": None,
+                     "inPlayArea": None, "inPlayIndex": None, "attackId": None,
+                     "serial": None, "specialConditionType": None},
+                    {"type": 3, "area": 5, "index": 1, "playerIndex": 0, "cardId": 71,
+                     "number": None, "toolIndex": None, "energyIndex": None, "count": None,
+                     "inPlayArea": None, "inPlayIndex": None, "attackId": None,
+                     "serial": None, "specialConditionType": None},
+                ],
+                "deck": None, "contextCard": None, "effect": None,
+                "remainDamageCounter": 0, "remainEnergyCost": 0,
+            },
+            "current": {
+                "turn": 2, "turnActionCount": 1, "yourIndex": 0, "firstPlayer": 0,
+                "supporterPlayed": False, "stadiumPlayed": False, "energyAttached": False,
+                "retreated": False, "result": -1, "stadium": [], "looking": None,
+                "players": [
+                    {"active": [self._fake_pokemon(63, 90, 190, 2)],
+                     "bench": [self._fake_pokemon(71, 130, 130, 1)]},
+                    {"active": [self._fake_pokemon(269, 150, 190, 3)], "bench": []},
+                ],
+            },
+            "logs": [
+                {"type": 16, "playerIndex": 0, "cardId": 63, "value": -30,
+                 "serial": None, "putDamageCounter": None},
+            ],
+        }
+
+    def test_resolves_selected_options_from_indices(self):
+        entry = _mod.build_turn_log_entry(self._fake_obs(), [1], game_index=0, step=3, agent_name="jamoraiko")
+        assert entry["selected_indices"] == [1]
+        assert entry["selected_options"] == [{"type": 3, "area": 5, "index": 1, "playerIndex": 0, "cardId": 71}]
+
+    def test_labels_select_type_and_context(self):
+        entry = _mod.build_turn_log_entry(self._fake_obs(), [1], game_index=0, step=3, agent_name="jamoraiko")
+        assert entry["select_type"] == 1
+        assert entry["select_type_name"] == "CARD"
+        assert entry["select_context"] == 3
+        assert entry["select_context_name"] == "SWITCH"
+
+    def test_includes_all_offered_options(self):
+        entry = _mod.build_turn_log_entry(self._fake_obs(), [1], game_index=0, step=3, agent_name="jamoraiko")
+        assert len(entry["options"]) == 2
+        assert entry["options"][0]["cardId"] == 63
+        assert entry["options"][1]["cardId"] == 71
+
+    def test_includes_board_snapshot_and_logs(self):
+        entry = _mod.build_turn_log_entry(self._fake_obs(), [1], game_index=0, step=3, agent_name="jamoraiko")
+        assert entry["board"]["mine"]["active"][0]["id"] == 63
+        assert entry["board"]["opponent"]["active"][0]["id"] == 269
+        assert entry["logs_since_last"] == [{"type": 16, "playerIndex": 0, "cardId": 63, "value": -30}]
+
+    def test_falls_back_to_question_mark_for_unknown_enum_value(self):
+        obs = self._fake_obs()
+        obs["select"]["type"] = 999
+        obs["select"]["context"] = 999
+        entry = _mod.build_turn_log_entry(obs, [0], game_index=0, step=0, agent_name="iono")
+        assert entry["select_type_name"] == "?"
+        assert entry["select_context_name"] == "?"
+
+    def test_carries_game_index_step_turn_player_and_agent_name(self):
+        entry = _mod.build_turn_log_entry(self._fake_obs(), [1], game_index=5, step=12, agent_name="jamoraiko")
+        assert entry["game_index"] == 5
+        assert entry["step"] == 12
+        assert entry["turn"] == 2
+        assert entry["player_index"] == 0
+        assert entry["agent"] == "jamoraiko"
