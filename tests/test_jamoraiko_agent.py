@@ -324,6 +324,35 @@ class TestScorePlayOption:
         score = jm._score_play_option(obs, o, my_index=0, fs=fs, my_state=my_state, plan=plan)
         assert score >= 8000
 
+    def test_energy_switch_scores_high_when_raging_bolt_ex_needs_lightning_and_source_exists(self, mock_card_table):
+        mock_card_table[jm.Energy_Switch] = MockCardData(cardId=jm.Energy_Switch, cardType=CardType.ITEM)
+        energy_switch = make_pokemon(id=jm.Energy_Switch)
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[6])  # 雷0闘1
+        bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4, 4])  # 雷4=供給可能
+        my_state = make_player_state(
+            active_pokemon=raging_bolt, bench=[bellibolt],
+            hand=[energy_switch], deck_count=40, prize_count=6,
+        )
+        obs, o = self._make_obs_with_hand_card(jm.Energy_Switch, my_state)
+        fs = jm._collect_field_state(my_state)
+        plan = jm.AttackPlan()
+        score = jm._score_play_option(obs, o, my_index=0, fs=fs, my_state=my_state, plan=plan)
+        assert score >= 7000
+
+    def test_energy_switch_scores_low_when_no_source_available(self, mock_card_table):
+        mock_card_table[jm.Energy_Switch] = MockCardData(cardId=jm.Energy_Switch, cardType=CardType.ITEM)
+        energy_switch = make_pokemon(id=jm.Energy_Switch)
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[6])  # 雷0闘1
+        my_state = make_player_state(
+            active_pokemon=raging_bolt, bench=[],
+            hand=[energy_switch], deck_count=40, prize_count=6,
+        )
+        obs, o = self._make_obs_with_hand_card(jm.Energy_Switch, my_state)
+        fs = jm._collect_field_state(my_state)
+        plan = jm.AttackPlan()
+        score = jm._score_play_option(obs, o, my_index=0, fs=fs, my_state=my_state, plan=plan)
+        assert score < 7000
+
 
 class TestAgentEndToEnd:
     def test_agent_picks_lethal_attack_when_available(self):
@@ -618,6 +647,71 @@ class TestScoreCardOptionDispatch:
             state=None, my_state=my_state, fs=fs, plan=plan,
         )
         assert score == jm._score_setup_active(jm.Iono_Voltorb)
+
+    def test_dispatches_detach_from_prefers_surplus_source_over_raging_bolt_ex(self):
+        from cg.api import Option, SelectContext
+
+        bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4, 4])  # 雷4=余剰あり
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 6])
+        my_state = make_player_state(active_pokemon=raging_bolt, bench=[bellibolt])
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o_bellibolt = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        o_raging = Option(type=OptionType.CARD, area=AreaType.ACTIVE, index=0, playerIndex=0)
+        fs = jm._collect_field_state(my_state)
+        plan = jm.AttackPlan()
+        score_bellibolt = jm._score_card_option(obs, o_bellibolt, SelectContext.DETACH_FROM, my_index=0, fs=fs, plan=plan)
+        score_raging = jm._score_card_option(obs, o_raging, SelectContext.DETACH_FROM, my_index=0, fs=fs, plan=plan)
+        assert score_bellibolt > score_raging
+
+    def test_dispatches_attach_from_prefers_raging_bolt_ex_needing_lightning(self):
+        from cg.api import Option, SelectContext
+
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[6])  # 雷0闘1
+        other = make_pokemon(id=jm.Iono_Kilowattrel, energies=[4, 4, 4])
+        my_state = make_player_state(active_pokemon=raging_bolt, bench=[other])
+        obs = MagicMock()
+        obs.current.players = [my_state]
+        o_raging = Option(type=OptionType.CARD, area=AreaType.ACTIVE, index=0, playerIndex=0)
+        o_other = Option(type=OptionType.CARD, area=AreaType.BENCH, index=0, playerIndex=0)
+        fs = jm._collect_field_state(my_state)
+        plan = jm.AttackPlan()
+        score_raging = jm._score_card_option(obs, o_raging, SelectContext.ATTACH_FROM, my_index=0, fs=fs, plan=plan)
+        score_other = jm._score_card_option(obs, o_other, SelectContext.ATTACH_FROM, my_index=0, fs=fs, plan=plan)
+        assert score_raging > score_other
+
+
+class TestFindEnergySwitchSource:
+    def test_returns_bellibolt_ex_when_surplus_lightning(self):
+        bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4, 4])  # 雷4=閾値到達
+        my_state = make_player_state(active_pokemon=None, bench=[bellibolt])
+        assert jm._find_energy_switch_source(my_state) is bellibolt
+
+    def test_returns_none_when_below_threshold(self):
+        bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4])  # 雷3=閾値未満
+        my_state = make_player_state(active_pokemon=None, bench=[bellibolt])
+        assert jm._find_energy_switch_source(my_state) is None
+
+    def test_ignores_raging_bolt_ex_itself(self):
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 4, 4, 4, 4])
+        my_state = make_player_state(active_pokemon=raging_bolt, bench=[])
+        assert jm._find_energy_switch_source(my_state) is None
+
+
+class TestRagingBoltExNeedsLightning:
+    def test_true_when_no_lightning_attached(self):
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[6])  # 闘1のみ
+        my_state = make_player_state(active_pokemon=raging_bolt, bench=[])
+        assert jm._raging_bolt_ex_needs_lightning(my_state) is True
+
+    def test_false_when_lightning_already_attached(self):
+        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 6])
+        my_state = make_player_state(active_pokemon=raging_bolt, bench=[])
+        assert jm._raging_bolt_ex_needs_lightning(my_state) is False
+
+    def test_false_when_raging_bolt_ex_not_on_board(self):
+        my_state = make_player_state(active_pokemon=None, bench=[])
+        assert jm._raging_bolt_ex_needs_lightning(my_state) is False
 
 
 class TestScoreOptionKilowattrelAbility:
