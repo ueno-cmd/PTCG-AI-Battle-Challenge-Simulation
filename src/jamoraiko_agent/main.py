@@ -563,6 +563,8 @@ def _score_option(obs, o, context, my_index: int, state, my_state,
                 consumption = _flashing_draw_consumption(my_state, fs.hand_counts)
                 return 8000 if consumption <= _safe_draws(my_state) else -1
             return -1
+        case OptionType.ENERGY:
+            return 9000  # きょくらいごうの追加ダメージ用：提示された基本エネルギーは常に捨てる
         case OptionType.RETREAT:
             return -1
         case OptionType.ATTACK:

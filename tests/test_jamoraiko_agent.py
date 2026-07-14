@@ -759,3 +759,22 @@ class TestScoreOptionKilowattrelAbility:
             state=None, my_state=my_state, fs=fs, plan=plan,
         )
         assert score == 8000
+
+
+class TestScoreOptionEnergyType:
+    def test_energy_option_always_scores_high(self):
+        from cg.api import Option, SelectContext
+
+        o = Option(type=OptionType.ENERGY, area=AreaType.ACTIVE, index=0, energyIndex=0, count=1)
+        fs = jm.FieldState(
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), iono_lightning_on_board=0,
+            own_board_basic_energy_total=0, active_energy_count=0,
+            active_fighting_energy_count=0,
+        )
+        plan = jm.AttackPlan()
+        score = jm._score_option(
+            obs=MagicMock(), o=o, context=SelectContext.DISCARD_ENERGY, my_index=0,
+            state=None, my_state=make_player_state(), fs=fs, plan=plan,
+        )
+        assert score == 9000
