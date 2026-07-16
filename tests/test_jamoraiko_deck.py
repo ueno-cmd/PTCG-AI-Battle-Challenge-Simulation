@@ -1,6 +1,6 @@
 from decks.jamoraiko_20260713 import DECK
 
-ENERGY_IDS = {4, 6}  # Basic {L} Energy, Basic {F} Energy
+ENERGY_IDS = {4}  # Basic {L} Energy
 ACE_SPEC_IDS = {1110}  # つりざおMAX
 
 
@@ -27,12 +27,12 @@ def test_no_duplicate_card_id_entries():
 
 def test_key_pokemon_present_with_expected_counts():
     counts = dict(DECK)
-    assert counts[63] == 2     # タケルライコex
     assert counts[268] == 3    # ズピカ
     assert counts[269] == 3    # ハラバリーex
     assert counts[270] == 3    # カイデン
     assert counts[271] == 3    # タイカイデン
-    assert counts[265] == 1    # ビリリダマ
+    assert counts[265] == 3    # ビリリダマ
+    assert 63 not in counts    # タケルライコexは不採用
 
 
 def test_trainer_counts():
@@ -52,5 +52,5 @@ def test_trainer_counts():
 
 def test_energy_counts():
     counts = dict(DECK)
-    assert counts[4] == 12  # 基本雷エネルギー
-    assert counts[6] == 3   # 基本闘エネルギー
+    assert counts[4] == 15  # 基本雷エネルギー
+    assert 6 not in counts  # 基本闘エネルギーは不採用

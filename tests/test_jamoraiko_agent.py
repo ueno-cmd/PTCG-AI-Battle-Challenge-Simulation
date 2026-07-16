@@ -17,7 +17,7 @@ class TestAgentDeckSelection:
         obs_dict = {"select": None, "logs": [], "current": None, "search_begin_input": None}
         result = jm.agent(obs_dict)
         assert len(result) == 60
-        assert result[0] == 63  # タケルライコex が先頭
+        assert result[0] == 268  # ナンジャモのズピカ が先頭
 
 
 class TestCollectFieldState:

@@ -81,7 +81,7 @@ class TestJamoraikoDeckExpansion:
     def test_expanded_deck_preserves_counts(self):
         from decks.jamoraiko_20260713 import DECK
         expanded = _mod.expand_deck(DECK)
-        assert expanded.count(63) == 2  # タケルライコex
+        assert expanded.count(265) == 3  # ナンジャモのビリリダマ
 
 
 class TestPatchIonoDeckLoad:
