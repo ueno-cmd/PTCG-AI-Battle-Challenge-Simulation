@@ -11,7 +11,6 @@ from cg.api import (
 )
 
 # ==================== カードID定数 ====================
-Raging_Bolt_ex          = 63    # タケルライコex
 Iono_Voltorb            = 265   # ナンジャモのビリリダマ
 Iono_Tadbulb            = 268   # ナンジャモのズピカ
 Iono_Bellibolt_ex       = 269   # ナンジャモのハラバリーex
@@ -29,7 +28,6 @@ Lillie_Determination       = 1227  # リーリエの決心
 Canari                     = 1233  # カナリィ
 Levincia                   = 1254  # ハッコウシティ
 Basic_Lightning_Energy      = 4
-Basic_Fighting_Energy       = 6
 
 IONO_POKEMON_IDS = {Iono_Voltorb, Iono_Tadbulb, Iono_Bellibolt_ex, Iono_Wattrel, Iono_Kilowattrel}
 
@@ -288,11 +286,6 @@ def _score_attach_option(obs, o, my_index: int) -> int:
     pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
     if pokemon is None or card is None:
         return 0
-    if card.id == Basic_Fighting_Energy:
-        if pokemon.id == Raging_Bolt_ex:
-            fighting_count = pokemon.energies.count(EnergyType.FIGHTING)
-            return 7000 if fighting_count < 1 else 100
-        return 50  # タケルライコex以外への闘エネは低優先
     if card.id == Basic_Lightning_Energy:
         return ENERGY_POLICY.attach_priority(pokemon, o.inPlayArea == AreaType.ACTIVE)
     return 0
@@ -517,8 +510,6 @@ def _score_discard_candidate(card_id: int, fs: FieldState) -> int:
         return 50 if owned > line.max_field_copies else -300
     if card_id == Basic_Lightning_Energy:
         return 30 if fs.hand_counts[Basic_Lightning_Energy] >= 3 else -50
-    if card_id == Basic_Fighting_Energy:
-        return -100  # 希少なので温存
     if card_id in (Boss_Orders, Lillie_Determination, Max_Rod):
         return -200  # キーカード・ACE SPECは温存
     return 10

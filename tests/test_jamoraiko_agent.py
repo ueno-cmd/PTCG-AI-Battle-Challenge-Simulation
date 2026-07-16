@@ -89,7 +89,6 @@ class MockCardData:
 @pytest.fixture(autouse=True)
 def mock_card_table(monkeypatch):
     table = {
-        jm.Raging_Bolt_ex:          MockCardData(cardId=jm.Raging_Bolt_ex),
         jm.Iono_Voltorb:            MockCardData(cardId=jm.Iono_Voltorb),
         jm.Iono_Tadbulb:            MockCardData(cardId=jm.Iono_Tadbulb),
         jm.Iono_Bellibolt_ex:       MockCardData(cardId=jm.Iono_Bellibolt_ex),
@@ -107,7 +106,6 @@ def mock_card_table(monkeypatch):
         jm.Canari:                     MockCardData(cardId=jm.Canari, cardType=CardType.SUPPORTER),
         jm.Levincia:                   MockCardData(cardId=jm.Levincia, cardType=CardType.STADIUM),
         jm.Basic_Lightning_Energy:      MockCardData(cardId=jm.Basic_Lightning_Energy, cardType=CardType.BASIC_ENERGY),
-        jm.Basic_Fighting_Energy:       MockCardData(cardId=jm.Basic_Fighting_Energy, cardType=CardType.BASIC_ENERGY),
     }
     monkeypatch.setattr(jm, "card_table", table)
     return table
@@ -264,22 +262,6 @@ class TestEnergyPolicy:
 
         non_pokemon = Card(id=999, serial=1, playerIndex=0)
         assert jm.ENERGY_POLICY.switch_destination_score(non_pokemon) == 0
-
-
-class TestScoreAttachOption:
-    def test_fighting_energy_prioritises_raging_bolt_ex_without_fighting(self):
-        from cg.api import Option
-
-        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4])
-        energy_card = make_pokemon(id=jm.Basic_Fighting_Energy)
-        my_state = make_player_state(
-            active_pokemon=raging_bolt, hand=[energy_card],
-        )
-        obs = MagicMock()
-        obs.current.players = [my_state]
-        o = Option(type=OptionType.ATTACH, index=0, inPlayArea=AreaType.ACTIVE, inPlayIndex=0)
-        score = jm._score_attach_option(obs, o, my_index=0)
-        assert score > 1000  # タケルライコexへの初回闘エネは高優先
 
 
 class TestDeckSafety:
@@ -620,10 +602,6 @@ class TestScoreDiscardCandidate:
     def test_key_supporter_is_protected(self):
         fs = self._fs()
         assert jm._score_discard_candidate(jm.Boss_Orders, fs) < 0
-
-    def test_fighting_energy_is_protected(self):
-        fs = self._fs()
-        assert jm._score_discard_candidate(jm.Basic_Fighting_Energy, fs) < 0
 
     def test_surplus_lightning_energy_is_safe_to_discard(self):
         fs = self._fs(hand_counts=defaultdict(int, {jm.Basic_Lightning_Energy: 3}))
