@@ -198,8 +198,8 @@ def calc_attack_plan(my_active: "Pokemon | None", op_active_hp: int,
 
 # ==================== エネルギー運用ポリシー ====================
 class EnergyPolicy:
-    """雷/闘エネルギーの手張り優先度、エネルギーつけかえの運用、
-    きょくらいごうの追加ダメージ用エネルギー破棄を1箇所に集約する。
+    """雷エネルギーの手張り優先度と、エネルギーつけかえによる
+    ハラバリーex/タイカイデンへのエネルギー集中を1箇所に集約する。
     OptionType.ATTACH / PLAY / ENERGY_CARD という複数のSelectContextに
     またがるロジックをここに閉じ込め、散逸を防ぐ。
     """
@@ -224,15 +224,11 @@ class EnergyPolicy:
         elif pokemon.id == Iono_Kilowattrel:
             if lightning_count < 3:
                 score += 40
-        elif pokemon.id == Raging_Bolt_ex:
-            if lightning_count < 1:
-                score += 90
         return score
 
     def find_surplus_source(self, my_state) -> "Pokemon | None":
-        """エネルギーつけかえの供給元にできる、自分自身の攻撃条件を満たし
-        雷エネルギーに余剰があるナンジャモポケモンを1体返す（無ければNone）。
-        タケルライコex自身は候補に含まない（供給元は常に他のポケモン）。"""
+        """エネルギーつけかえの供給元にできる、自分自身の攻撃必要本数に
+        既に届いているナンジャモポケモンを1体返す（無ければNone）。"""
         for card in my_state.active + my_state.bench:
             if card is None:
                 continue
@@ -245,35 +241,30 @@ class EnergyPolicy:
         return None
 
     def needs_lightning(self, my_state) -> bool:
-        """場のタケルライコexが雷エネルギーを1枚も持っていないか（きょくらいごうのコスト未達）"""
-        for card in my_state.active + my_state.bench:
-            if card is not None and card.id == Raging_Bolt_ex:
-                if card.energies.count(EnergyType.LIGHTNING) < 1:
-                    return True
-        return False
-
-    def has_growth_path(self, fs: FieldState, my_state) -> bool:
-        """タケルライコexがまだきょくらいごう着地に伸びる見込みがあるか
-        （手札に闘/雷の基本エネルギーがある、またはエネルギーつけかえの供給元がある）"""
-        if fs.hand_counts[Basic_Fighting_Energy] > 0 or fs.hand_counts[Basic_Lightning_Energy] > 0:
-            return True
-        if fs.hand_counts[Energy_Switch] > 0 and self.find_surplus_source(my_state) is not None:
-            return True
-        return False
+        """アクティブのハラバリーex/タイカイデンが、自身の攻撃必要本数に届いていないか"""
+        active = my_state.active[0] if my_state.active else None
+        if active is None:
+            return False
+        threshold = self.SURPLUS_THRESHOLD.get(active.id)
+        if threshold is None:
+            return False
+        return active.energies.count(EnergyType.LIGHTNING) < threshold
 
     def play_score(self, my_state) -> int:
         """OptionType.PLAY（エネルギーつけかえを使うか）のスコアを返す"""
         if self.needs_lightning(my_state) and self.find_surplus_source(my_state) is not None:
-            return 7500  # タケルライコexが雷0枚で、ベンチに余剰供給元がある時のみ高優先
+            return 7500  # アクティブが攻撃必要本数未満で、ベンチに余剰供給元がある時のみ高優先
         return 200
 
     def switch_destination_score(self, card) -> int:
         """SelectContext.ATTACH_FROM（エネルギーつけかえで付け直す先のポケモン）のスコアを返す"""
         if not isinstance(card, Pokemon):
             return 0
-        if card.id == Raging_Bolt_ex:
-            return 500 if card.energies.count(EnergyType.LIGHTNING) < 1 else -500
-        return 0
+        threshold = self.SURPLUS_THRESHOLD.get(card.id)
+        if threshold is None:
+            return 0
+        lightning_count = card.energies.count(EnergyType.LIGHTNING)
+        return 500 if lightning_count < threshold else -500
 
     def switch_source_score(self, obs, o, my_index: int) -> int:
         """SelectContext.SWITCH_ENERGY_CARD（エネルギーつけかえで動かす元の
@@ -281,18 +272,11 @@ class EnergyPolicy:
         card = get_card(obs, o.area, o.index, o.playerIndex)
         if not isinstance(card, Pokemon):
             return 0
-        if card.id == Raging_Bolt_ex:
-            return -1000  # タケルライコex自身のエネルギーは動かさない
         threshold = self.SURPLUS_THRESHOLD.get(card.id)
         if threshold is None:
             return 0
         lightning_count = card.energies.count(EnergyType.LIGHTNING)
         return 500 if lightning_count >= threshold else -500
-
-    def discard_for_damage_score(self) -> int:
-        """SelectContext.DISCARD_ENERGY_CARD（きょくらいごうの追加ダメージ用エネルギー破棄）
-        のスコアを返す。貪欲方針：提示されたエネルギーは常に破棄する"""
-        return 9000
 
 
 ENERGY_POLICY = EnergyPolicy()
@@ -561,12 +545,12 @@ def _score_card_option(obs, o, context, my_index: int, fs: FieldState, plan: Att
 
 
 def _score_energy_card_option(obs, o, context, my_index: int) -> int:
-    """OptionType.ENERGY_CARD のスコアをコンテキスト別に返す"""
+    """OptionType.ENERGY_CARD のスコアをコンテキスト別に返す。
+    DISCARD_ENERGY_CARD（エネルギー破棄でダメージ増加）はデッキ内に該当する技が
+    存在しないため未対応（case _ の0点に自然にフォールバックする）"""
     match context:
         case SelectContext.SWITCH_ENERGY_CARD:
             return ENERGY_POLICY.switch_source_score(obs, o, my_index)
-        case SelectContext.DISCARD_ENERGY_CARD:
-            return ENERGY_POLICY.discard_for_damage_score()
         case _:
             return 0
 
