@@ -62,26 +62,18 @@ class FieldState:
     hand_counts: defaultdict
     discard_counts: defaultdict
     iono_lightning_on_board: int
-    own_board_basic_energy_total: int
     active_energy_count: int
-    active_fighting_energy_count: int
     hand_has_basic_lightning_energy: bool = False
 
 
 def _collect_field_state(my_state) -> FieldState:
     """バトル場・ベンチ・手札・捨て山のカード枚数と、
-    チェインボルト/きょくらいごうのダメージ計算に必要なエネルギー集計を返す。
-
-    own_board_basic_energy_total は雷・闘の基本エネルギーのみを数える
-    （本デッキは基本エネルギー2種のみ採用のためv1はこれで正確）。
-    """
+    チェインボルトのダメージ計算に必要な雷エネルギー集計を返す。"""
     field_counts   = defaultdict(int)
     hand_counts    = defaultdict(int)
     discard_counts = defaultdict(int)
     iono_lightning_on_board = 0
-    own_board_basic_energy_total = 0
     active_energy_count = 0
-    active_fighting_energy_count = 0
 
     active = my_state.active[0] if my_state.active else None
 
@@ -90,14 +82,11 @@ def _collect_field_state(my_state) -> FieldState:
             continue
         field_counts[card.id] += 1
         lightning = card.energies.count(EnergyType.LIGHTNING)
-        fighting  = card.energies.count(EnergyType.FIGHTING)
         if card.id in IONO_POKEMON_IDS:
             iono_lightning_on_board += lightning
-        own_board_basic_energy_total += lightning + fighting
 
     if active is not None:
         active_energy_count = len(active.energies)
-        active_fighting_energy_count = active.energies.count(EnergyType.FIGHTING)
 
     for card in my_state.hand:
         hand_counts[card.id] += 1
@@ -110,9 +99,7 @@ def _collect_field_state(my_state) -> FieldState:
         hand_counts=hand_counts,
         discard_counts=discard_counts,
         iono_lightning_on_board=iono_lightning_on_board,
-        own_board_basic_energy_total=own_board_basic_energy_total,
         active_energy_count=active_energy_count,
-        active_fighting_energy_count=active_fighting_energy_count,
         hand_has_basic_lightning_energy=hand_counts[Basic_Lightning_Energy] > 0,
     )
 
@@ -125,8 +112,6 @@ class Attacker:
     energy_required: int
     damage_fn: Callable[[FieldState], int]
     locks_next_turn: bool = False
-    is_utility: bool = False
-    requires_fighting: bool = False
 
 
 ATTACKERS: list[Attacker] = [
@@ -136,10 +121,6 @@ ATTACKERS: list[Attacker] = [
              damage_fn=lambda fs: 230, locks_next_turn=True),
     Attacker(id=Iono_Kilowattrel, attack_name="Mach Bolt", energy_required=3,
              damage_fn=lambda fs: 70),
-    Attacker(id=Raging_Bolt_ex, attack_name="Bellowing Thunder", energy_required=2,
-             damage_fn=lambda fs: 70 * fs.own_board_basic_energy_total, requires_fighting=True),
-    Attacker(id=Raging_Bolt_ex, attack_name="Burst Roar", energy_required=1,
-             damage_fn=lambda fs: 0, is_utility=True),
 ]
 
 
@@ -153,12 +134,11 @@ class PokemonLine:
 
 
 POKEMON_LINES: dict[int, PokemonLine] = {
-    Iono_Voltorb:      PokemonLine(id=Iono_Voltorb, max_field_copies=2, setup_active_priority=300),
+    Iono_Voltorb:      PokemonLine(id=Iono_Voltorb, max_field_copies=3, setup_active_priority=300),
     Iono_Tadbulb:      PokemonLine(id=Iono_Tadbulb, max_field_copies=1, setup_active_priority=50),
     Iono_Bellibolt_ex: PokemonLine(id=Iono_Bellibolt_ex, pre_evo_id=Iono_Tadbulb, max_field_copies=1),
     Iono_Wattrel:      PokemonLine(id=Iono_Wattrel, max_field_copies=1, setup_active_priority=50),
     Iono_Kilowattrel:  PokemonLine(id=Iono_Kilowattrel, pre_evo_id=Iono_Wattrel, max_field_copies=1),
-    Raging_Bolt_ex:    PokemonLine(id=Raging_Bolt_ex, max_field_copies=1, setup_active_priority=200),
 }
 
 
@@ -176,11 +156,8 @@ def calc_attack_plan(my_active: "Pokemon | None", op_active_hp: int,
     """アクティブなポケモンについて、テーブル上の候補技から最適な1つを選ぶ。
 
     優先順位：
-    1. 確定KOできる技があれば、場のエネルギーを消費しない技を優先
-       （きょくらいごうは他に確定KO手段がない場合のみ使用）
+    1. 確定KOできる技があれば最優先
     2. 確定KOがなければ最大ダメージを選ぶが、次ターン技封じの技は減点評価
-    3. はじけるほうこう（is_utility）はダメージ0のため、
-       他に使える技がない場合のみ自然に選ばれる
     """
     if my_active is None:
         return AttackPlan()
@@ -191,14 +168,8 @@ def calc_attack_plan(my_active: "Pokemon | None", op_active_hp: int,
             continue
         if fs.active_energy_count < atk.energy_required:
             continue
-        if atk.requires_fighting and fs.active_fighting_energy_count < 1:
-            continue
-        if atk.is_utility and 6 > _safe_draws(my_state):
-            continue  # 山札温存（Task 6で_safe_drawsを実装）
-        if atk.is_utility and atk.id == Raging_Bolt_ex and ENERGY_POLICY.has_growth_path(fs, my_state):
-            continue  # きょくらいごうへの伸びしろが残っている間ははじけるほうこうを温存
         damage = atk.damage_fn(fs)
-        is_lethal = (not atk.is_utility) and damage >= op_active_hp
+        is_lethal = damage >= op_active_hp
         candidates.append((atk, damage, is_lethal))
 
     if not candidates:
@@ -206,8 +177,7 @@ def calc_attack_plan(my_active: "Pokemon | None", op_active_hp: int,
 
     lethal = [c for c in candidates if c[2]]
     if lethal:
-        # テーブル上、同一ポケモンが同時に2つ以上の確定KO可能技を持つことはない
-        # （タケルライコexのはじけるほうこうはダメージ0固定でis_lethalに絶対ならない）ため、
+        # 現在のATTACKERSテーブルでは同一ポケモンが複数の技エントリを持つことはないため、
         # 複数のlethal候補から選別するロジックは不要。先頭を採用すれば十分
         chosen = lethal[0]
     else:
@@ -507,14 +477,12 @@ def _score_setup_active(card_id: int) -> int:
     return line.setup_active_priority if line else 0
 
 
-def _is_attack_ready(card_id: int, energy_count: int, fighting_count: int) -> bool:
+def _is_attack_ready(card_id: int, energy_count: int) -> bool:
     """このポケモンが今すぐ攻撃可能な技を持つか（ATTACKERSテーブルの再利用）"""
     for atk in ATTACKERS:
-        if atk.id != card_id or atk.is_utility:
+        if atk.id != card_id:
             continue
         if energy_count < atk.energy_required:
-            continue
-        if atk.requires_fighting and fighting_count < 1:
             continue
         return True
     return False
@@ -535,9 +503,8 @@ def _score_switch_target(card, o, my_index: int, plan: AttackPlan) -> int:
         return score
     # 自分の交代先／強制昇格先
     energy_count = len(card.energies)
-    fighting_count = card.energies.count(EnergyType.FIGHTING)
     score = energy_count * 10
-    if _is_attack_ready(card.id, energy_count, fighting_count):
+    if _is_attack_ready(card.id, energy_count):
         score += 5000
     return score
 
@@ -555,12 +522,6 @@ def _score_search_candidate(card_id: int, fs: FieldState) -> int:
         return score
     if card_id == Basic_Lightning_Energy:
         return 150
-    if card_id == Basic_Fighting_Energy:
-        raging_needs_fighting = (
-            fs.field_counts[Raging_Bolt_ex] > 0
-            and fs.active_fighting_energy_count < 1
-        )
-        return 180 if raging_needs_fighting else 20
     return 0
 
 

@@ -29,12 +29,6 @@ class TestCollectFieldState:
         fs = jm._collect_field_state(my_state)
         assert fs.iono_lightning_on_board == 5
 
-    def test_own_board_basic_energy_total_counts_lightning_and_fighting(self):
-        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 6])  # 雷1闘1
-        my_state = make_player_state(active_pokemon=raging_bolt, bench=[])
-        fs = jm._collect_field_state(my_state)
-        assert fs.own_board_basic_energy_total == 2
-
     def test_active_energy_count_reflects_active_pokemon_only(self):
         active = make_pokemon(id=jm.Iono_Voltorb, energies=[4, 4])
         bench_mon = make_pokemon(id=jm.Iono_Tadbulb, energies=[4, 4, 4])
@@ -79,8 +73,6 @@ def mock_attack_table(monkeypatch):
         1001: MockAttack(attackId=1001, name="Voltaic Chain"),
         1002: MockAttack(attackId=1002, name="Thunderous Bolt"),
         1003: MockAttack(attackId=1003, name="Mach Bolt"),
-        1004: MockAttack(attackId=1004, name="Bellowing Thunder"),
-        1005: MockAttack(attackId=1005, name="Burst Roar"),
     }
     monkeypatch.setattr(jm, "attack_table", table)
     return table
@@ -126,8 +118,7 @@ class TestCalcAttackPlan:
         base = dict(
             field_counts=defaultdict(int), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), iono_lightning_on_board=0,
-            own_board_basic_energy_total=0, active_energy_count=0,
-            active_fighting_energy_count=0,
+            active_energy_count=0,
         )
         base.update(overrides)
         return jm.FieldState(**base)
@@ -146,19 +137,6 @@ class TestCalcAttackPlan:
         plan = jm.calc_attack_plan(voltorb, op_active_hp=200, fs=fs, my_state=my_state)
         assert plan.is_lethal is True
 
-    def test_bellowing_thunder_chosen_when_lethal_and_only_damaging_option(self):
-        """タケルライコexの技はきょくらいごう(ダメージ技)とはじけるほうこう(ダメージ0)の2つのみのため、
-        同一ポケモンが同時に2つの確定KO可能技を持つことは構造上ありえない。
-        きょくらいごうが確定KO可能なら、それがそのまま選ばれることを確認する"""
-        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 6])
-        # fs は my_active から自動導出されないため、雷1闘1の想定を active_fighting_energy_count=1 で明示する
-        fs = self._fs(active_energy_count=2, active_fighting_energy_count=1,
-                       own_board_basic_energy_total=10)  # きょくらいごうは700ダメ
-        my_state = make_player_state(active_pokemon=raging_bolt, deck_count=40, prize_count=6)
-        plan = jm.calc_attack_plan(raging_bolt, op_active_hp=50, fs=fs, my_state=my_state)
-        assert plan.is_lethal is True
-        assert plan.attacker_id == jm.Raging_Bolt_ex
-
     def test_thunderous_bolt_penalised_when_not_lethal(self):
         """確定KOでない場合、次ターン技封じのサンダーボルトより他技を優先する"""
         bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4, 4])
@@ -168,74 +146,10 @@ class TestCalcAttackPlan:
         # サンダーボルト(230)一択のはずだが、ペナルティが付いていても他に選択肢がないので選ばれる
         assert plan.attacker_id == jm.Iono_Bellibolt_ex
 
-    def test_burst_roar_only_chosen_when_no_other_attack_available(self):
-        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4])  # 闘エネなし＝きょくらいごう不可
-        fs = self._fs(active_energy_count=1, own_board_basic_energy_total=1)
-        my_state = make_player_state(active_pokemon=raging_bolt, deck_count=40, prize_count=6)
-        plan = jm.calc_attack_plan(raging_bolt, op_active_hp=200, fs=fs, my_state=my_state)
-        assert plan.attack_id == 1005  # Burst Roar
-
     def test_no_active_pokemon_returns_empty_plan(self):
         fs = self._fs()
         my_state = make_player_state(active_pokemon=None, deck_count=40, prize_count=6)
         plan = jm.calc_attack_plan(None, op_active_hp=100, fs=fs, my_state=my_state)
-        assert plan.attacker_id == -1
-
-    def test_bellowing_thunder_excluded_when_no_fighting_energy_even_if_lethal(self):
-        """タケルライコexに雷2枚・闘0枚がついている場合、きょくらいごうのダメージが
-        確定KO相当の量でも、闘エネルギーが0本のため候補から除外されるべき
-        （本数だけを見て属性を見ないと、雷2枚だけでも「使用可能」と誤判定してしまう）"""
-        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4, 4])  # 雷2、闘0
-        fs = self._fs(
-            active_energy_count=2, active_fighting_energy_count=0,
-            own_board_basic_energy_total=10,  # きょくらいごうなら700ダメ（確定KO相当）
-        )
-        my_state = make_player_state(active_pokemon=raging_bolt, deck_count=40, prize_count=6)
-        plan = jm.calc_attack_plan(raging_bolt, op_active_hp=50, fs=fs, my_state=my_state)
-        # きょくらいごう(1004)は選ばれない。闘エネがないので残る技ははじけるほうこう(1005)のみ、
-        # ダメージ0のためis_lethalにはならない
-        assert plan.attack_id != 1004
-        assert plan.is_lethal is False
-
-    def test_burst_roar_suppressed_when_hand_has_lightning_energy(self):
-        """手札に雷エネがまだあり、きょくらいごうへの伸びしろが残っている間は
-        はじけるほうこう（ダメージ0・手札全トラッシュ）を選ばせない"""
-        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[6])  # 雷0闘1＝はじけるほうこうのみ発動可能
-        fs = self._fs(
-            active_energy_count=1, active_fighting_energy_count=1,
-            own_board_basic_energy_total=1,
-            hand_counts=defaultdict(int, {jm.Basic_Lightning_Energy: 1}),
-        )
-        my_state = make_player_state(active_pokemon=raging_bolt, deck_count=40, prize_count=6)
-        plan = jm.calc_attack_plan(raging_bolt, op_active_hp=200, fs=fs, my_state=my_state)
-        assert plan.attacker_id == -1  # 温存のため候補なし
-
-    def test_burst_roar_allowed_when_no_growth_path_remains(self):
-        """手札に闘・雷どちらも無く、エネルギーつけかえの供給元も無い時は
-        従来通りはじけるほうこうが選ばれる（山札に余裕がある前提）"""
-        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[6])
-        fs = self._fs(
-            active_energy_count=1, active_fighting_energy_count=1,
-            own_board_basic_energy_total=1,
-        )
-        my_state = make_player_state(active_pokemon=raging_bolt, deck_count=40, prize_count=6)
-        plan = jm.calc_attack_plan(raging_bolt, op_active_hp=200, fs=fs, my_state=my_state)
-        assert plan.attack_id == 1005  # Burst Roar
-
-    def test_burst_roar_suppressed_when_energy_switch_source_available(self):
-        """手札にエネルギーつけかえがあり、ベンチに供給元があるなら
-        まだ伸びる見込みがあるため温存する"""
-        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[6])
-        fs = self._fs(
-            active_energy_count=1, active_fighting_energy_count=1,
-            own_board_basic_energy_total=1,
-            hand_counts=defaultdict(int, {jm.Energy_Switch: 1}),
-        )
-        bellibolt = make_pokemon(id=jm.Iono_Bellibolt_ex, energies=[4, 4, 4, 4])  # 供給元あり
-        my_state = make_player_state(
-            active_pokemon=raging_bolt, bench=[bellibolt], deck_count=40, prize_count=6,
-        )
-        plan = jm.calc_attack_plan(raging_bolt, op_active_hp=200, fs=fs, my_state=my_state)
         assert plan.attacker_id == -1
 
 
@@ -390,20 +304,11 @@ class TestDeckSafety:
         my_state = make_player_state(deck_count=40, prize_count=6)
         assert jm._flashing_draw_consumption(my_state, hand_counts) == 4
 
-    def test_burst_roar_blocked_when_deck_thin(self):
-        """山札が薄い時、はじけるほうこう(6枚ドロー固定)は選ばれない"""
-        raging_bolt = make_pokemon(id=jm.Raging_Bolt_ex, energies=[4])
-        fs = self._fs(active_energy_count=1, own_board_basic_energy_total=1)
-        my_state = make_player_state(active_pokemon=raging_bolt, deck_count=5, prize_count=6)  # safe_draws = -2
-        plan = jm.calc_attack_plan(raging_bolt, op_active_hp=200, fs=fs, my_state=my_state)
-        assert plan.attacker_id == -1  # 使える技がない
-
     def _fs(self, **overrides):
         base = dict(
             field_counts=defaultdict(int), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), iono_lightning_on_board=0,
-            own_board_basic_energy_total=0, active_energy_count=0,
-            active_fighting_energy_count=0,
+            active_energy_count=0,
         )
         base.update(overrides)
         return jm.FieldState(**base)
@@ -569,8 +474,8 @@ class TestAgentEndToEnd:
         from cg.api import Card, Option, SelectContext, SelectType
 
         hand = [
-            Card(id=jm.Raging_Bolt_ex, serial=1, playerIndex=0),  # タケルライコex：200点（低スコア）
-            Card(id=jm.Iono_Voltorb, serial=2, playerIndex=0),    # ビリリダマ：300点（高スコア、期待される選択肢）
+            Card(id=jm.Iono_Tadbulb, serial=1, playerIndex=0),  # ズピカ：50点（低スコア）
+            Card(id=jm.Iono_Voltorb, serial=2, playerIndex=0),  # ビリリダマ：300点（高スコア、期待される選択肢）
         ]
         my_state = make_player_state(hand=hand, hand_count=len(hand), deck_count=50, prize_count=6)
         op_state = make_player_state(deck_count=50, prize_count=6)
@@ -588,11 +493,8 @@ class TestAgentEndToEnd:
 
 
 class TestScoreSetupActive:
-    def test_voltorb_outranks_raging_bolt_ex(self):
-        assert jm._score_setup_active(jm.Iono_Voltorb) > jm._score_setup_active(jm.Raging_Bolt_ex)
-
-    def test_raging_bolt_ex_outranks_tadbulb(self):
-        assert jm._score_setup_active(jm.Raging_Bolt_ex) > jm._score_setup_active(jm.Iono_Tadbulb)
+    def test_voltorb_outranks_tadbulb(self):
+        assert jm._score_setup_active(jm.Iono_Voltorb) > jm._score_setup_active(jm.Iono_Tadbulb)
 
     def test_unknown_card_defaults_to_zero(self):
         assert jm._score_setup_active(999999) == 0
@@ -600,20 +502,19 @@ class TestScoreSetupActive:
 
 class TestIsAttackReady:
     def test_voltorb_ready_with_2_energy(self):
-        assert jm._is_attack_ready(jm.Iono_Voltorb, energy_count=2, fighting_count=0) is True
+        assert jm._is_attack_ready(jm.Iono_Voltorb, energy_count=2) is True
 
     def test_voltorb_not_ready_with_1_energy(self):
-        assert jm._is_attack_ready(jm.Iono_Voltorb, energy_count=1, fighting_count=0) is False
+        assert jm._is_attack_ready(jm.Iono_Voltorb, energy_count=1) is False
 
-    def test_raging_bolt_ex_not_ready_without_fighting_energy(self):
-        # きょくらいごうは闘エネ必須。はじけるほうこうはis_utilityのため候補から除外される
-        assert jm._is_attack_ready(jm.Raging_Bolt_ex, energy_count=2, fighting_count=0) is False
+    def test_bellibolt_ex_ready_with_4_energy(self):
+        assert jm._is_attack_ready(jm.Iono_Bellibolt_ex, energy_count=4) is True
 
-    def test_raging_bolt_ex_ready_with_fighting_energy(self):
-        assert jm._is_attack_ready(jm.Raging_Bolt_ex, energy_count=2, fighting_count=1) is True
+    def test_bellibolt_ex_not_ready_with_3_energy(self):
+        assert jm._is_attack_ready(jm.Iono_Bellibolt_ex, energy_count=3) is False
 
     def test_unknown_card_is_never_ready(self):
-        assert jm._is_attack_ready(999999, energy_count=10, fighting_count=10) is False
+        assert jm._is_attack_ready(999999, energy_count=10) is False
 
 
 class TestScoreSwitchTarget:
@@ -669,8 +570,7 @@ class TestScoreSearchCandidate:
         base = dict(
             field_counts=defaultdict(int), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), iono_lightning_on_board=0,
-            own_board_basic_energy_total=0, active_energy_count=0,
-            active_fighting_energy_count=0,
+            active_energy_count=0,
         )
         base.update(overrides)
         return jm.FieldState(**base)
@@ -680,7 +580,7 @@ class TestScoreSearchCandidate:
         assert jm._score_search_candidate(jm.Iono_Voltorb, fs) > 0
 
     def test_pokemon_at_cap_is_deprioritised(self):
-        fs = self._fs(field_counts=defaultdict(int, {jm.Iono_Voltorb: 2}))
+        fs = self._fs(field_counts=defaultdict(int, {jm.Iono_Voltorb: 3}))
         assert jm._score_search_candidate(jm.Iono_Voltorb, fs) < 0
 
     def test_evolution_deprioritised_when_pre_evo_absent(self):
@@ -694,16 +594,6 @@ class TestScoreSearchCandidate:
         fs = self._fs()
         assert jm._score_search_candidate(jm.Basic_Lightning_Energy, fs) == 150
 
-    def test_fighting_energy_prioritised_when_raging_bolt_ex_needs_it(self):
-        fs_needs = self._fs(
-            field_counts=defaultdict(int, {jm.Raging_Bolt_ex: 1}),
-            active_fighting_energy_count=0,
-        )
-        fs_not_needed = self._fs()
-        score_needs = jm._score_search_candidate(jm.Basic_Fighting_Energy, fs_needs)
-        score_not_needed = jm._score_search_candidate(jm.Basic_Fighting_Energy, fs_not_needed)
-        assert score_needs > score_not_needed
-
     def test_unknown_card_defaults_to_zero(self):
         fs = self._fs()
         assert jm._score_search_candidate(999999, fs) == 0
@@ -714,14 +604,13 @@ class TestScoreDiscardCandidate:
         base = dict(
             field_counts=defaultdict(int), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), iono_lightning_on_board=0,
-            own_board_basic_energy_total=0, active_energy_count=0,
-            active_fighting_energy_count=0,
+            active_energy_count=0,
         )
         base.update(overrides)
         return jm.FieldState(**base)
 
     def test_surplus_pokemon_is_safe_to_discard(self):
-        fs = self._fs(hand_counts=defaultdict(int, {jm.Iono_Voltorb: 3}))  # 上限2を超過
+        fs = self._fs(hand_counts=defaultdict(int, {jm.Iono_Voltorb: 4}))  # 上限3を超過
         assert jm._score_discard_candidate(jm.Iono_Voltorb, fs) > 0
 
     def test_needed_pokemon_is_protected(self):
@@ -878,8 +767,7 @@ class TestScoreOptionKilowattrelAbility:
         base = dict(
             field_counts=defaultdict(int), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), iono_lightning_on_board=0,
-            own_board_basic_energy_total=0, active_energy_count=0,
-            active_fighting_energy_count=0, hand_has_basic_lightning_energy=False,
+            active_energy_count=0, hand_has_basic_lightning_energy=False,
         )
         base.update(overrides)
         return jm.FieldState(**base)
@@ -928,8 +816,7 @@ class TestScoreOptionEnergyCardType:
         fs = jm.FieldState(
             field_counts=defaultdict(int), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), iono_lightning_on_board=0,
-            own_board_basic_energy_total=0, active_energy_count=0,
-            active_fighting_energy_count=0,
+            active_energy_count=0,
         )
         plan = jm.AttackPlan()
         score = jm._score_option(
