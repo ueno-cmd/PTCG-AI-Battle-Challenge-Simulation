@@ -543,6 +543,24 @@ def _hand_counts(cards):
     return counts
 
 
+class TestPlayScoringContextScaffolding:
+    """TrainerCardPolicyパターンの土台（まだ_score_play_optionには未配線）"""
+
+    def test_fixed_score_policy_returns_constant(self):
+        policy = lm.FixedScorePolicy(1234)
+        ctx = lm.PlayScoringContext(
+            obs=MagicMock(), o=Option(type=OptionType.PLAY, index=0), my_index=0,
+            current_plan=lm.AttackPlan(), can_attack=False,
+            state=_make_state(), my_state=make_player_state(),
+            hand_counts=defaultdict(int), field_counts=defaultdict(int), stadium_id=0,
+        )
+        assert policy.play_score(ctx) == 1234
+
+    def test_trainer_card_policy_is_abstract(self):
+        with pytest.raises(TypeError):
+            lm.TrainerCardPolicy()
+
+
 # ==================== 山札セーフティヘルパー ====================
 class TestSafeDraws:
     def test_healthy_deck(self):

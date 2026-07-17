@@ -1,11 +1,12 @@
 import os
 import random
+from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
 
 from cg.api import (
     AreaType, CardType, EnergyType, Observation, SelectContext,
-    OptionType, Card, Pokemon, all_card_data, to_observation_class,
+    OptionType, Card, Pokemon, Option, PlayerState, all_card_data, to_observation_class,
 )
 
 # ==================== カードID定数 ====================
@@ -456,6 +457,39 @@ def _deck_consumption(card_id: int, my_state, hand_counts: defaultdict) -> "int 
     if card_id in (Pokegear, Ultra_Ball, Poke_Pad):
         return 1
     return None
+
+
+# ==================== PLAYスコアリングのポリシー登録制 ====================
+@dataclass
+class PlayScoringContext:
+    """OptionType.PLAY のスコアリングに必要な情報をまとめる（_score_play_optionの既存引数を集約）"""
+    obs: Observation
+    o: Option
+    my_index: int
+    current_plan: AttackPlan
+    can_attack: bool
+    state: PlayerState
+    my_state: PlayerState
+    hand_counts: defaultdict
+    field_counts: defaultdict
+    stadium_id: int
+    attacker1: bool = False
+    rng: "random.Random | None" = None
+
+
+class TrainerCardPolicy(ABC):
+    """1枚のトレーナーズカード（サポート/グッズ/スタジアム）のPLAY判断を表す"""
+    @abstractmethod
+    def play_score(self, ctx: PlayScoringContext) -> int: ...
+
+
+class FixedScorePolicy(TrainerCardPolicy):
+    """固定スコアのみを返すカード用"""
+    def __init__(self, score: int):
+        self._score = score
+
+    def play_score(self, ctx: PlayScoringContext) -> int:
+        return self._score
 
 
 def _score_play_option(obs, o, my_index, current_plan, can_attack,
