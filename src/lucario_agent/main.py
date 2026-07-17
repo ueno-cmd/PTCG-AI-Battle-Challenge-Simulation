@@ -680,7 +680,13 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
             if card.id == 1267:
                 return 1  # Lumiose City は低優先
             if card.id == Lunatone:
-                return 8500 if _safe_draws(my_state) >= 3 else -1
+                # ルナサイクルの発動条件（カードテキスト）：場にソルロックがいる／手札の
+                # 基本闘エネルギーをトラッシュできる。予備(2枚以上)が無い時は手札の最後の
+                # 1枚を失うため温存する（実ログ86456814ほかで多発していた症状の修正）
+                lunar_cycle_ready = (
+                    field_counts[Solrock] >= 1 and hand_counts[Basic_Fighting_Energy] >= 2
+                )
+                return 8500 if _safe_draws(my_state) >= 3 and lunar_cycle_ready else -1
             return 30000
         case OptionType.RETREAT:
             return 2000 if current_plan.attacker >= 1 else -1

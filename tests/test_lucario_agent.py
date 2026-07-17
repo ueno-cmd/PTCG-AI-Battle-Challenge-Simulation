@@ -994,18 +994,27 @@ class TestLunaCycleAbilityScore:
         obs.current.players = [make_player_state(), make_player_state()]
         return obs, lunatone
 
-    def test_scores_high_when_deck_healthy(self, mock_card_table):
-        obs, lunatone = self._obs_with_active_lunatone()
-        obs.current.players[0].active = [lunatone]
-        my_state = make_player_state(deck_count=20, prize_count=6)
-        score = lm._score_option(
+    def _score(self, obs, my_state, field_counts=None, hand_counts=None):
+        return lm._score_option(
             obs, Option(type=OptionType.ABILITY, area=lm.AreaType.ACTIVE, index=0),
             context=lm.SelectContext.MAIN, my_index=0, state=_make_state(),
             my_state=my_state, op_state=make_player_state(),
-            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            field_counts=field_counts if field_counts is not None else defaultdict(int),
+            hand_counts=hand_counts if hand_counts is not None else defaultdict(int),
             discard_counts=defaultdict(int), attacker1=False,
             current_plan=lm.AttackPlan(), can_attack=False,
             stadium_id=0, ability_used_flag=False,
+        )
+
+    def test_scores_high_when_deck_healthy(self, mock_card_table):
+        """ソルロックが場におり、手札に闘エネルギーの予備(2枚)があれば発動許可"""
+        obs, lunatone = self._obs_with_active_lunatone()
+        obs.current.players[0].active = [lunatone]
+        my_state = make_player_state(deck_count=20, prize_count=6)
+        score = self._score(
+            obs, my_state,
+            field_counts=defaultdict(int, {lm.Solrock: 1}),
+            hand_counts=defaultdict(int, {lm.Basic_Fighting_Energy: 2}),
         )
         assert score == 8500
 
@@ -1014,14 +1023,10 @@ class TestLunaCycleAbilityScore:
         obs, lunatone = self._obs_with_active_lunatone()
         obs.current.players[0].active = [lunatone]
         my_state = make_player_state(deck_count=10, prize_count=6)
-        score = lm._score_option(
-            obs, Option(type=OptionType.ABILITY, area=lm.AreaType.ACTIVE, index=0),
-            context=lm.SelectContext.MAIN, my_index=0, state=_make_state(),
-            my_state=my_state, op_state=make_player_state(),
-            field_counts=defaultdict(int), hand_counts=defaultdict(int),
-            discard_counts=defaultdict(int), attacker1=False,
-            current_plan=lm.AttackPlan(), can_attack=False,
-            stadium_id=0, ability_used_flag=False,
+        score = self._score(
+            obs, my_state,
+            field_counts=defaultdict(int, {lm.Solrock: 1}),
+            hand_counts=defaultdict(int, {lm.Basic_Fighting_Energy: 2}),
         )
         assert score == 8500
 
@@ -1030,14 +1035,36 @@ class TestLunaCycleAbilityScore:
         obs, lunatone = self._obs_with_active_lunatone()
         obs.current.players[0].active = [lunatone]
         my_state = make_player_state(deck_count=9, prize_count=6)
-        score = lm._score_option(
-            obs, Option(type=OptionType.ABILITY, area=lm.AreaType.ACTIVE, index=0),
-            context=lm.SelectContext.MAIN, my_index=0, state=_make_state(),
-            my_state=my_state, op_state=make_player_state(),
-            field_counts=defaultdict(int), hand_counts=defaultdict(int),
-            discard_counts=defaultdict(int), attacker1=False,
-            current_plan=lm.AttackPlan(), can_attack=False,
-            stadium_id=0, ability_used_flag=False,
+        score = self._score(
+            obs, my_state,
+            field_counts=defaultdict(int, {lm.Solrock: 1}),
+            hand_counts=defaultdict(int, {lm.Basic_Fighting_Energy: 2}),
+        )
+        assert score == -1
+
+    def test_suppressed_when_solrock_absent(self, mock_card_table):
+        """カードテキスト上ソルロックが場にいないとルナサイクルは発動できない"""
+        obs, lunatone = self._obs_with_active_lunatone()
+        obs.current.players[0].active = [lunatone]
+        my_state = make_player_state(deck_count=20, prize_count=6)
+        score = self._score(
+            obs, my_state,
+            field_counts=defaultdict(int),  # Solrock不在
+            hand_counts=defaultdict(int, {lm.Basic_Fighting_Energy: 2}),
+        )
+        assert score == -1
+
+    def test_suppressed_when_only_one_energy_in_hand(self, mock_card_table):
+        """手札の基本闘エネルギーが最後の1枚のときは温存し発動しない
+        （実ログ86456814ほかで、手札唯一のエネルギーがルナサイクルのコストで
+        失われるケースが多発していたことの再現テスト）"""
+        obs, lunatone = self._obs_with_active_lunatone()
+        obs.current.players[0].active = [lunatone]
+        my_state = make_player_state(deck_count=20, prize_count=6)
+        score = self._score(
+            obs, my_state,
+            field_counts=defaultdict(int, {lm.Solrock: 1}),
+            hand_counts=defaultdict(int, {lm.Basic_Fighting_Energy: 1}),
         )
         assert score == -1
 
