@@ -1313,3 +1313,33 @@ class TestLillieDeterminationHandQualityGuard:
     def test_scores_normally_when_no_key_pokemon_in_hand(self):
         score = self._score([Card(id=lm.Pokegear, serial=2, playerIndex=0)])
         assert score == 3100
+
+
+class TestUltraBallAlreadyFoundSuppression:
+    """★修正：主要ポケモンを十分確保済み（already_found>=3）ならスコアを大幅に下げる。
+    実ログ86197001で、手札がボスの指令とメガルカリオexの2枚しかない状況でもハイパー
+    ボールを撃ち両方とも巻き込んで捨てていたロジックミスの修正"""
+
+    def _score(self, field_counts=None, hand_counts=None):
+        my_ps = make_player_state(hand=[Card(id=lm.Ultra_Ball, serial=1, playerIndex=0)])
+        obs = MagicMock()
+        obs.current.players = [my_ps, make_player_state()]
+        return lm._score_play_option(
+            obs, Option(type=OptionType.PLAY, index=0), my_index=0,
+            current_plan=lm.AttackPlan(), can_attack=False,
+            state=_make_state(), my_state=my_ps,
+            hand_counts=hand_counts or defaultdict(int),
+            field_counts=field_counts or defaultdict(int), stadium_id=0,
+        )
+
+    def test_still_high_priority_when_already_found_is_2(self):
+        fc = defaultdict(int, {lm.Riolu: 1, lm.Mega_Lucario_ex: 1})
+        assert self._score(field_counts=fc) == 5500
+
+    def test_suppressed_when_already_found_is_3(self):
+        fc = defaultdict(int, {lm.Riolu: 1, lm.Mega_Lucario_ex: 1, lm.Ogerpon_ex: 1})
+        assert self._score(field_counts=fc) == 100
+
+    def test_suppressed_when_already_found_exceeds_3(self):
+        fc = defaultdict(int, {lm.Riolu: 2, lm.Mega_Lucario_ex: 1, lm.Ogerpon_ex: 1})
+        assert self._score(field_counts=fc) == 100

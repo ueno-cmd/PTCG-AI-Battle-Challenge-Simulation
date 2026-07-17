@@ -529,11 +529,18 @@ class LillieDeterminationPolicy(TrainerCardPolicy):
 
 
 class UltraBallPolicy(TrainerCardPolicy):
+    """主要ポケモンを十分確保済み（already_found>=3）ならスコアを大幅に下げる
+    （86197001の実ログで、手札がボスの指令とメガルカリオexの2枚しかない状況でも
+    ハイパーボールを撃ち両方とも巻き込んで捨てていたロジックミスの修正）"""
+    ALREADY_FOUND_SUPPRESS_THRESHOLD = 3
+
     def play_score(self, ctx: PlayScoringContext) -> int:
         already_found = (
             ctx.field_counts[Riolu] + ctx.field_counts[Mega_Lucario_ex] + ctx.field_counts[Ogerpon_ex]
             + ctx.hand_counts[Riolu] + ctx.hand_counts[Mega_Lucario_ex] + ctx.hand_counts[Ogerpon_ex]
         )
+        if already_found >= self.ALREADY_FOUND_SUPPRESS_THRESHOLD:
+            return 100
         return 6000 if already_found == 0 else 5500
 
 
