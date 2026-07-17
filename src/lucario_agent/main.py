@@ -492,6 +492,82 @@ class FixedScorePolicy(TrainerCardPolicy):
         return self._score
 
 
+class PremiumPowerProPolicy(TrainerCardPolicy):
+    def play_score(self, ctx: PlayScoringContext) -> int:
+        confirmed_ko_already_secured = ctx.state.supporterPlayed and ctx.current_plan.remain_hp <= 0
+        if confirmed_ko_already_secured:
+            return -1
+        if ctx.can_attack:
+            return 5000
+        other_supporter_in_hand = ctx.hand_counts[Boss_Orders] >= 1 or ctx.hand_counts[Lillie_Determination] >= 1
+        if not ctx.state.supporterPlayed and not other_supporter_in_hand:
+            return 3050
+        return -1
+
+
+class BossOrdersPolicy(TrainerCardPolicy):
+    def play_score(self, ctx: PlayScoringContext) -> int:
+        if ctx.current_plan.target < 1:
+            return -1  # 対象不在なら温存
+        if ctx.current_plan.remain_hp <= 0:
+            return 8800  # 即使用（確定KO）
+        active_rng = ctx.rng if ctx.rng is not None else _rng
+        if active_rng.random() < EPSILON:
+            return 6000  # 探索的先出し
+        return -1  # 温存
+
+
+class LillieDeterminationPolicy(TrainerCardPolicy):
+    def play_score(self, ctx: PlayScoringContext) -> int:
+        return 3100
+
+
+class UltraBallPolicy(TrainerCardPolicy):
+    def play_score(self, ctx: PlayScoringContext) -> int:
+        already_found = (
+            ctx.field_counts[Riolu] + ctx.field_counts[Mega_Lucario_ex] + ctx.field_counts[Ogerpon_ex]
+            + ctx.hand_counts[Riolu] + ctx.hand_counts[Mega_Lucario_ex] + ctx.hand_counts[Ogerpon_ex]
+        )
+        return 6000 if already_found == 0 else 5500
+
+
+class JudgePolicy(TrainerCardPolicy):
+    def play_score(self, ctx: PlayScoringContext) -> int:
+        return 7000 if ctx.hand_counts[Basic_Fighting_Energy] == 0 and not ctx.attacker1 else -1
+
+
+class WallyCompassionPolicy(TrainerCardPolicy):
+    def play_score(self, ctx: PlayScoringContext) -> int:
+        my_lucario = next(
+            (p for p in ([ctx.my_state.active[0]] if ctx.my_state.active else []) + list(ctx.my_state.bench)
+             if p is not None and p.id == Mega_Lucario_ex),
+            None,
+        )
+        if my_lucario is not None and my_lucario.hp < my_lucario.maxHp:
+            return 6800
+        return -1
+
+
+class GravityMountainPolicy(TrainerCardPolicy):
+    def play_score(self, ctx: PlayScoringContext) -> int:
+        return -1 if ctx.stadium_id == 0 else 10000
+
+
+TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {
+    Premium_Power_Pro: PremiumPowerProPolicy(),
+    Boss_Orders: BossOrdersPolicy(),
+    Lillie_Determination: LillieDeterminationPolicy(),
+    Ultra_Ball: UltraBallPolicy(),
+    Pokegear: FixedScorePolicy(5200),
+    Night_Stretcher: FixedScorePolicy(4800),
+    Judge: JudgePolicy(),
+    Hilda: FixedScorePolicy(5300),
+    Ciphermaniac_Codebreaking: FixedScorePolicy(5100),
+    Wally_Compassion: WallyCompassionPolicy(),
+    Gravity_Mountain: GravityMountainPolicy(),
+}
+
+
 def _score_play_option(obs, o, my_index, current_plan, can_attack,
                        state, my_state, hand_counts, field_counts, stadium_id,
                        attacker1: bool = False,
@@ -508,56 +584,17 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
         if card.id == Riolu:
             return -1 if field_counts[Riolu] + field_counts[Mega_Lucario_ex] >= 2 else 20000
         return 20000
-    # トレーナーズ
-    if card.id == Premium_Power_Pro:
-        confirmed_ko_already_secured = state.supporterPlayed and current_plan.remain_hp <= 0
-        if confirmed_ko_already_secured:
-            return -1
-        if can_attack:
-            return 5000
-        other_supporter_in_hand = hand_counts[Boss_Orders] >= 1 or hand_counts[Lillie_Determination] >= 1
-        if not state.supporterPlayed and not other_supporter_in_hand:
-            return 3050
-        return -1
-    if card.id == Boss_Orders:
-        if current_plan.target < 1:
-            return -1  # 対象不在なら温存
-        if current_plan.remain_hp <= 0:
-            return 8800  # 即使用（確定KO）
-        active_rng = rng if rng is not None else _rng
-        if active_rng.random() < EPSILON:
-            return 6000  # 探索的先出し
-        return -1  # 温存
-    if card.id == Lillie_Determination:
-        return 3100
-    if card.id == Ultra_Ball:
-        already_found = (
-            field_counts[Riolu] + field_counts[Mega_Lucario_ex] + field_counts[Ogerpon_ex]
-            + hand_counts[Riolu] + hand_counts[Mega_Lucario_ex] + hand_counts[Ogerpon_ex]
-        )
-        return 6000 if already_found == 0 else 5500
-    if card.id == Pokegear:
-        return 5200
-    if card.id == Night_Stretcher:
-        return 4800
-    if card.id == Judge:
-        return 7000 if hand_counts[Basic_Fighting_Energy] == 0 and not attacker1 else -1
-    if card.id == Hilda:
-        return 5300
-    if card.id == Ciphermaniac_Codebreaking:
-        return 5100
-    if card.id == Wally_Compassion:
-        my_lucario = next(
-            (p for p in ([my_state.active[0]] if my_state.active else []) + list(my_state.bench)
-             if p is not None and p.id == Mega_Lucario_ex),
-            None,
-        )
-        if my_lucario is not None and my_lucario.hp < my_lucario.maxHp:
-            return 6800
-        return -1
-    if card.id == Gravity_Mountain:
-        return -1 if stadium_id == 0 else 10000
-    return 10000
+
+    policy = TRAINER_CARD_POLICIES.get(card.id)
+    if policy is None:
+        return 10000
+
+    ctx = PlayScoringContext(
+        obs=obs, o=o, my_index=my_index, current_plan=current_plan, can_attack=can_attack,
+        state=state, my_state=my_state, hand_counts=hand_counts, field_counts=field_counts,
+        stadium_id=stadium_id, attacker1=attacker1, rng=rng,
+    )
+    return policy.play_score(ctx)
 
 
 def _score_attach_option(obs, o, my_index, current_plan, attacker1) -> int:
