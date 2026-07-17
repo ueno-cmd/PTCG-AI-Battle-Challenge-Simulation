@@ -399,6 +399,8 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
                 return 4 if state.firstPlayer != my_index else 2
             if card.id == Riolu:
                 return 3
+            if card.id == Ogerpon_ex:
+                return 1  # ルナトーン(0点)より優先。Riolu/Solrockには劣後させたまま
             return 0
 
         case SelectContext.TO_HAND:

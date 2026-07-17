@@ -1343,3 +1343,38 @@ class TestUltraBallAlreadyFoundSuppression:
     def test_suppressed_when_already_found_exceeds_3(self):
         fc = defaultdict(int, {lm.Riolu: 2, lm.Mega_Lucario_ex: 1, lm.Ogerpon_ex: 1})
         assert self._score(field_counts=fc) == 100
+
+
+class TestSetupActivePokemonOgerponPriority:
+    """SelectContext.SETUP_ACTIVE_POKEMONでのオーガポンex優先度テスト。
+    実ログ86197001：開幕手札にRiolu/Solrockが無く、Lunatone(攻撃不可)とOgerpon_ex
+    (3エネで攻撃可能)が両方あった場面で同点(0)によりLunatoneが選ばれ、以後
+    エネルギー無しで自力退場できず20ターン無攻撃のまま敗北していたロジックミスの修正"""
+
+    def _score(self, card_id):
+        card = Card(id=card_id, serial=1, playerIndex=0)
+        obs = MagicMock()
+        obs.select.deck = [card]
+        return lm._score_card_option(
+            obs, Option(type=OptionType.CARD, area=lm.AreaType.DECK, index=0, playerIndex=0),
+            context=lm.SelectContext.SETUP_ACTIVE_POKEMON, my_index=0, state=_make_state(),
+            my_state=make_player_state(),
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), ability_used_flag=False,
+        )
+
+    def test_ogerpon_ex_score_is_1(self):
+        assert self._score(lm.Ogerpon_ex) == 1
+
+    def test_lunatone_score_unchanged_at_0(self):
+        assert self._score(lm.Lunatone) == 0
+
+    def test_ogerpon_ex_beats_lunatone_reproducing_log_86197001(self):
+        assert self._score(lm.Ogerpon_ex) > self._score(lm.Lunatone)
+
+    def test_riolu_still_takes_priority_over_ogerpon_ex(self):
+        assert self._score(lm.Riolu) > self._score(lm.Ogerpon_ex)
+
+    def test_solrock_still_takes_priority_over_ogerpon_ex(self):
+        assert self._score(lm.Solrock) > self._score(lm.Ogerpon_ex)
