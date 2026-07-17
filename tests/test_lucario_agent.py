@@ -1271,3 +1271,45 @@ class TestUltraBallAlreadyFoundIncludesOgerponEx:
     def test_lower_priority_when_ogerpon_ex_already_in_hand(self):
         hc = defaultdict(int, {lm.Ogerpon_ex: 1})
         assert self._score(hand_counts=hc) == 5500
+
+
+class TestLillieDeterminationHandQualityGuard:
+    """★修正：手札に主要ポケモンがあれば温存する。
+    実ログ86363073, 86197001, 86241854, 86295193, 86295949等で、有用な手札を
+    持ちながら山札に戻していたロジックミスの修正"""
+
+    def _score(self, extra_hand_cards):
+        lillie = Card(id=lm.Lillie_Determination, serial=1, playerIndex=0)
+        cards = [lillie] + extra_hand_cards
+        obs, my_state = _obs_with_hand(cards, deck_count=20)
+        o = Option(type=OptionType.PLAY, index=0)
+        return lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts(cards), field_counts=defaultdict(int),
+            stadium_id=0,
+        )
+
+    def test_suppressed_when_riolu_in_hand(self):
+        score = self._score([Card(id=lm.Riolu, serial=2, playerIndex=0)])
+        assert score == -1
+
+    def test_suppressed_when_mega_lucario_ex_in_hand(self):
+        score = self._score([Card(id=lm.Mega_Lucario_ex, serial=2, playerIndex=0)])
+        assert score == -1
+
+    def test_suppressed_when_ogerpon_ex_in_hand(self):
+        score = self._score([Card(id=lm.Ogerpon_ex, serial=2, playerIndex=0)])
+        assert score == -1
+
+    def test_suppressed_when_solrock_in_hand(self):
+        score = self._score([Card(id=lm.Solrock, serial=2, playerIndex=0)])
+        assert score == -1
+
+    def test_suppressed_when_lunatone_in_hand(self):
+        score = self._score([Card(id=lm.Lunatone, serial=2, playerIndex=0)])
+        assert score == -1
+
+    def test_scores_normally_when_no_key_pokemon_in_hand(self):
+        score = self._score([Card(id=lm.Pokegear, serial=2, playerIndex=0)])
+        assert score == 3100

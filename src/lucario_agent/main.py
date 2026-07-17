@@ -518,7 +518,13 @@ class BossOrdersPolicy(TrainerCardPolicy):
 
 
 class LillieDeterminationPolicy(TrainerCardPolicy):
+    """手札に主要ポケモンがあれば温存する（86363073, 86197001, 86241854, 86295193,
+    86295949等の実ログで、有用な手札を持ちながら山札に戻していたロジックミスの修正）"""
+    KEY_POKEMON_IDS = (Riolu, Mega_Lucario_ex, Ogerpon_ex, Solrock, Lunatone)
+
     def play_score(self, ctx: PlayScoringContext) -> int:
+        if any(ctx.hand_counts[pid] >= 1 for pid in self.KEY_POKEMON_IDS):
+            return -1
         return 3100
 
 
