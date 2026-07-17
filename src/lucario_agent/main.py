@@ -262,7 +262,14 @@ def calc_attack_plan(
     my_prize:           int,
     rng: "random.Random | None" = None,
 ) -> AttackPlan:
-    """最適な攻撃プランを計算して返す"""
+    """最適な攻撃プランを計算して返す。
+
+    【メモ・2026-07-17】Mega_Lucario_ex/Solrock/Ogerpon_exのアタッカー候補は
+    if/elif連鎖で判定している。2026-07-07にテーブル化リファクタリング
+    （アタッカー定義をdataclassのリストに切り出す案）が検討されたが、
+    ブレスト中にスコープ確定直後で中断されたまま未着手。今回のTrainerCardPolicy化とは
+    別スコープのため対象外とする
+    """
     new_plan   = AttackPlan()
     best_score = -1
 
@@ -378,6 +385,13 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
 
     match context:
         case SelectContext.SWITCH | SelectContext.TO_ACTIVE:
+            # 【メモ・2026-07-17】current_plan(グローバルplan)はSelectContext.MAIN かつ
+            # turn>=2 のタイミングでのみ再計算される。それ以外のタイミング（相手の
+            # ボスの指令等で強制的にこのコンテキストへ入った場合）は直前のMAIN計算
+            # 時点の古いattacker/targetを参照し続けるため、盤面が変わった後もスコアが
+            # ズレる可能性がある。2026-07-17時点ではこれが直接の敗因になったケースは
+            # 未確認（実ログ86197001の敗因はSETUP_ACTIVE_POKEMON側だった）が、
+            # 潜在リスクとして次回検討の余地がある
             if o.playerIndex == my_index:
                 score = energy_count * 2
                 if o.index == current_plan.attacker - 1:
