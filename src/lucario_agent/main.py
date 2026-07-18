@@ -534,14 +534,19 @@ class BossOrdersPolicy(TrainerCardPolicy):
 
 
 class LillieDeterminationPolicy(TrainerCardPolicy):
-    """手札に主要ポケモンがあれば温存する（86363073, 86197001, 86241854, 86295193,
-    86295949等の実ログで、有用な手札を持ちながら山札に戻していたロジックミスの修正）"""
-    KEY_POKEMON_IDS = (Riolu, Mega_Lucario_ex, Ogerpon_ex, Solrock, Lunatone)
+    """手札に「今すぐ場へ展開できる」主要ポケモンがあれば温存する。
+    Mega Lucario exは進化元のRioluが場にいなければ死に札のため、温存条件から除外する
+    （86363073, 86197001, 86241854, 86295193, 86295949, 86486986等の実ログで、
+    有用な手札を持ちながら、あるいは死に札を有用と誤認して山札に戻していた
+    ロジックミスの修正）"""
+    DIRECTLY_PLAYABLE_IDS = (Riolu, Ogerpon_ex, Solrock, Lunatone)
 
     def play_score(self, ctx: PlayScoringContext) -> int:
-        if any(ctx.hand_counts[pid] >= 1 for pid in self.KEY_POKEMON_IDS):
-            return -1
-        return 3100
+        deployable = any(ctx.hand_counts[pid] >= 1 for pid in self.DIRECTLY_PLAYABLE_IDS)
+        deployable = deployable or (
+            ctx.hand_counts[Mega_Lucario_ex] >= 1 and ctx.field_counts[Riolu] >= 1
+        )
+        return -1 if deployable else 3100
 
 
 class UltraBallPolicy(TrainerCardPolicy):

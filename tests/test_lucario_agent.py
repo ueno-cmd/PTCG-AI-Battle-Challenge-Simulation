@@ -1321,8 +1321,28 @@ class TestLillieDeterminationHandQualityGuard:
         score = self._score([Card(id=lm.Riolu, serial=2, playerIndex=0)])
         assert score == -1
 
-    def test_suppressed_when_mega_lucario_ex_in_hand(self):
+    def test_not_suppressed_when_mega_lucario_ex_in_hand_without_riolu_in_field(self):
+        """Mega Lucario exは進化元のRioluが場にいなければ死に札。温存しない
+        （86486986戦：Riolu不在でMega Lucario exのみ手札にあり、誤って温存され
+        続けていたロジックミスの修正）"""
         score = self._score([Card(id=lm.Mega_Lucario_ex, serial=2, playerIndex=0)])
+        assert score == 3100
+
+    def test_suppressed_when_mega_lucario_ex_in_hand_with_riolu_in_field(self):
+        """場にRioluがいれば、手札のMega Lucario exは次ターン進化できる有用な
+        手札のため温存する"""
+        lillie = Card(id=lm.Lillie_Determination, serial=1, playerIndex=0)
+        extra = Card(id=lm.Mega_Lucario_ex, serial=2, playerIndex=0)
+        cards = [lillie, extra]
+        obs, my_state = _obs_with_hand(cards, deck_count=20)
+        fc = defaultdict(int, {lm.Riolu: 1})
+        o = Option(type=OptionType.PLAY, index=0)
+        score = lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts(cards), field_counts=fc,
+            stadium_id=0,
+        )
         assert score == -1
 
     def test_suppressed_when_ogerpon_ex_in_hand(self):
