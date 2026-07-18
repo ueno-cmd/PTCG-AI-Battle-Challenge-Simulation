@@ -973,6 +973,22 @@ class TestDiscardContext:
         )
         assert score == -50
 
+    def test_protects_judge(self):
+        """JudgeはAlakazam系対面での実質唯一の対抗札のため、要注意ポケモンと
+        同格で保護する（実ログ86139105, 86374453で、ハイパーボールの捨て札
+        コストに巻き込まれて廃棄されていた問題の修正）"""
+        judge = Card(id=lm.Judge, serial=1, playerIndex=0)
+        obs = self._obs(judge)
+        score = lm._score_card_option(
+            obs, Option(type=OptionType.CARD, area=lm.AreaType.HAND, index=0, playerIndex=0),
+            context=lm.SelectContext.DISCARD, my_index=0, state=_make_state(),
+            my_state=make_player_state(),
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), ability_used_flag=False,
+        )
+        assert score == -100
+
     def test_default_trainer_is_low_priority_but_positive(self):
         stretcher = Card(id=1097, serial=1, playerIndex=0)  # Night Stretcher（まだ定数化前）
         obs = self._obs(stretcher)

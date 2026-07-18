@@ -440,7 +440,7 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
                 return 0
             if card.id == Basic_Fighting_Energy:
                 return 50 if hand_counts[Basic_Fighting_Energy] >= 2 else -20
-            if card.id in (Riolu, Mega_Lucario_ex, Solrock, Lunatone, Ogerpon_ex):
+            if card.id in (Riolu, Mega_Lucario_ex, Solrock, Lunatone, Ogerpon_ex, Judge):
                 return -100
             if card.id in (Boss_Orders, Lillie_Determination):
                 return -50
