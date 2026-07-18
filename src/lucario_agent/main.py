@@ -491,6 +491,7 @@ class PlayScoringContext:
     stadium_id: int
     attacker1: bool = False
     rng: "random.Random | None" = None
+    op_hand_count: int = 0
 
 
 class TrainerCardPolicy(ABC):
@@ -566,7 +567,15 @@ class UltraBallPolicy(TrainerCardPolicy):
 
 
 class JudgePolicy(TrainerCardPolicy):
+    """相手の手札が閾値以上に膨れている場合は最優先で発動する
+    （Alakazam系のPsychic Draw×Rare Candyドローエンジン対策。実ログ86139105ほかで、
+    相手手札が最大25枚まで膨張しても8敗中5敗でJudgeが一度も使われていなかった問題の修正。
+    閾値は暫定値）"""
+    OPPONENT_HAND_THRESHOLD = 10
+
     def play_score(self, ctx: PlayScoringContext) -> int:
+        if ctx.op_hand_count >= self.OPPONENT_HAND_THRESHOLD:
+            return 9000
         return 7000 if ctx.hand_counts[Basic_Fighting_Energy] == 0 and not ctx.attacker1 else -1
 
 
@@ -605,7 +614,8 @@ TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {
 def _score_play_option(obs, o, my_index, current_plan, can_attack,
                        state, my_state, hand_counts, field_counts, stadium_id,
                        attacker1: bool = False,
-                       rng: "random.Random | None" = None) -> int:
+                       rng: "random.Random | None" = None,
+                       op_hand_count: int = 0) -> int:
     """OptionType.PLAY のスコアを返す"""
     card = get_card(obs, AreaType.HAND, o.index, my_index)
     data = card_table[card.id]
@@ -626,7 +636,7 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
     ctx = PlayScoringContext(
         obs=obs, o=o, my_index=my_index, current_plan=current_plan, can_attack=can_attack,
         state=state, my_state=my_state, hand_counts=hand_counts, field_counts=field_counts,
-        stadium_id=stadium_id, attacker1=attacker1, rng=rng,
+        stadium_id=stadium_id, attacker1=attacker1, rng=rng, op_hand_count=op_hand_count,
     )
     return policy.play_score(ctx)
 
@@ -673,7 +683,7 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
             return _score_play_option(
                 obs, o, my_index, current_plan, can_attack,
                 state, my_state, hand_counts, field_counts, stadium_id,
-                attacker1,
+                attacker1, op_hand_count=op_state.handCount,
             )
         case OptionType.ATTACH:
             return _score_attach_option(obs, o, my_index, current_plan, attacker1)

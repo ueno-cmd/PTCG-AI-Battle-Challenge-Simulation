@@ -1124,6 +1124,39 @@ class TestNewCardScoring:
         )
         assert score == -1
 
+    def test_judge_prioritised_when_opponent_hand_is_flooded(self):
+        """相手の手札が閾値以上に膨れている場合は、自分のエネルギー状況に
+        関わらずJudgeを最優先で発動する（Alakazam系のPsychic Draw×Rare Candy
+        ドローエンジン対策。実ログ86139105ほかで、相手手札が最大25枚まで
+        膨張しても対抗できていなかった問題の修正）"""
+        my_ps = make_player_state(hand=[Card(id=lm.Judge, serial=1, playerIndex=0)])
+        obs = MagicMock()
+        obs.current.players = [my_ps, make_player_state()]
+        score = lm._score_play_option(
+            obs, Option(type=OptionType.PLAY, index=0), my_index=0,
+            current_plan=lm.AttackPlan(), can_attack=True,
+            state=_make_state(), my_state=my_ps,
+            hand_counts=defaultdict(int, {lm.Basic_Fighting_Energy: 1}),
+            field_counts=defaultdict(int), stadium_id=0,
+            op_hand_count=10,
+        )
+        assert score == 9000
+
+    def test_judge_not_prioritised_when_opponent_hand_below_threshold(self):
+        """相手の手札が閾値未満なら、従来通り自分のエネルギー状況で判断する"""
+        my_ps = make_player_state(hand=[Card(id=lm.Judge, serial=1, playerIndex=0)])
+        obs = MagicMock()
+        obs.current.players = [my_ps, make_player_state()]
+        score = lm._score_play_option(
+            obs, Option(type=OptionType.PLAY, index=0), my_index=0,
+            current_plan=lm.AttackPlan(), can_attack=True,
+            state=_make_state(), my_state=my_ps,
+            hand_counts=defaultdict(int, {lm.Basic_Fighting_Energy: 1}),
+            field_counts=defaultdict(int), stadium_id=0,
+            op_hand_count=9,
+        )
+        assert score == -1
+
     def test_wally_compassion_used_when_lucario_damaged(self):
         lucario = make_pokemon(id=lm.Mega_Lucario_ex, hp=200, max_hp=440)
         my_ps = make_player_state(
