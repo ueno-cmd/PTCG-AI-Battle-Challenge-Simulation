@@ -17,7 +17,7 @@
 
 **変更**:
 - `KEY_POKEMON_IDS`を`DIRECTLY_PLAYABLE_IDS`に改名し、即座に展開可能なポケモン（Riolu, Ogerpon_ex, Solrock, Lunatone）のみに限定
-- Mega Lucario exは「Rioluがベンチに存在する場合のみ」温存対象に変更
+- Mega Lucario exは「Rioluが場（アクティブまたはベンチ）に存在する場合のみ」温存対象に変更
 - 影響ログ: 86363073, 86197001, 86241854, 86295193, 86295949, 86486986 ほか
 
 **ファイル**: `src/lucario_agent/main.py` (`LillieDeterminationPolicy` クラス)
