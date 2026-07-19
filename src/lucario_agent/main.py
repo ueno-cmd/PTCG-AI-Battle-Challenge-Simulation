@@ -150,7 +150,7 @@ def pokemon_score(pokemon: Pokemon) -> int:
     return score
 
 
-def energy_score(pokemon: Pokemon, active: bool, attacker1: bool) -> int:
+def energy_score(pokemon: Pokemon, active: bool, attacker1: bool, op_active_nullifies_ex: bool = False) -> int:
     """エネルギー付与先ポケモンの優先度スコアを返す"""
     energy_count = len(pokemon.energies)
     score = 8000
@@ -175,6 +175,8 @@ def energy_score(pokemon: Pokemon, active: bool, attacker1: bool) -> int:
             score += 80
         if attacker1:
             score += 40  # ルカリオ確保済みなら余剰エネルギーをオーガポンexへ
+        if op_active_nullifies_ex:
+            score += 150  # 相手がex無効化持ちならメガルカリオex系より優先してエネルギーを回す
     return score
 
 
@@ -208,6 +210,12 @@ def _get_stadium_id(state) -> int:
     for card in state.stadium:
         return card.id
     return 0
+
+
+def _op_active_nullifies_ex(op_state) -> bool:
+    """相手アクティブが「ポケモンexの技ダメージを無効化する」特性持ちかどうかを判定する"""
+    op_active = op_state.active[0] if op_state.active else None
+    return op_active is not None and op_active.id in EX_DAMAGE_NULLIFIER_IDS
 
 
 def _analyze_main_options(obs: Observation, select, my_index: int) -> tuple[bool, bool, bool, bool]:
@@ -385,7 +393,8 @@ def calc_attack_plan(
 # ==================== スコアリング ====================
 def _score_card_option(obs, o, context, my_index, state, my_state,
                        field_counts, hand_counts, discard_counts,
-                       attacker1, current_plan, ability_used_flag) -> int:
+                       attacker1, current_plan, ability_used_flag,
+                       op_active_nullifies_ex: bool = False) -> int:
     """OptionType.CARD のスコアをコンテキスト別に返す"""
     card = get_card(obs, o.area, o.index, o.playerIndex)
     if card is None:
@@ -413,6 +422,8 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
                     score += 4
                 elif card.id == Ogerpon_ex:
                     score += 20 if energy_count >= 3 else 6
+                    if op_active_nullifies_ex:
+                        score += 30  # 相手がex無効化持ちなら優先的にアクティブへ出す
             else:
                 score = 100 if o.index == current_plan.target - 1 else 0
             return score
@@ -659,7 +670,7 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
     return policy.play_score(ctx)
 
 
-def _score_attach_option(obs, o, my_index, current_plan, attacker1) -> int:
+def _score_attach_option(obs, o, my_index, current_plan, attacker1, op_active_nullifies_ex: bool = False) -> int:
     """OptionType.ATTACH のスコアを返す"""
     card = get_card(obs, AreaType.HAND, o.index, my_index)
     if card.id == Hero_Cape:
@@ -671,7 +682,7 @@ def _score_attach_option(obs, o, my_index, current_plan, attacker1) -> int:
             score += 200
         return score
     pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
-    score = energy_score(pokemon, o.inPlayArea == AreaType.ACTIVE, attacker1)
+    score = energy_score(pokemon, o.inPlayArea == AreaType.ACTIVE, attacker1, op_active_nullifies_ex)
     if card.id == Rock_Fighting_Energy and o.inPlayArea == AreaType.ACTIVE:
         # Alakazam「ハンドパワー」はアクティブのポケモンのみを狙うため、
         # そのときアクティブの子を優先的に守る
@@ -688,7 +699,8 @@ def _score_attach_option(obs, o, my_index, current_plan, attacker1) -> int:
 def _score_option(obs, o, context, my_index, state, my_state, op_state,
                   field_counts, hand_counts, discard_counts,
                   attacker1, current_plan, can_attack,
-                  stadium_id, ability_used_flag) -> int:
+                  stadium_id, ability_used_flag,
+                  op_active_nullifies_ex: bool = False) -> int:
     """1 つのオプションにヒューリスティックスコアを付ける"""
     match o.type:
         case OptionType.NUMBER:
@@ -700,6 +712,7 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
                 obs, o, context, my_index, state, my_state,
                 field_counts, hand_counts, discard_counts,
                 attacker1, current_plan, ability_used_flag,
+                op_active_nullifies_ex=op_active_nullifies_ex,
             )
         case OptionType.PLAY:
             return _score_play_option(
@@ -708,7 +721,7 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
                 attacker1, op_hand_count=op_state.handCount,
             )
         case OptionType.ATTACH:
-            return _score_attach_option(obs, o, my_index, current_plan, attacker1)
+            return _score_attach_option(obs, o, my_index, current_plan, attacker1, op_active_nullifies_ex)
         case OptionType.EVOLVE:
             pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
             return 9000 + len(pokemon.energies)
@@ -768,6 +781,7 @@ def agent(obs_dict: dict) -> list[int]:
 
     field_counts, hand_counts, discard_counts, attacker1 = _collect_field_state(my_state)
     stadium_id = _get_stadium_id(state)
+    op_active_nullifies_ex = _op_active_nullifies_ex(op_state)
 
     can_switch = can_op_switch = can_use_mega_brave = can_attack = False
     if context == SelectContext.MAIN and state.turn >= 2:
@@ -784,7 +798,7 @@ def agent(obs_dict: dict) -> list[int]:
             obs, o, context, my_index, state, my_state, op_state,
             field_counts, hand_counts, discard_counts,
             attacker1, plan, can_attack,
-            stadium_id, ability_used,
+            stadium_id, ability_used, op_active_nullifies_ex,
         )
         for o in select.option
     ]

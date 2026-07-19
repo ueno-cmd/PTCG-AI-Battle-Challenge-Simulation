@@ -172,6 +172,20 @@ class TestEnergyScoreOgerponEx:
         with_flag    = lm.energy_score(p, False, True)
         assert with_flag > without_flag
 
+    def test_op_active_nullifies_ex_gives_priority_over_mega_lucario_ex(self):
+        """相手アクティブがex無効化持ちなら、オーガポンexがメガルカリオexより優先される"""
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, energies=[6])
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, energies=[])
+        ogerpon_score = lm.energy_score(ogerpon, False, False, op_active_nullifies_ex=True)
+        lucario_score = lm.energy_score(lucario, False, True, op_active_nullifies_ex=True)
+        assert ogerpon_score > lucario_score
+
+    def test_op_active_nullifies_ex_bonus_only_applies_when_true(self):
+        p = make_pokemon(id=lm.Ogerpon_ex, energies=[6])
+        without_flag = lm.energy_score(p, False, False, op_active_nullifies_ex=False)
+        with_flag    = lm.energy_score(p, False, False, op_active_nullifies_ex=True)
+        assert with_flag > without_flag
+
 
 # ==================== Task 4: フィールド状態ヘルパー ====================
 from unittest.mock import MagicMock
@@ -211,6 +225,24 @@ class TestGetStadiumId:
         state = MagicMock()
         state.stadium = [Card(id=lm.Gravity_Mountain, serial=1, playerIndex=0)]
         assert lm._get_stadium_id(state) == lm.Gravity_Mountain
+
+
+class TestOpActiveNullifiesEx:
+    def test_true_when_op_active_is_crustle(self):
+        ps = make_player_state(active_pokemon=make_pokemon(id=lm.Crustle))
+        assert lm._op_active_nullifies_ex(ps) is True
+
+    def test_true_when_op_active_is_sylveon(self):
+        ps = make_player_state(active_pokemon=make_pokemon(id=lm.Sylveon))
+        assert lm._op_active_nullifies_ex(ps) is True
+
+    def test_false_when_op_active_is_regular_pokemon(self):
+        ps = make_player_state(active_pokemon=make_pokemon(id=lm.Riolu))
+        assert lm._op_active_nullifies_ex(ps) is False
+
+    def test_false_when_no_active(self):
+        ps = make_player_state()
+        assert lm._op_active_nullifies_ex(ps) is False
 
 
 # ==================== Task 5: calc_attack_plan ====================
@@ -920,7 +952,7 @@ class TestReplays85626724DeckOutLoss:
 class TestSwitchContext:
     """SWITCH/TO_ACTIVEコンテキストでのオーガポンex優先度テスト"""
 
-    def _score(self, energies):
+    def _score(self, energies, op_active_nullifies_ex=False):
         ogerpon = make_pokemon(id=lm.Ogerpon_ex, hp=210, energies=energies)
         my_ps = make_player_state(bench=[ogerpon])
         obs = MagicMock()
@@ -932,6 +964,7 @@ class TestSwitchContext:
             field_counts=defaultdict(int), hand_counts=defaultdict(int),
             discard_counts=defaultdict(int), attacker1=False,
             current_plan=lm.AttackPlan(), ability_used_flag=False,
+            op_active_nullifies_ex=op_active_nullifies_ex,
         )
 
     def test_ogerpon_ex_prioritized_when_charged(self):
@@ -941,6 +974,12 @@ class TestSwitchContext:
     def test_ogerpon_ex_low_priority_when_not_charged(self):
         """2エネルギー以下（ぶちやぶる不可）では優先度が低いまま"""
         assert self._score([6, 6]) == 2 * 2 + 6  # energy_count*2 + 充填中ボーナス
+
+    def test_op_active_nullifies_ex_adds_extra_priority(self):
+        """相手アクティブがex無効化持ちなら追加で優先度が上がる"""
+        base    = self._score([6, 6, 6], op_active_nullifies_ex=False)
+        boosted = self._score([6, 6, 6], op_active_nullifies_ex=True)
+        assert boosted == base + 30
 
 
 # ==================== Task 4: ルナサイクル ====================
@@ -1165,6 +1204,27 @@ class TestAttachRockFightingEnergyPriority:
         rock  = self._score(lm.Rock_Fighting_Energy, lm.AreaType.BENCH)
         basic = self._score(lm.Basic_Fighting_Energy, lm.AreaType.BENCH)
         assert rock == basic
+
+
+class TestAttachOgerponExPriority:
+    def _score(self, energies, op_active_nullifies_ex):
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, energies=energies)
+        my_ps = make_player_state(
+            bench=[ogerpon],
+            hand=[Card(id=lm.Basic_Fighting_Energy, serial=1, playerIndex=0)],
+        )
+        obs = MagicMock()
+        obs.current.players = [my_ps, make_player_state()]
+        option = Option(type=OptionType.ATTACH, index=0, inPlayArea=lm.AreaType.BENCH, inPlayIndex=0)
+        return lm._score_attach_option(
+            obs, option, my_index=0, current_plan=lm.AttackPlan(), attacker1=False,
+            op_active_nullifies_ex=op_active_nullifies_ex,
+        )
+
+    def test_op_active_nullifies_ex_boosts_ogerpon_ex_attach_priority(self):
+        without_flag = self._score([6], op_active_nullifies_ex=False)
+        with_flag    = self._score([6], op_active_nullifies_ex=True)
+        assert with_flag > without_flag
 
 
 # ==================== Task 5: 新規カードのスコアリング ====================
