@@ -21,6 +21,7 @@ Hero_Cape             = 1159
 Boss_Orders           = 1182
 Lillie_Determination  = 1227
 Gravity_Mountain      = 1252
+Nighttime_Mine        = 1266  # テラスタルポケモンの技コスト+1（両プレイヤー対象）
 Basic_Fighting_Energy = 6
 Rock_Fighting_Energy  = 20  # ロック闘エネルギー：装着ポケモンは相手の技の"効果"を受けない（Alakazam「ハンドパワー」対策）
 Ultra_Ball                 = 1121
@@ -32,6 +33,8 @@ Wally_Compassion           = 1229
 Ciphermaniac_Codebreaking  = 1188
 Ogerpon_ex                 = 117
 Crustle                     = 345  # 特性「ふしぎな岩の宿」：相手の「ポケモン【ex】」の技ダメージを無効化する壁ポケモン
+Sylveon                     = 330  # 特性「Safeguard」：Crustleと同一効果文（相手のポケモンexの技ダメージを無効化）
+EX_DAMAGE_NULLIFIER_IDS = frozenset({Crustle, Sylveon})
 
 EPSILON = 0.28  # 温存判断時に探索的先出しをする確率
 _rng    = random.Random()  # 本番用の実乱数。テストではスタブを注入する
@@ -148,7 +151,7 @@ def pokemon_score(pokemon: Pokemon) -> int:
     return score
 
 
-def energy_score(pokemon: Pokemon, active: bool, attacker1: bool) -> int:
+def energy_score(pokemon: Pokemon, active: bool, attacker1: bool, op_active_nullifies_ex: bool = False) -> int:
     """エネルギー付与先ポケモンの優先度スコアを返す"""
     energy_count = len(pokemon.energies)
     score = 8000
@@ -173,6 +176,8 @@ def energy_score(pokemon: Pokemon, active: bool, attacker1: bool) -> int:
             score += 80
         if attacker1:
             score += 40  # ルカリオ確保済みなら余剰エネルギーをオーガポンexへ
+        if op_active_nullifies_ex:
+            score += 150  # 相手がex無効化持ちならメガルカリオex系より優先してエネルギーを回す
     return score
 
 
@@ -208,6 +213,19 @@ def _get_stadium_id(state) -> int:
     return 0
 
 
+def _op_active_nullifies_ex(op_state) -> bool:
+    """相手アクティブが「ポケモンexの技ダメージを無効化する」特性持ちかどうかを判定する"""
+    op_active = op_state.active[0] if op_state.active else None
+    return op_active is not None and op_active.id in EX_DAMAGE_NULLIFIER_IDS
+
+
+def _tera_stadium_cost_bonus(pokemon_id: int, stadium_id: int) -> int:
+    """Nighttime Mine下でテラスタルポケモンが支払う追加コストを返す"""
+    if stadium_id == Nighttime_Mine and card_table[pokemon_id].tera:
+        return 1
+    return 0
+
+
 def _analyze_main_options(obs: Observation, select, my_index: int) -> tuple[bool, bool, bool, bool]:
     """MAIN コンテキストのオプション一覧から行動フラグを抽出する"""
     can_switch         = False
@@ -232,7 +250,7 @@ def _analyze_main_options(obs: Observation, select, my_index: int) -> tuple[bool
 
 # ==================== 攻撃プラン計算 ====================
 def _calc_attack_damage(attacker_id: int, base_damage: int, defender_id: int, defender_data) -> int:
-    """弱点・抵抗力・Crustleの特性無効化を考慮した実ダメージを1箇所で計算する"""
+    """弱点・抵抗力・ex技無効化ポケモンの特性を考慮した実ダメージを1箇所で計算する"""
     damage = base_damage
     attack_ignores_defender_effects = attacker_id == Ogerpon_ex  # ぶちやぶる：相手にかかっている効果を計算しない
     if not attack_ignores_defender_effects:
@@ -241,9 +259,14 @@ def _calc_attack_damage(attacker_id: int, base_damage: int, defender_id: int, de
         elif defender_data.resistance == EnergyType.FIGHTING:
             damage -= 30
 
-    defender_nullifies_ex_damage = defender_id == Crustle and attacker_id == Mega_Lucario_ex
+    attacker_is_ex = card_table[attacker_id].ex or card_table[attacker_id].megaEx
+    defender_nullifies_ex_damage = (
+        not attack_ignores_defender_effects  # ぶちやぶるは無効化を貫通するため対象外
+        and defender_id in EX_DAMAGE_NULLIFIER_IDS
+        and attacker_is_ex
+    )
     if defender_nullifies_ex_damage:
-        damage = 0  # Crustleの特性「ふしぎな岩の宿」：相手のexポケモンの技ダメージを無効化する
+        damage = 0  # Crustle/Sylveonの特性：相手のポケモンexの技ダメージを無効化する
 
     return damage
 
@@ -261,6 +284,7 @@ def calc_attack_plan(
     can_use_mega_brave: bool,
     can_attack:         bool,
     my_prize:           int,
+    stadium_id: int = 0,
     rng: "random.Random | None" = None,
 ) -> AttackPlan:
     """最適な攻撃プランを計算して返す。
@@ -307,6 +331,8 @@ def calc_attack_plan(
 
             if base_damage <= 0:
                 continue
+
+            energy_required += _tera_stadium_cost_bonus(my_pokemon.id, stadium_id)
 
             energy_count = len(my_pokemon.energies)
             more_energy  = False
@@ -378,7 +404,8 @@ def calc_attack_plan(
 # ==================== スコアリング ====================
 def _score_card_option(obs, o, context, my_index, state, my_state,
                        field_counts, hand_counts, discard_counts,
-                       attacker1, current_plan, ability_used_flag) -> int:
+                       attacker1, current_plan, ability_used_flag,
+                       op_active_nullifies_ex: bool = False) -> int:
     """OptionType.CARD のスコアをコンテキスト別に返す"""
     card = get_card(obs, o.area, o.index, o.playerIndex)
     if card is None:
@@ -406,6 +433,8 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
                     score += 4
                 elif card.id == Ogerpon_ex:
                     score += 20 if energy_count >= 3 else 6
+                    if op_active_nullifies_ex:
+                        score += 30  # 相手がex無効化持ちなら優先的にアクティブへ出す
             else:
                 score = 100 if o.index == current_plan.target - 1 else 0
             return score
@@ -652,7 +681,7 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
     return policy.play_score(ctx)
 
 
-def _score_attach_option(obs, o, my_index, current_plan, attacker1) -> int:
+def _score_attach_option(obs, o, my_index, current_plan, attacker1, op_active_nullifies_ex: bool = False) -> int:
     """OptionType.ATTACH のスコアを返す"""
     card = get_card(obs, AreaType.HAND, o.index, my_index)
     if card.id == Hero_Cape:
@@ -664,7 +693,7 @@ def _score_attach_option(obs, o, my_index, current_plan, attacker1) -> int:
             score += 200
         return score
     pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
-    score = energy_score(pokemon, o.inPlayArea == AreaType.ACTIVE, attacker1)
+    score = energy_score(pokemon, o.inPlayArea == AreaType.ACTIVE, attacker1, op_active_nullifies_ex)
     if card.id == Rock_Fighting_Energy and o.inPlayArea == AreaType.ACTIVE:
         # Alakazam「ハンドパワー」はアクティブのポケモンのみを狙うため、
         # そのときアクティブの子を優先的に守る
@@ -681,7 +710,8 @@ def _score_attach_option(obs, o, my_index, current_plan, attacker1) -> int:
 def _score_option(obs, o, context, my_index, state, my_state, op_state,
                   field_counts, hand_counts, discard_counts,
                   attacker1, current_plan, can_attack,
-                  stadium_id, ability_used_flag) -> int:
+                  stadium_id, ability_used_flag,
+                  op_active_nullifies_ex: bool = False) -> int:
     """1 つのオプションにヒューリスティックスコアを付ける"""
     match o.type:
         case OptionType.NUMBER:
@@ -693,6 +723,7 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
                 obs, o, context, my_index, state, my_state,
                 field_counts, hand_counts, discard_counts,
                 attacker1, current_plan, ability_used_flag,
+                op_active_nullifies_ex=op_active_nullifies_ex,
             )
         case OptionType.PLAY:
             return _score_play_option(
@@ -701,7 +732,7 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
                 attacker1, op_hand_count=op_state.handCount,
             )
         case OptionType.ATTACH:
-            return _score_attach_option(obs, o, my_index, current_plan, attacker1)
+            return _score_attach_option(obs, o, my_index, current_plan, attacker1, op_active_nullifies_ex)
         case OptionType.EVOLVE:
             pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
             return 9000 + len(pokemon.energies)
@@ -761,6 +792,7 @@ def agent(obs_dict: dict) -> list[int]:
 
     field_counts, hand_counts, discard_counts, attacker1 = _collect_field_state(my_state)
     stadium_id = _get_stadium_id(state)
+    op_active_nullifies_ex = _op_active_nullifies_ex(op_state)
 
     can_switch = can_op_switch = can_use_mega_brave = can_attack = False
     if context == SelectContext.MAIN and state.turn >= 2:
@@ -769,7 +801,7 @@ def agent(obs_dict: dict) -> list[int]:
             obs, my_state, op_state, state,
             field_counts, hand_counts, discard_counts,
             can_switch, can_op_switch, can_use_mega_brave, can_attack,
-            my_prize,
+            my_prize, stadium_id=stadium_id,
         )
 
     scores = [
@@ -777,7 +809,7 @@ def agent(obs_dict: dict) -> list[int]:
             obs, o, context, my_index, state, my_state, op_state,
             field_counts, hand_counts, discard_counts,
             attacker1, plan, can_attack,
-            stadium_id, ability_used,
+            stadium_id, ability_used, op_active_nullifies_ex,
         )
         for o in select.option
     ]
