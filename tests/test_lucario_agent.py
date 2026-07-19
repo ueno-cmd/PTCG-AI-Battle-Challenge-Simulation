@@ -950,6 +950,22 @@ class TestDiscardContext:
         )
         assert score == 50
 
+    def test_protects_rock_fighting_energy_regardless_of_count(self):
+        """ロック闘エネルギーは夜のタンカで回収不可・デッキ内4枚のみのため、
+        手札枚数によらず常に温存する（基本闘エネルギーは2枚以上あれば捨てて良いのと対照的）"""
+        energy = Card(id=lm.Rock_Fighting_Energy, serial=1, playerIndex=0)
+        obs = self._obs(energy)
+        score = lm._score_card_option(
+            obs, Option(type=OptionType.CARD, area=lm.AreaType.HAND, index=0, playerIndex=0),
+            context=lm.SelectContext.DISCARD, my_index=0, state=_make_state(),
+            my_state=make_player_state(),
+            field_counts=defaultdict(int),
+            hand_counts=defaultdict(int, {lm.Rock_Fighting_Energy: 3}),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), ability_used_flag=False,
+        )
+        assert score == -20
+
     def test_protects_key_pokemon(self):
         riolu = Card(id=lm.Riolu, serial=1, playerIndex=0)
         obs = self._obs(riolu)
