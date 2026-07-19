@@ -548,6 +548,25 @@ class TestCalcAttackPlan:
         assert result.attacker     == 0
         assert result.attack_index == 0
 
+    def test_ogerpon_ex_pierces_wall_with_4_energy_under_nighttime_mine(self):
+        """テラスタル×スタジアム×ex無効化の複合ケース：Nighttime Mine下ではオーガポンexは
+        4エネルギー必要になるが、無効化貫通（ぶちやぶる）は引き続き機能し140ダメージが通る"""
+        lm.card_table[lm.Crustle] = MockCardData(cardId=lm.Crustle, weakness=EnergyType.FIRE)
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, hp=210, energies=[6, 6, 6, 6])
+        my_ps = make_player_state(active_pokemon=ogerpon, prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=lm.Crustle, hp=150), prize_count=6)
+        obs = MagicMock()
+        obs.select.option = []
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int), defaultdict(int),
+            can_switch=False, can_op_switch=False,
+            can_use_mega_brave=False, can_attack=True, my_prize=6,
+            stadium_id=lm.Nighttime_Mine,
+        )
+        assert result.attacker  == 0
+        assert result.remain_hp == 150 - 140  # ダメージは通常通り140（無効化を貫通）
+
 
 class TestCrustleAbilityInteraction:
     """Crustle(345)の特性「ふしぎな岩の宿」対策のテスト"""

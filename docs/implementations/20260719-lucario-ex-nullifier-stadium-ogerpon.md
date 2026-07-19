@@ -41,8 +41,10 @@
 
 `uv run pytest -q`でリポジトリ全体が全件PASS。
 
-- 開始前（Task 1着手前）：526件
-- 完了後（Task 3完了・本サマリー作成時点で再確認）：**540件**（既存526件＋新規14件）
+- 開始前（`feature/lucario-ex-nullifier-stadium-ogerpon`ブランチ分岐元`a1a42dd`時点）：523件
+- 完了後（最終ブランチ全体レビューの指摘反映後、再確認）：**541件**（既存523件＋新規18件）
+
+（最終ブランチ全体レビューで、開始前の件数が526件と誤記されていた点を指摘され修正。`git checkout a1a42dd -- .`で分岐元コミット時点のコードを再現し`uv run pytest -q`で523件PASSと直接確認済み。また、テラスタル×スタジアム×ex無効化の複合ケースを検証する統合テストが無い点も指摘され、`test_ogerpon_ex_pierces_wall_with_4_energy_under_nighttime_mine`を追加した）
 
 ## コミット範囲
 
@@ -55,6 +57,16 @@
 ```
 
 （`git log --oneline a1a42dd..HEAD`で確認。3コミットとも各タスク末尾で全件PASSを確認してからコミットしている。）
+
+## 最終ブランチ全体レビュー（Opusモデル）の対応
+
+Critical/Important無し。「Ready to merge: With fixes（ドキュメントのみ）」との判定で、以下3件のMinor指摘に対応した。
+
+- テスト件数の誤記（526→523への修正、上記「テスト結果」参照）
+- `_tera_stadium_cost_bonus`の呼び出し位置を`if base_damage <= 0: continue`の後ろに移動（`src/lucario_agent/main.py`）。非攻撃候補（base_damage=0で捨てられるポケモン）への無駄な`card_table`参照を避けるための整理で、挙動に変化はない
+- テラスタル×スタジアム×ex無効化の複合ケース（Nighttime Mine下でオーガポンexが4エネルギーで140ダメージを通す）を検証する統合テストを追加
+
+いずれもcontrollerが直接対応し、`uv run pytest -q`で541件PASSを確認済み。
 
 ## 未対応・次回持ち越し
 

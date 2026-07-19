@@ -329,10 +329,10 @@ def calc_attack_plan(
                 energy_required = 3
                 base_damage     = 140
 
-            energy_required += _tera_stadium_cost_bonus(my_pokemon.id, stadium_id)
-
             if base_damage <= 0:
                 continue
+
+            energy_required += _tera_stadium_cost_bonus(my_pokemon.id, stadium_id)
 
             energy_count = len(my_pokemon.energies)
             more_energy  = False
