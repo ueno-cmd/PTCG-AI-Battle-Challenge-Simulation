@@ -16,7 +16,7 @@ from deck_builder.card_lookup import build_card_dict, find_card_id
 from deck_builder.deck_loader import load_deck_def
 
 PROJECT_ROOT = Path(__file__).parent.parent
-CARD_CSV = PROJECT_ROOT / "data" / "EN_Card_Data.csv"
+CARD_CSV = PROJECT_ROOT / "data" / "competition" / "EN_Card_Data.csv"
 OUTPUT_DIR = PROJECT_ROOT / "output"
 
 

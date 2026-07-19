@@ -15,5 +15,5 @@ dev = [
 testpaths = ["tests"]
 pythonpath = [
     "src",
-    "data/sample_submission",
+    "data/competition/sample_submission",
 ]

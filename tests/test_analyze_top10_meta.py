@@ -23,7 +23,7 @@ def test_build_report_includes_deck_and_decision_sections(tmp_path):
     report = build_report(
         targets_csv=targets_csv,
         battle_logs_dir=DATA_DIR / "battle_logs",
-        card_data_csv=DATA_DIR / "EN_Card_Data.csv",
+        card_data_csv=DATA_DIR / "competition" / "EN_Card_Data.csv",
         catalog_dir=catalog_dir,
     )
 
@@ -49,7 +49,7 @@ def test_build_report_missing_battle_log_raises_system_exit_with_episode_id(tmp_
         build_report(
             targets_csv=targets_csv,
             battle_logs_dir=DATA_DIR / "battle_logs",
-            card_data_csv=DATA_DIR / "EN_Card_Data.csv",
+            card_data_csv=DATA_DIR / "competition" / "EN_Card_Data.csv",
             catalog_dir=catalog_dir,
         )
 
@@ -72,7 +72,7 @@ def test_read_targets_missing_comma_raises_system_exit_with_line_number(tmp_path
         build_report(
             targets_csv=targets_csv,
             battle_logs_dir=DATA_DIR / "battle_logs",
-            card_data_csv=DATA_DIR / "EN_Card_Data.csv",
+            card_data_csv=DATA_DIR / "competition" / "EN_Card_Data.csv",
             catalog_dir=catalog_dir,
         )
 

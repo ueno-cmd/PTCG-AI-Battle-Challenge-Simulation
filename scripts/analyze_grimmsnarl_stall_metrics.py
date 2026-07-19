@@ -22,7 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(ROOT / "data" / "sample_submission"))
+sys.path.insert(0, str(ROOT / "data" / "competition" / "sample_submission"))
 
 # macOSではlibcg.soがロードできないため、tests/conftest.pyと同様に
 # cg.sim を先にモックしてから cg.api（pure Python部分）をインポートする

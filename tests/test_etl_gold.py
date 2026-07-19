@@ -6,7 +6,7 @@ import pytest
 from etl.gold import build_event_timeline, classify_archetype, extract_deck_list, find_player_index, load_card_names, load_raw_log
 
 FIXTURE_PATH = Path(__file__).parent.parent / "data" / "battle_logs" / "84580427.json"
-CARD_DATA_PATH = Path(__file__).parent.parent / "data" / "EN_Card_Data.csv"
+CARD_DATA_PATH = Path(__file__).parent.parent / "data" / "competition" / "EN_Card_Data.csv"
 
 
 @pytest.fixture

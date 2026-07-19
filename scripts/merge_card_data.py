@@ -9,9 +9,9 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 
-EN_CSV = DATA_DIR / "EN_Card_Data.csv"
-JP_CSV = DATA_DIR / "JP_Card_Data.csv"
-OUT_CSV = DATA_DIR / "card_data_merged.csv"
+EN_CSV = DATA_DIR / "competition" / "EN_Card_Data.csv"
+JP_CSV = DATA_DIR / "competition" / "JP_Card_Data.csv"
+OUT_CSV = DATA_DIR / "derived" / "card_data_merged.csv"
 
 # EN列名 → 出力列名のマッピング
 EN_RENAME = {

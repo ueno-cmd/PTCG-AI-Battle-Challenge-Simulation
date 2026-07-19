@@ -1,8 +1,8 @@
-"""TOP10メタ分析CLI。data/top10_meta_targets.csvを読み、対象バトルログを
+"""TOP10メタ分析CLI。data/derived/top10_meta_targets.csvを読み、対象バトルログを
 デッキ分布・意思決定パターンの2観点で集約したMarkdownレポートを生成する。
 
 使い方: uv run python scripts/analyze_top10_meta.py [targets_csv]
-（省略時は data/top10_meta_targets.csv を使う）
+（省略時は data/derived/top10_meta_targets.csv を使う）
 """
 import csv
 import sys
@@ -154,12 +154,12 @@ def _render_markdown(deck_rows: list[dict], attack_rows: list[dict], play_rows: 
 
 
 def main() -> None:
-    targets_csv = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/top10_meta_targets.csv")
+    targets_csv = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/derived/top10_meta_targets.csv")
     repo_root = Path(__file__).parent.parent
     report = build_report(
         targets_csv=targets_csv,
         battle_logs_dir=repo_root / "data" / "battle_logs",
-        card_data_csv=repo_root / "data" / "EN_Card_Data.csv",
+        card_data_csv=repo_root / "data" / "competition" / "EN_Card_Data.csv",
         catalog_dir=repo_root / "data" / "unity-catalog",
     )
     output_dir = repo_root / "output"
