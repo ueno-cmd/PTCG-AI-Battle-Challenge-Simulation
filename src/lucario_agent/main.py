@@ -578,7 +578,10 @@ class JudgePolicy(TrainerCardPolicy):
     def play_score(self, ctx: PlayScoringContext) -> int:
         if ctx.op_hand_count >= self.OPPONENT_HAND_THRESHOLD:
             return 9000
-        return 7000 if ctx.hand_counts[Basic_Fighting_Energy] == 0 and not ctx.attacker1 else -1
+        no_fighting_energy_in_hand = (
+            ctx.hand_counts[Basic_Fighting_Energy] + ctx.hand_counts[Rock_Fighting_Energy] == 0
+        )
+        return 7000 if no_fighting_energy_in_hand and not ctx.attacker1 else -1
 
 
 class WallyCompassionPolicy(TrainerCardPolicy):

@@ -1191,6 +1191,21 @@ class TestNewCardScoring:
         )
         assert score == -1
 
+    def test_judge_not_self_triggered_when_only_rock_energy_in_hand(self):
+        """手札にロック闘エネルギーのみ（基本闘エネルギー0枚）でも
+        「エネルギー切れ」と誤判定しない（潜在バグ修正）"""
+        my_ps = make_player_state(hand=[Card(id=lm.Judge, serial=1, playerIndex=0)])
+        obs = MagicMock()
+        obs.current.players = [my_ps, make_player_state()]
+        score = lm._score_play_option(
+            obs, Option(type=OptionType.PLAY, index=0), my_index=0,
+            current_plan=lm.AttackPlan(), can_attack=False,
+            state=_make_state(), my_state=my_ps,
+            hand_counts=defaultdict(int, {lm.Rock_Fighting_Energy: 1}),
+            field_counts=defaultdict(int), stadium_id=0,
+        )
+        assert score == -1
+
     def test_judge_prioritised_when_opponent_hand_is_flooded(self):
         """相手の手札が閾値以上に膨れている場合は、自分のエネルギー状況に
         関わらずJudgeを最優先で発動する（Alakazam系のPsychic Draw×Rare Candy
