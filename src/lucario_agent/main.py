@@ -435,6 +435,9 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
                 score += -150 if field_counts[Ogerpon_ex] >= 2 else (-3 if field_counts[Ogerpon_ex] >= 1 else 40)
             elif card.id == Basic_Fighting_Energy:
                 score += 30 if not ability_used_flag or not state.energyAttached else -1
+            elif card.id == Rock_Fighting_Energy:
+                # コスト機能は基本闘エネルギーと同等＋効果無効化のボーナスがあるため優先
+                score += 50
             return score
 
         case SelectContext.DISCARD:

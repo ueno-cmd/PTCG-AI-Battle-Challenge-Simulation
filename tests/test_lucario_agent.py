@@ -1405,6 +1405,13 @@ class TestToHandContext:
         fc = defaultdict(int, {lm.Ogerpon_ex: 2})
         assert self._score(lm.Ogerpon_ex, field_counts=fc) == 200 - 150
 
+    def test_rock_energy_prioritized_over_basic_energy(self):
+        """コスト機能は同等だが効果無効化のボーナスがあるため、
+        基本闘エネルギーより優先してサーチする"""
+        rock  = self._score(lm.Rock_Fighting_Energy)
+        basic = self._score(lm.Basic_Fighting_Energy)
+        assert rock > basic
+
 
 class TestUltraBallAlreadyFoundIncludesOgerponEx:
     """Ultra_Ballの使用判定(already_found)にOgerpon_exも含まれることの確認"""
