@@ -655,6 +655,10 @@ def _score_attach_option(obs, o, my_index, current_plan, attacker1) -> int:
         return score
     pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
     score = energy_score(pokemon, o.inPlayArea == AreaType.ACTIVE, attacker1)
+    if card.id == Rock_Fighting_Energy and o.inPlayArea == AreaType.ACTIVE:
+        # Alakazam「ハンドパワー」はアクティブのポケモンのみを狙うため、
+        # そのときアクティブの子を優先的に守る
+        score += 500
     if o.inPlayArea == AreaType.ACTIVE:
         if current_plan.attacker == 0 and current_plan.energy:
             score += 200

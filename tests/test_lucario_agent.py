@@ -1086,6 +1086,40 @@ class TestLunaCycleAbilityScore:
         assert score == -1
 
 
+# ==================== Task 2: ATTACH優先度 ====================
+class TestAttachRockFightingEnergyPriority:
+    """ロック闘エネルギーは、アクティブのポケモンへの装着時に基本闘エネルギーより優先される
+    （Alakazam「ハンドパワー」はアクティブのポケモンのみを狙う技のため）"""
+
+    def _score(self, card_id, in_play_area):
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, energies=[])
+        my_ps = make_player_state(
+            active_pokemon=lucario,
+            bench=[lucario] if in_play_area == lm.AreaType.BENCH else [],
+            hand=[Card(id=card_id, serial=1, playerIndex=0)],
+        )
+        obs = MagicMock()
+        obs.current.players = [my_ps, make_player_state()]
+        option = Option(
+            type=OptionType.ATTACH, index=0,
+            inPlayArea=in_play_area, inPlayIndex=0,
+        )
+        return lm._score_attach_option(
+            obs, option, my_index=0, current_plan=lm.AttackPlan(), attacker1=False,
+        )
+
+    def test_rock_energy_scores_higher_than_basic_on_active(self):
+        rock  = self._score(lm.Rock_Fighting_Energy, lm.AreaType.ACTIVE)
+        basic = self._score(lm.Basic_Fighting_Energy, lm.AreaType.ACTIVE)
+        assert rock > basic
+
+    def test_rock_energy_has_no_bonus_on_bench(self):
+        """ベンチへの装着では基本闘エネルギーと同スコア（アクティブ限定のボーナスのため）"""
+        rock  = self._score(lm.Rock_Fighting_Energy, lm.AreaType.BENCH)
+        basic = self._score(lm.Basic_Fighting_Energy, lm.AreaType.BENCH)
+        assert rock == basic
+
+
 # ==================== Task 5: 新規カードのスコアリング ====================
 class TestNewCardScoring:
     def _score(self, card_id, my_state=None, hand_counts=None, field_counts=None,
