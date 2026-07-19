@@ -22,6 +22,7 @@ Boss_Orders           = 1182
 Lillie_Determination  = 1227
 Gravity_Mountain      = 1252
 Basic_Fighting_Energy = 6
+Rock_Fighting_Energy  = 20  # ロック闘エネルギー：装着ポケモンは相手の技の"効果"を受けない（Alakazam「ハンドパワー」対策）
 Ultra_Ball                 = 1121
 Pokegear                   = 1122
 Night_Stretcher            = 1097

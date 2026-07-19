@@ -36,8 +36,11 @@ def test_dusk_ball_and_carmine_and_switch_removed():
 
 
 def test_energy_count():
-    fighting = sum(c for i, c in DECK if i == 6)
-    assert fighting == 11
+    basic = sum(c for i, c in DECK if i == 6)
+    rock = sum(c for i, c in DECK if i == 20)
+    assert basic == 7
+    assert rock == 4
+    assert basic + rock == 11
 
 
 def test_ace_spec_does_not_exceed_1_copy():

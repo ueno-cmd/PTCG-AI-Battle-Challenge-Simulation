@@ -39,6 +39,7 @@ def mock_card_table(monkeypatch):
         112:  _card(112),             # Munkidori
         1267: _card(1267),            # Lumiose City
         12:   _card(12,   cardType=CardType.SPECIAL_ENERGY),  # Legacy Energy
+        lm.Rock_Fighting_Energy: _card(lm.Rock_Fighting_Energy, cardType=CardType.SPECIAL_ENERGY),  # ロック闘エネルギー
         1172: _card(1172, cardType=CardType.TOOL),            # Lillie's Pearl
         lm.Premium_Power_Pro:    _card(lm.Premium_Power_Pro,    cardType=CardType.ITEM),
         lm.Boss_Orders:          _card(lm.Boss_Orders,          cardType=CardType.SUPPORTER),

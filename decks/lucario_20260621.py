@@ -21,5 +21,6 @@ DECK = [
     (1229, 1),   # Wally's Compassion
     (1188, 1),   # Ciphermaniac's Codebreaking
     (1252, 1),   # Gravity Mountain
-    (6, 11),     # Basic {F} Energy
+    (6, 7),      # Basic {F} Energy
+    (20, 4),     # Rock {F} Energy（Alakazam「ハンドパワー」対策。闘エネルギー1個分＋相手の技の効果を無効化）
 ]
