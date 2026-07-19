@@ -261,6 +261,21 @@ class TestCalcAttackDamage:
         defender = MockCardData(cardId=lm.Crustle)
         assert lm._calc_attack_damage(lm.Solrock, 70, lm.Crustle, defender) == 70
 
+    def test_sylveon_nullifies_ex_attacker_damage(self):
+        """Sylveon(330)もCrustleと同じ効果文の特性を持つため無効化対象に含める"""
+        defender = MockCardData(cardId=lm.Sylveon)
+        assert lm._calc_attack_damage(lm.Mega_Lucario_ex, 270, lm.Sylveon, defender) == 0
+
+    def test_ogerpon_ex_bypasses_sylveon_ability(self):
+        """ぶちやぶるはSylveonの特性も貫通する"""
+        defender = MockCardData(cardId=lm.Sylveon)
+        assert lm._calc_attack_damage(lm.Ogerpon_ex, 140, lm.Sylveon, defender) == 140
+
+    def test_generalizes_to_any_ex_attacker_not_just_mega_lucario(self):
+        """攻撃側がexなら誰でも無効化される（Mega_Lucario_ex固定ではなくCardData.ex/megaExで判定）"""
+        defender = MockCardData(cardId=lm.Crustle)
+        assert lm._calc_attack_damage(337, 200, lm.Crustle, defender) == 0  # Archaludon ex（ex=True）
+
 
 class TestCalcAttackPlan:
     def test_no_attackers_returns_default_plan(self):

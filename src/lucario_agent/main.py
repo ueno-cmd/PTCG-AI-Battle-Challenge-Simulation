@@ -32,6 +32,8 @@ Wally_Compassion           = 1229
 Ciphermaniac_Codebreaking  = 1188
 Ogerpon_ex                 = 117
 Crustle                     = 345  # 特性「ふしぎな岩の宿」：相手の「ポケモン【ex】」の技ダメージを無効化する壁ポケモン
+Sylveon                     = 330  # 特性「Safeguard」：Crustleと同一効果文（相手のポケモンexの技ダメージを無効化）
+EX_DAMAGE_NULLIFIER_IDS = frozenset({Crustle, Sylveon})
 
 EPSILON = 0.28  # 温存判断時に探索的先出しをする確率
 _rng    = random.Random()  # 本番用の実乱数。テストではスタブを注入する
@@ -232,7 +234,7 @@ def _analyze_main_options(obs: Observation, select, my_index: int) -> tuple[bool
 
 # ==================== 攻撃プラン計算 ====================
 def _calc_attack_damage(attacker_id: int, base_damage: int, defender_id: int, defender_data) -> int:
-    """弱点・抵抗力・Crustleの特性無効化を考慮した実ダメージを1箇所で計算する"""
+    """弱点・抵抗力・ex技無効化ポケモンの特性を考慮した実ダメージを1箇所で計算する"""
     damage = base_damage
     attack_ignores_defender_effects = attacker_id == Ogerpon_ex  # ぶちやぶる：相手にかかっている効果を計算しない
     if not attack_ignores_defender_effects:
@@ -241,9 +243,14 @@ def _calc_attack_damage(attacker_id: int, base_damage: int, defender_id: int, de
         elif defender_data.resistance == EnergyType.FIGHTING:
             damage -= 30
 
-    defender_nullifies_ex_damage = defender_id == Crustle and attacker_id == Mega_Lucario_ex
+    attacker_is_ex = card_table[attacker_id].ex or card_table[attacker_id].megaEx
+    defender_nullifies_ex_damage = (
+        not attack_ignores_defender_effects  # ぶちやぶるは無効化を貫通するため対象外
+        and defender_id in EX_DAMAGE_NULLIFIER_IDS
+        and attacker_is_ex
+    )
     if defender_nullifies_ex_damage:
-        damage = 0  # Crustleの特性「ふしぎな岩の宿」：相手のexポケモンの技ダメージを無効化する
+        damage = 0  # Crustle/Sylveonの特性：相手のポケモンexの技ダメージを無効化する
 
     return damage
 
