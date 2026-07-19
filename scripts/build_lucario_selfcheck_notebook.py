@@ -18,10 +18,10 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / "decks"))
 
-REF_NB = ROOT / "src/rl_references/ptcg-tiny-rl-to-submission-baseline-guide.ipynb"
+REF_NB = ROOT / "notebooks/references/ptcg-tiny-rl-to-submission-baseline-guide.ipynb"
 LUCARIO_PY = ROOT / "src/lucario_agent/main.py"
 GRIMMSNARL_PY = ROOT / "src/grimmsnarl_agent/main.py"
-DST = ROOT / "src/rl_experiments/lucario_selfcheck_experiment.ipynb"
+DST = ROOT / "notebooks/experiments/lucario_selfcheck_experiment.ipynb"
 
 # 参考ノートブックからコピーするセル（標準import / cgランタイム起動）
 COPY_CELL_IDS = ["b6064b7f", "1a929ee3"]

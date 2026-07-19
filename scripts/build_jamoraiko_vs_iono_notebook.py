@@ -16,17 +16,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))  # decksパッケージをimportするため
 from decks.jamoraiko_20260713 import DECK as JAMORAIKO_DECK_TUPLES  # noqa: E402
 
-REF_NB = Path("src/rl_references/ptcg-tiny-rl-to-submission-baseline-guide.ipynb")
+REF_NB = Path("notebooks/references/ptcg-tiny-rl-to-submission-baseline-guide.ipynb")
 JAMORAIKO_PY = Path("src/jamoraiko_agent/main.py")
-IONO_NB = Path("src/sample_notebook/a-sample-rule-based-agent-iono-s-deck.ipynb")
+IONO_NB = Path("notebooks/samples/a-sample-rule-based-agent-iono-s-deck.ipynb")
 IONO_CELL_ID = "4c4dd070"
-DST = Path("src/rl_experiments/jamoraiko_vs_iono_experiment.ipynb")
+DST = Path("notebooks/experiments/jamoraiko_vs_iono_experiment.ipynb")
 
 # 参考ノートブックからコピーするセル（標準import / cgランタイム起動）
 COPY_CELL_IDS = ["b6064b7f", "1a929ee3"]
 
 # イオナサンプルの決め打ちデッキ構成（60枚）。
-# src/sample_notebook/a-sample-rule-based-agent-iono-s-deck.ipynb のDecklistコメントと一致
+# notebooks/samples/a-sample-rule-based-agent-iono-s-deck.ipynb のDecklistコメントと一致
 IONO_DECK_TUPLES = [
     (265, 3),   # Iono's Voltorb
     (268, 3),   # Iono's Tadbulb
@@ -97,7 +97,7 @@ def _patch_iono_deck_load(iono_source: str, iono_deck: list[int]) -> str:
     if _IONO_DECK_LOAD_ORIGINAL not in iono_source:
         raise RuntimeError(
             "イオナサンプルのデッキ読み込みコードが想定と異なります。"
-            "src/sample_notebook/a-sample-rule-based-agent-iono-s-deck.ipynb の内容が"
+            "notebooks/samples/a-sample-rule-based-agent-iono-s-deck.ipynb の内容が"
             "変更された可能性があります。ソースを確認してください。"
         )
 

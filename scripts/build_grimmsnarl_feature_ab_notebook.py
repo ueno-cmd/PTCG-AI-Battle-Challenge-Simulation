@@ -11,9 +11,9 @@ Usage: uv run python scripts/build_grimmsnarl_feature_ab_notebook.py
 import json
 from pathlib import Path
 
-REF_NB = Path("src/rl_references/ptcg-tiny-rl-to-submission-baseline-guide.ipynb")
+REF_NB = Path("notebooks/references/ptcg-tiny-rl-to-submission-baseline-guide.ipynb")
 AGENT_PY = Path("src/grimmsnarl_agent/main.py")
-DST = Path("src/rl_experiments/grimmsnarl_feature_ab_experiment.ipynb")
+DST = Path("notebooks/experiments/grimmsnarl_feature_ab_experiment.ipynb")
 
 DECK_CSV_GLOB = "/kaggle/input/datasets/**/deck_20260705_185905.csv"
 
