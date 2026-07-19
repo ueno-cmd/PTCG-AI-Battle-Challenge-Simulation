@@ -423,6 +423,22 @@ class TestCalcAttackPlan:
         )
         assert result.attacker == -1
 
+    def test_ogerpon_ex_selected_when_only_rock_energy_in_hand(self):
+        """手札に基本闘エネルギーが0枚でも、ロック闘エネルギーがあれば
+        「あと1エネルギーで技が届く」候補として正しく評価される（潜在バグ修正）"""
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, hp=210, energies=[6, 6])
+        my_ps = make_player_state(active_pokemon=ogerpon, prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=lm.Riolu, hp=100), prize_count=6)
+        obs = MagicMock()
+        obs.select.option = []
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int, {lm.Rock_Fighting_Energy: 1}), defaultdict(int),
+            can_switch=False, can_op_switch=False,
+            can_use_mega_brave=False, can_attack=True, my_prize=6,
+        )
+        assert result.attacker == 0
+
 
 class TestCrustleAbilityInteraction:
     """Crustle(345)の特性「ふしぎな岩の宿」対策のテスト"""

@@ -317,7 +317,8 @@ def calc_attack_plan(
                 break
             if energy_count < energy_required:
                 can_attach_energy_this_turn = (
-                    hand_counts[Basic_Fighting_Energy] >= 1 and not state.energyAttached
+                    hand_counts[Basic_Fighting_Energy] + hand_counts[Rock_Fighting_Energy] >= 1
+                    and not state.energyAttached
                 )
                 if can_attach_energy_this_turn:
                     energy_count += 1
