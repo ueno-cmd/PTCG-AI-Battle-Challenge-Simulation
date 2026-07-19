@@ -14,6 +14,7 @@ class MockCardData:
     ex:         bool              = False
     stage2:     bool              = False
     stage1:     bool              = False
+    tera:       bool              = False
     cardType:   CardType          = CardType.POKEMON
     weakness:   EnergyType | None = None
     resistance: EnergyType | None = None
@@ -31,7 +32,7 @@ def mock_card_table(monkeypatch):
         lm.Solrock:               _card(lm.Solrock),
         lm.Riolu:                 _card(lm.Riolu),
         lm.Mega_Lucario_ex:       _card(lm.Mega_Lucario_ex, megaEx=True),
-        lm.Ogerpon_ex:            _card(lm.Ogerpon_ex, ex=True),  # Cornerstone Mask Ogerpon ex
+        lm.Ogerpon_ex:            _card(lm.Ogerpon_ex, ex=True, tera=True),  # Cornerstone Mask Ogerpon ex
         144:  _card(144,  ex=True),   # Squawkabilly ex
         322:  _card(322),             # Noctowl
         323:  _card(323),             # Fan Rotom
@@ -243,6 +244,18 @@ class TestOpActiveNullifiesEx:
     def test_false_when_no_active(self):
         ps = make_player_state()
         assert lm._op_active_nullifies_ex(ps) is False
+
+
+class TestTeraStadiumCostBonus:
+    def test_no_bonus_without_nighttime_mine(self):
+        assert lm._tera_stadium_cost_bonus(lm.Ogerpon_ex, stadium_id=0) == 0
+
+    def test_no_bonus_for_non_tera_pokemon_under_nighttime_mine(self):
+        """メガルカリオexはテラスタルではないためコスト変化なし"""
+        assert lm._tera_stadium_cost_bonus(lm.Mega_Lucario_ex, stadium_id=lm.Nighttime_Mine) == 0
+
+    def test_bonus_for_tera_pokemon_under_nighttime_mine(self):
+        assert lm._tera_stadium_cost_bonus(lm.Ogerpon_ex, stadium_id=lm.Nighttime_Mine) == 1
 
 
 # ==================== Task 5: calc_attack_plan ====================
@@ -485,6 +498,55 @@ class TestCalcAttackPlan:
             can_use_mega_brave=False, can_attack=True, my_prize=6,
         )
         assert result.attacker == 0
+
+    def test_ogerpon_ex_requires_4_energy_under_nighttime_mine(self):
+        """Nighttime Mine下ではオーガポンexの技コストが3→4になり、3エネルギーでは発動しない"""
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, hp=210, energies=[6, 6, 6])
+        my_ps = make_player_state(active_pokemon=ogerpon, prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=lm.Riolu, hp=100), prize_count=6)
+        obs = MagicMock()
+        obs.select.option = []
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int), defaultdict(int),
+            can_switch=False, can_op_switch=False,
+            can_use_mega_brave=False, can_attack=True, my_prize=6,
+            stadium_id=lm.Nighttime_Mine,
+        )
+        assert result.attacker == -1
+
+    def test_ogerpon_ex_attacks_normally_without_nighttime_mine(self):
+        """Nighttime Mine以外では従来通り3エネルギーで攻撃候補になる（回帰確認）"""
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, hp=210, energies=[6, 6, 6])
+        my_ps = make_player_state(active_pokemon=ogerpon, prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=lm.Riolu, hp=100), prize_count=6)
+        obs = MagicMock()
+        obs.select.option = []
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int), defaultdict(int),
+            can_switch=False, can_op_switch=False,
+            can_use_mega_brave=False, can_attack=True, my_prize=6,
+            stadium_id=lm.Gravity_Mountain,
+        )
+        assert result.attacker == 0
+
+    def test_mega_lucario_ex_unaffected_by_nighttime_mine(self):
+        """メガルカリオexは非テラスタルのためNighttime Mine下でもコスト変化なし（回帰確認）"""
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, hp=300, energies=[6])
+        my_ps = make_player_state(active_pokemon=lucario, prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=lm.Riolu, hp=100), prize_count=6)
+        obs = MagicMock()
+        obs.select.option = []
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int), defaultdict(int),
+            can_switch=False, can_op_switch=False,
+            can_use_mega_brave=False, can_attack=True, my_prize=6,
+            stadium_id=lm.Nighttime_Mine,
+        )
+        assert result.attacker     == 0
+        assert result.attack_index == 0
 
 
 class TestCrustleAbilityInteraction:

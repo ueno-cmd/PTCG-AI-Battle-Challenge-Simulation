@@ -21,6 +21,7 @@ Hero_Cape             = 1159
 Boss_Orders           = 1182
 Lillie_Determination  = 1227
 Gravity_Mountain      = 1252
+Nighttime_Mine        = 1266  # テラスタルポケモンの技コスト+1（両プレイヤー対象）
 Basic_Fighting_Energy = 6
 Rock_Fighting_Energy  = 20  # ロック闘エネルギー：装着ポケモンは相手の技の"効果"を受けない（Alakazam「ハンドパワー」対策）
 Ultra_Ball                 = 1121
@@ -218,6 +219,13 @@ def _op_active_nullifies_ex(op_state) -> bool:
     return op_active is not None and op_active.id in EX_DAMAGE_NULLIFIER_IDS
 
 
+def _tera_stadium_cost_bonus(pokemon_id: int, stadium_id: int) -> int:
+    """Nighttime Mine下でテラスタルポケモンが支払う追加コストを返す"""
+    if stadium_id == Nighttime_Mine and card_table[pokemon_id].tera:
+        return 1
+    return 0
+
+
 def _analyze_main_options(obs: Observation, select, my_index: int) -> tuple[bool, bool, bool, bool]:
     """MAIN コンテキストのオプション一覧から行動フラグを抽出する"""
     can_switch         = False
@@ -276,6 +284,7 @@ def calc_attack_plan(
     can_use_mega_brave: bool,
     can_attack:         bool,
     my_prize:           int,
+    stadium_id: int = 0,
     rng: "random.Random | None" = None,
 ) -> AttackPlan:
     """最適な攻撃プランを計算して返す。
@@ -319,6 +328,8 @@ def calc_attack_plan(
             elif my_pokemon.id == Ogerpon_ex:
                 energy_required = 3
                 base_damage     = 140
+
+            energy_required += _tera_stadium_cost_bonus(my_pokemon.id, stadium_id)
 
             if base_damage <= 0:
                 continue
@@ -790,7 +801,7 @@ def agent(obs_dict: dict) -> list[int]:
             obs, my_state, op_state, state,
             field_counts, hand_counts, discard_counts,
             can_switch, can_op_switch, can_use_mega_brave, can_attack,
-            my_prize,
+            my_prize, stadium_id=stadium_id,
         )
 
     scores = [
