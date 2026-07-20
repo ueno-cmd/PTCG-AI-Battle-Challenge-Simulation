@@ -1,7 +1,7 @@
 from decks.grimmsnarl_20260701 import DECK
 
 ENERGY_IDS = {7}  # Basic {D} Energy
-ACE_SPEC_IDS = {1092}  # Secret Box（data/EN_Card_Data.csv で Rule: ACE SPEC）
+ACE_SPEC_IDS = {1092}  # Secret Box（data/competition/EN_Card_Data.csv で Rule: ACE SPEC）
 
 
 def test_deck_has_60_cards():

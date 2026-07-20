@@ -6,7 +6,7 @@
 
 ## NotebookLM：デッキID辞書の生成
 
-**ソース：** `data/EN_Card_Data.csv` または `data/Card_ID List_EN.pdf` をアップロード
+**ソース：** `data/competition/EN_Card_Data.csv` または `data/competition/Card_ID List_EN.pdf` をアップロード
 
 ```
 以下の条件でカード名とCard IDのPython辞書を作ってください。
