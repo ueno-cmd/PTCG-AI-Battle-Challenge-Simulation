@@ -69,29 +69,29 @@ from tests.conftest import make_pokemon
 class TestPrizeCount:
     def test_regular_pokemon_yields_1(self):
         p = make_pokemon(id=lm.Riolu)
-        assert lm.prize_count(p) == 1
+        assert lm.prize_count(p, lm.card_table) == 1
 
     def test_ex_pokemon_yields_2(self):
         p = make_pokemon(id=337)  # Archaludon ex
-        assert lm.prize_count(p) == 2
+        assert lm.prize_count(p, lm.card_table) == 2
 
     def test_mega_ex_yields_3(self):
         p = make_pokemon(id=lm.Mega_Lucario_ex)
-        assert lm.prize_count(p) == 3
+        assert lm.prize_count(p, lm.card_table) == 3
 
     def test_legacy_energy_reduces_count_by_1(self):
         """Legacy Energy(id=12) を装備した ex は 2 - 1 = 1 プライズ"""
         p = make_pokemon(id=337)
         legacy = Card(id=12, serial=12, playerIndex=0)
         object.__setattr__(p, "energyCards", [legacy])
-        assert lm.prize_count(p) == 1
+        assert lm.prize_count(p, lm.card_table) == 1
 
     def test_minimum_prize_is_0(self):
         """複数の減算があっても 0 を下限とする"""
         p = make_pokemon(id=lm.Riolu)  # 通常 → 1
         legacy = Card(id=12, serial=12, playerIndex=0)
         object.__setattr__(p, "energyCards", [legacy, legacy])
-        assert lm.prize_count(p) == 0
+        assert lm.prize_count(p, lm.card_table) == 0
 
 
 # ==================== Task 3: pokemon_score + energy_score ====================
@@ -99,33 +99,33 @@ class TestPokemonScore:
     def test_ex_pokemon_scores_higher_than_regular(self):
         ex  = make_pokemon(id=337, hp=200)       # ex → 2 prize
         reg = make_pokemon(id=lm.Riolu, hp=200)  # regular → 1 prize
-        assert lm.pokemon_score(ex) > lm.pokemon_score(reg)
+        assert lm.pokemon_score(ex, lm.card_table) > lm.pokemon_score(reg, lm.card_table)
 
     def test_more_energies_yields_higher_score(self):
         p_no  = make_pokemon(id=lm.Riolu, hp=100, energies=[])
         p_two = make_pokemon(id=lm.Riolu, hp=100, energies=[6, 6])
-        assert lm.pokemon_score(p_two) > lm.pokemon_score(p_no)
+        assert lm.pokemon_score(p_two, lm.card_table) > lm.pokemon_score(p_no, lm.card_table)
 
     def test_special_ids_are_penalised(self, mock_card_table):
         """特殊ID(144) は非ペナルティの同条件 ex より正確に 200 低スコア"""
         mock_card_table[999] = MockCardData(cardId=999, ex=True)  # ペナルティなし ex
         normal_ex = make_pokemon(id=999, hp=70)
         squawk    = make_pokemon(id=144, hp=70)
-        diff = lm.pokemon_score(normal_ex) - lm.pokemon_score(squawk)
+        diff = lm.pokemon_score(normal_ex, lm.card_table) - lm.pokemon_score(squawk, lm.card_table)
         assert diff == 200
 
     def test_munkidori_gets_bonus_with_energy(self):
         """Munkidori(112) はエネルギーが 1 枚以上で +300"""
         no_e   = make_pokemon(id=112, hp=90, energies=[])
         with_e = make_pokemon(id=112, hp=90, energies=[6])
-        assert lm.pokemon_score(with_e) > lm.pokemon_score(no_e)
+        assert lm.pokemon_score(with_e, lm.card_table) > lm.pokemon_score(no_e, lm.card_table)
 
     def test_stage1_gets_bonus(self, mock_card_table):
         """stage1 ポケモンは同 HP の basic より高スコア"""
         mock_card_table[900] = MockCardData(cardId=900, stage1=True)
         p_stage1 = make_pokemon(id=900, hp=130)
         p_basic  = make_pokemon(id=lm.Riolu, hp=130)
-        assert lm.pokemon_score(p_stage1) > lm.pokemon_score(p_basic)
+        assert lm.pokemon_score(p_stage1, lm.card_table) > lm.pokemon_score(p_basic, lm.card_table)
 
 
 class TestEnergyScore:
@@ -248,14 +248,14 @@ class TestOpActiveNullifiesEx:
 
 class TestTeraStadiumCostBonus:
     def test_no_bonus_without_nighttime_mine(self):
-        assert lm._tera_stadium_cost_bonus(lm.Ogerpon_ex, stadium_id=0) == 0
+        assert lm._tera_stadium_cost_bonus(lm.Ogerpon_ex, stadium_id=0, card_table=lm.card_table) == 0
 
     def test_no_bonus_for_non_tera_pokemon_under_nighttime_mine(self):
         """メガルカリオexはテラスタルではないためコスト変化なし"""
-        assert lm._tera_stadium_cost_bonus(lm.Mega_Lucario_ex, stadium_id=lm.Nighttime_Mine) == 0
+        assert lm._tera_stadium_cost_bonus(lm.Mega_Lucario_ex, stadium_id=lm.Nighttime_Mine, card_table=lm.card_table) == 0
 
     def test_bonus_for_tera_pokemon_under_nighttime_mine(self):
-        assert lm._tera_stadium_cost_bonus(lm.Ogerpon_ex, stadium_id=lm.Nighttime_Mine) == 1
+        assert lm._tera_stadium_cost_bonus(lm.Ogerpon_ex, stadium_id=lm.Nighttime_Mine, card_table=lm.card_table) == 1
 
 
 # ==================== Task 5: calc_attack_plan ====================
@@ -277,49 +277,49 @@ class TestCalcAttackDamage:
 
     def test_no_modifier_returns_base_damage(self):
         defender = MockCardData(cardId=999)
-        assert lm._calc_attack_damage(lm.Mega_Lucario_ex, 130, 999, defender) == 130
+        assert lm._calc_attack_damage(lm.Mega_Lucario_ex, 130, 999, defender, card_table=lm.card_table) == 130
 
     def test_weakness_doubles_damage(self):
         defender = MockCardData(cardId=999, weakness=EnergyType.FIGHTING)
-        assert lm._calc_attack_damage(lm.Mega_Lucario_ex, 130, 999, defender) == 260
+        assert lm._calc_attack_damage(lm.Mega_Lucario_ex, 130, 999, defender, card_table=lm.card_table) == 260
 
     def test_resistance_reduces_damage_by_30(self):
         defender = MockCardData(cardId=999, resistance=EnergyType.FIGHTING)
-        assert lm._calc_attack_damage(lm.Mega_Lucario_ex, 130, 999, defender) == 100
+        assert lm._calc_attack_damage(lm.Mega_Lucario_ex, 130, 999, defender, card_table=lm.card_table) == 100
 
     def test_ogerpon_ex_ignores_weakness(self):
         """ぶちやぶるは弱点を計算しない"""
         defender = MockCardData(cardId=999, weakness=EnergyType.FIGHTING)
-        assert lm._calc_attack_damage(lm.Ogerpon_ex, 140, 999, defender) == 140
+        assert lm._calc_attack_damage(lm.Ogerpon_ex, 140, 999, defender, card_table=lm.card_table) == 140
 
     def test_crustle_nullifies_mega_lucario_ex_damage(self):
         defender = MockCardData(cardId=lm.Crustle)
-        assert lm._calc_attack_damage(lm.Mega_Lucario_ex, 270, lm.Crustle, defender) == 0
+        assert lm._calc_attack_damage(lm.Mega_Lucario_ex, 270, lm.Crustle, defender, card_table=lm.card_table) == 0
 
     def test_crustle_does_not_nullify_ogerpon_ex_damage(self):
         """ぶちやぶるは相手にかかっている効果を計算しないためCrustleの特性を貫通する"""
         defender = MockCardData(cardId=lm.Crustle)
-        assert lm._calc_attack_damage(lm.Ogerpon_ex, 140, lm.Crustle, defender) == 140
+        assert lm._calc_attack_damage(lm.Ogerpon_ex, 140, lm.Crustle, defender, card_table=lm.card_table) == 140
 
     def test_crustle_does_not_nullify_non_ex_attacker_damage(self):
         """Crustleの特性はexポケモンの技のみを無効化する（Solrock等の非exは通常通り）"""
         defender = MockCardData(cardId=lm.Crustle)
-        assert lm._calc_attack_damage(lm.Solrock, 70, lm.Crustle, defender) == 70
+        assert lm._calc_attack_damage(lm.Solrock, 70, lm.Crustle, defender, card_table=lm.card_table) == 70
 
     def test_sylveon_nullifies_ex_attacker_damage(self):
         """Sylveon(330)もCrustleと同じ効果文の特性を持つため無効化対象に含める"""
         defender = MockCardData(cardId=lm.Sylveon)
-        assert lm._calc_attack_damage(lm.Mega_Lucario_ex, 270, lm.Sylveon, defender) == 0
+        assert lm._calc_attack_damage(lm.Mega_Lucario_ex, 270, lm.Sylveon, defender, card_table=lm.card_table) == 0
 
     def test_ogerpon_ex_bypasses_sylveon_ability(self):
         """ぶちやぶるはSylveonの特性も貫通する"""
         defender = MockCardData(cardId=lm.Sylveon)
-        assert lm._calc_attack_damage(lm.Ogerpon_ex, 140, lm.Sylveon, defender) == 140
+        assert lm._calc_attack_damage(lm.Ogerpon_ex, 140, lm.Sylveon, defender, card_table=lm.card_table) == 140
 
     def test_generalizes_to_any_ex_attacker_not_just_mega_lucario(self):
         """攻撃側がexなら誰でも無効化される（Mega_Lucario_ex固定ではなくCardData.ex/megaExで判定）"""
         defender = MockCardData(cardId=lm.Crustle)
-        assert lm._calc_attack_damage(337, 200, lm.Crustle, defender) == 0  # Archaludon ex（ex=True）
+        assert lm._calc_attack_damage(337, 200, lm.Crustle, defender, card_table=lm.card_table) == 0  # Archaludon ex（ex=True）
 
 
 class TestCalcAttackPlan:
@@ -335,6 +335,7 @@ class TestCalcAttackPlan:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=False, can_attack=False, my_prize=6,
+            card_table=lm.card_table,
         )
         assert result.attacker == -1
         assert result.target   == -1
@@ -351,6 +352,7 @@ class TestCalcAttackPlan:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=True, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
         )
         assert result.attacker     == 0
         assert result.attack_index == 1
@@ -368,6 +370,7 @@ class TestCalcAttackPlan:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=True, can_attack=True, my_prize=4,
+            card_table=lm.card_table,
         )
         assert result.attacker == 0
 
@@ -385,6 +388,7 @@ class TestCalcAttackPlan:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=False, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
         )
         assert result.attacker     == 0
         assert result.attack_index == 0
@@ -401,6 +405,7 @@ class TestCalcAttackPlan:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=True, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
         )
         assert result.attack_index == 0
 
@@ -416,6 +421,7 @@ class TestCalcAttackPlan:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=True, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
             rng=_StubRng(0.1),
         )
         assert result.attack_index == 1
@@ -432,6 +438,7 @@ class TestCalcAttackPlan:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=True, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
             rng=_StubRng(0.9),
         )
         assert result.attack_index == 0
@@ -448,6 +455,7 @@ class TestCalcAttackPlan:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=False, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
         )
         assert result.attacker  == 0
         assert result.remain_hp == 100 - 140
@@ -465,6 +473,7 @@ class TestCalcAttackPlan:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=False, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
         )
         assert result.remain_hp == 300 - 140
 
@@ -480,6 +489,7 @@ class TestCalcAttackPlan:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=False, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
         )
         assert result.attacker == -1
 
@@ -496,6 +506,7 @@ class TestCalcAttackPlan:
             defaultdict(int), defaultdict(int, {lm.Rock_Fighting_Energy: 1}), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=False, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
         )
         assert result.attacker == 0
 
@@ -511,6 +522,7 @@ class TestCalcAttackPlan:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=False, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
             stadium_id=lm.Nighttime_Mine,
         )
         assert result.attacker == -1
@@ -527,6 +539,7 @@ class TestCalcAttackPlan:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=False, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
             stadium_id=lm.Gravity_Mountain,
         )
         assert result.attacker == 0
@@ -543,6 +556,7 @@ class TestCalcAttackPlan:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=False, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
             stadium_id=lm.Nighttime_Mine,
         )
         assert result.attacker     == 0
@@ -562,6 +576,7 @@ class TestCalcAttackPlan:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=False, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
             stadium_id=lm.Nighttime_Mine,
         )
         assert result.attacker  == 0
@@ -584,6 +599,7 @@ class TestCrustleAbilityInteraction:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=True, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
         )
         assert result.remain_hp == 150  # 0ダメージなのでHPは変化しない
 
@@ -600,6 +616,7 @@ class TestCrustleAbilityInteraction:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=False, can_op_switch=False,
             can_use_mega_brave=False, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
         )
         assert result.remain_hp == 150 - 140
 
@@ -617,6 +634,7 @@ class TestCrustleAbilityInteraction:
             defaultdict(int), defaultdict(int), defaultdict(int),
             can_switch=True, can_op_switch=False,
             can_use_mega_brave=True, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
         )
         assert result.attacker  == 1  # my_cards=[active, *bench] → bench[0]はindex1
         assert result.remain_hp == 150 - 140
