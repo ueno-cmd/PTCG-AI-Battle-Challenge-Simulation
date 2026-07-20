@@ -457,8 +457,11 @@ def _score_attach_option(obs, o, my_index, current_plan, attacker1, op_active_nu
     score = energy_score(pokemon, o.inPlayArea == AreaType.ACTIVE, attacker1, op_active_nullifies_ex)
     if card.id == Rock_Fighting_Energy and o.inPlayArea == AreaType.ACTIVE:
         # Alakazam「ハンドパワー」はアクティブのポケモンのみを狙うため、
-        # そのときアクティブの子を優先的に守る
-        score += 500
+        # そのときアクティブの子を優先的に守る。ただし相手がex無効化持ちで
+        # 対象がexなら、この優先度がOgerpon_exへの優先度連動を上書きしてしまうため抑制する
+        attacker_is_ex = card_table[pokemon.id].ex or card_table[pokemon.id].megaEx
+        if not (op_active_nullifies_ex and attacker_is_ex):
+            score += 500
     if o.inPlayArea == AreaType.ACTIVE:
         if current_plan.attacker == 0 and current_plan.energy:
             score += 200

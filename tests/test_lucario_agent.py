@@ -1274,6 +1274,49 @@ class TestScoreCardOptionAttachFrom:
         assert with_flag > without_flag
 
 
+class TestScoreAttachOptionRockFightingEnergy:
+    """_score_attach_optionのRock_Fighting_Energy「アクティブ優先+500」ボーナスが、
+    相手がex無効化持ち・対象がexのときは抑制されることを確認するテスト"""
+
+    def _score(self, pokemon, op_active_nullifies_ex):
+        obs = MagicMock()
+        rock_energy_card = Card(id=lm.Rock_Fighting_Energy, serial=1, playerIndex=0)
+        my_state = make_player_state(active_pokemon=pokemon, hand=[rock_energy_card])
+        obs.current.players = [my_state, make_player_state()]
+        option = Option(
+            type=OptionType.ATTACH, area=lm.AreaType.HAND, index=0,
+            inPlayArea=lm.AreaType.ACTIVE, inPlayIndex=0,
+        )
+        return lm._score_attach_option(
+            obs, option, my_index=0, current_plan=lm.AttackPlan(),
+            attacker1=False, op_active_nullifies_ex=op_active_nullifies_ex,
+        )
+
+    def test_bonus_suppressed_for_ex_attacker_when_op_active_nullifies_ex(self):
+        """相手がex無効化持ちのとき、ex系アタッカー(メガルカリオex)への
+        +500ボーナスが抑制される（実バグの回帰テスト）"""
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, energies=[])
+        baseline = lm.energy_score(lucario, True, False, op_active_nullifies_ex=True)
+        attach_score = self._score(lucario, op_active_nullifies_ex=True)
+        assert attach_score == baseline
+
+    def test_bonus_still_applies_when_op_active_nullifies_ex_is_false(self):
+        """相手がex無効化持ちでなければ、ex系アタッカーにも+500ボーナスが
+        従来通り付与される（回帰確認）"""
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, energies=[])
+        baseline = lm.energy_score(lucario, True, False, op_active_nullifies_ex=False)
+        attach_score = self._score(lucario, op_active_nullifies_ex=False)
+        assert attach_score == baseline + 500
+
+    def test_bonus_still_applies_for_non_ex_attacker_even_when_nullifier_present(self):
+        """対象が非ex(ソルロック)なら、相手がex無効化持ちでも+500ボーナスは
+        維持される（回帰確認）"""
+        solrock = make_pokemon(id=lm.Solrock, energies=[])
+        baseline = lm.energy_score(solrock, True, False, op_active_nullifies_ex=True)
+        attach_score = self._score(solrock, op_active_nullifies_ex=True)
+        assert attach_score == baseline + 500
+
+
 class TestLunaCycleAbilityScore:
     def _obs_with_active_lunatone(self):
         lunatone = Card(id=lm.Lunatone, serial=1, playerIndex=0)
