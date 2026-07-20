@@ -1,5 +1,8 @@
 """ルカリオex Kaggle提出用notebook自動生成スクリプトの単体テスト"""
 import importlib.util
+import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -41,3 +44,25 @@ class TestBuildNotebook:
         assert "glob.glob" in code_sources
         assert "deck.csv" in code_sources
         assert "cg-lib/cg" in code_sources
+
+
+class TestMainEndToEnd:
+    def test_generates_valid_notebook_without_internal_imports(self):
+        result = subprocess.run(
+            [sys.executable, str(_SCRIPT)],
+            capture_output=True, text=True, check=True, cwd=_SCRIPT.parent.parent,
+        )
+        assert "wrote" in result.stdout
+
+        dst = _SCRIPT.parent.parent / "notebooks" / "submissions" / "lucario_agent_submission.ipynb"
+        assert dst.exists()
+        nb = json.loads(dst.read_text(encoding="utf-8"))
+        assert nb["nbformat"] == 4
+
+        write_cells = [
+            c for c in nb["cells"]
+            if c["cell_type"] == "code" and c["source"].startswith("%%writefile main.py")
+        ]
+        assert len(write_cells) == 1
+        assert "def agent(" in write_cells[0]["source"]
+        assert "from lucario_agent" not in write_cells[0]["source"]

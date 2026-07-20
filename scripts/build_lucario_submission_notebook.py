@@ -10,7 +10,16 @@ Kaggle上で「Upload Notebook」等によりファイルごと差し替える�
 Usage: uv run python scripts/build_lucario_submission_notebook.py
 """
 import ast
+import json
 import sys
+from pathlib import Path
+
+ROOT = Path(__file__).parent.parent
+SCRIPTS_DIR = ROOT / "scripts"
+DST = ROOT / "notebooks" / "submissions" / "lucario_agent_submission.ipynb"
+
+sys.path.insert(0, str(SCRIPTS_DIR))
+import build_lucario_submission_main as submission_builder  # noqa: E402
 
 
 def validate_syntax(combined: str) -> None:
@@ -64,3 +73,16 @@ def build_notebook(combined: str) -> dict:
         "nbformat": 4,
         "nbformat_minor": 5,
     }
+
+
+def main() -> None:
+    combined = submission_builder.build()
+    validate_syntax(combined)
+    nb = build_notebook(combined)
+    DST.parent.mkdir(parents=True, exist_ok=True)
+    DST.write_text(json.dumps(nb, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    print(f"wrote {DST}")
+
+
+if __name__ == "__main__":
+    main()
