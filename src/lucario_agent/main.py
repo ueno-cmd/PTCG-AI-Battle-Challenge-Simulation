@@ -5,7 +5,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 from cg.api import (
-    AreaType, CardType, EnergyType, Observation, SelectContext,
+    AreaType, CardType, Observation, SelectContext,
     OptionType, Card, Pokemon, Option, PlayerState, all_card_data, to_observation_class,
 )
 
