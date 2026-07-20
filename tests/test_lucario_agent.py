@@ -750,6 +750,31 @@ class TestScoreRetreatOption:
         assert lm._score_retreat_option(lm.AttackPlan(attacker=1)) == 2000
 
 
+class TestScoreOptionRetreatWiring:
+    """main.py側でRETREATケースがmy_state.active[0]とcard_tableを正しく渡すことの統合テスト"""
+
+    def test_score_option_retreat_uses_current_active_and_card_table(self):
+        """_score_optionがRETREATケースで現在のアクティブとcard_tableを_score_retreat_optionに渡す"""
+        from unittest.mock import MagicMock
+        from cg.api import Option, OptionType, SelectContext
+        from collections import defaultdict
+
+        megaex = make_pokemon(id=lm.Mega_Lucario_ex, hp=50)
+        my_state = make_player_state(active_pokemon=megaex, prize_count=6)
+        op_state = make_player_state(active_pokemon=make_pokemon(id=lm.Riolu, hp=100), prize_count=6)
+        plan = lm.AttackPlan(attacker=0, damage=0)
+        obs = MagicMock()
+        option = Option(type=OptionType.RETREAT)
+        score = lm._score_option(
+            obs=obs, o=option, context=SelectContext.MAIN, my_index=0,
+            state=_make_state(), my_state=my_state, op_state=op_state,
+            field_counts=defaultdict(int), hand_counts=defaultdict(int), discard_counts=defaultdict(int),
+            attacker1=False, current_plan=plan, can_attack=True,
+            stadium_id=0, ability_used_flag=False,
+        )
+        assert score == 2000
+
+
 class TestScoreAttackOptionChoice:
     """OptionType.ATTACK のスコアリング（_score_attack_option_choice）のテスト"""
 

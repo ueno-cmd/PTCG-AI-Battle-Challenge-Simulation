@@ -514,7 +514,11 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
                 return 8500 if _safe_draws(my_state) >= 3 and lunar_cycle_ready else -1
             return 30000
         case OptionType.RETREAT:
-            return _score_retreat_option(current_plan)
+            return _score_retreat_option(
+                current_plan,
+                my_state.active[0] if my_state.active else None,
+                card_table,
+            )
         case OptionType.ATTACK:
             return _score_attack_option_choice(o, current_plan)
         case _:
