@@ -188,6 +188,33 @@ class TestEnergyScoreOgerponEx:
         assert with_flag > without_flag
 
 
+class TestEnergyScoreNullifierPenaltyForLucarioLine:
+    """energy_scoreのMega_Lucario_ex/Riolu分岐に、相手がex無効化持ちのときの減点があることを確認するテスト
+    （Ogerpon_exには+150ボーナスがあるのに対応する減点が無かった実バグの回帰テスト）"""
+
+    def test_mega_lucario_ex_penalised_when_op_active_nullifies_ex(self):
+        p = make_pokemon(id=lm.Mega_Lucario_ex, energies=[])
+        without_flag = lm.energy_score(p, False, False, op_active_nullifies_ex=False)
+        with_flag    = lm.energy_score(p, False, False, op_active_nullifies_ex=True)
+        assert with_flag < without_flag
+
+    def test_riolu_penalised_when_op_active_nullifies_ex(self):
+        p = make_pokemon(id=lm.Riolu, energies=[])
+        without_flag = lm.energy_score(p, False, False, op_active_nullifies_ex=False)
+        with_flag    = lm.energy_score(p, False, False, op_active_nullifies_ex=True)
+        assert with_flag < without_flag
+
+    def test_solrock_beats_mega_lucario_ex_when_op_active_nullifies_ex(self):
+        """相手がex無効化持ちのとき、ソルロック(ex無効化されない非exアタッカー)が
+        ベンチのメガルカリオex(ex無効化される)より優先される（実ログ86898758で
+        確認された実バグの回帰テスト：メガルカリオexへエネルギーが偏り続けていた）"""
+        solrock = make_pokemon(id=lm.Solrock, energies=[])
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, energies=[])
+        solrock_score = lm.energy_score(solrock, False, False, op_active_nullifies_ex=True)
+        lucario_score = lm.energy_score(lucario, False, False, op_active_nullifies_ex=True)
+        assert solrock_score > lucario_score
+
+
 # ==================== Task 4: フィールド状態ヘルパー ====================
 from unittest.mock import MagicMock
 from cg.api import Card

@@ -75,6 +75,8 @@ def energy_score(pokemon: Pokemon, active: bool, attacker1: bool, op_active_null
             score += 100
         if attacker1:
             score -= 50
+        if op_active_nullifies_ex:
+            score -= 150  # 相手がex無効化持ちならOgerpon_ex/Solrockへ道を譲る
     elif pokemon.id == Ogerpon_ex:
         if energy_count < 3:
             score += 80
