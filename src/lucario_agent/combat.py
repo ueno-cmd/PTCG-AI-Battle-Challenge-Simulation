@@ -250,9 +250,15 @@ def calc_attack_plan(
     return new_plan
 
 
-def _score_retreat_option(current_plan: AttackPlan) -> int:
+def _score_retreat_option(current_plan: AttackPlan, my_active=None, card_table: dict | None = None) -> int:
     """OptionType.RETREAT のスコアを返す"""
-    return 2000 if current_plan.attacker >= 1 else -1
+    if current_plan.attacker >= 1:
+        return 2000  # より良いアタッカーへ切り替える
+    if current_plan.damage <= 0 and my_active is not None and card_table is not None:
+        data = card_table[my_active.id]
+        if data.megaEx or data.ex:
+            return 2000  # 無効化等で攻撃が無意味な高価値ポケモンを温存退却する
+    return -1
 
 
 def _score_attack_option_choice(o, current_plan: AttackPlan) -> int:

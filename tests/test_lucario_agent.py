@@ -710,6 +710,9 @@ class TestStayBonusDamageGating:
         assert result.damage == 140
 
 
+from tests.conftest import make_pokemon
+
+
 class TestScoreRetreatOption:
     """OptionType.RETREAT のスコアリング（_score_retreat_option）のテスト"""
 
@@ -722,6 +725,29 @@ class TestScoreRetreatOption:
     def test_negative_when_no_plan_computed(self):
         """plan未計算時のデフォルト(attacker=-1)でも退却は選ばれない"""
         assert lm._score_retreat_option(lm.AttackPlan()) == -1
+
+    def test_positive_when_ineffective_attack_and_high_value_active(self):
+        """居座り攻撃が無意味(damage<=0)で、現在のアクティブがex/megaExなら温存退却を推奨する"""
+        plan = lm.AttackPlan(attacker=0, damage=0)
+        megaex = make_pokemon(id=lm.Mega_Lucario_ex, hp=50)
+        assert lm._score_retreat_option(plan, megaex, lm.card_table) == 2000
+
+    def test_negative_when_ineffective_attack_but_regular_pokemon(self):
+        """無意味な攻撃でも、現在のアクティブが無印(非ex)なら温存退却は推奨しない"""
+        plan = lm.AttackPlan(attacker=0, damage=0)
+        regular = make_pokemon(id=lm.Riolu, hp=50)
+        assert lm._score_retreat_option(plan, regular, lm.card_table) == -1
+
+    def test_negative_when_attack_is_effective(self):
+        """実ダメージのある攻撃プランなら、温存退却の新分岐は発火しない"""
+        plan = lm.AttackPlan(attacker=0, damage=130)
+        megaex = make_pokemon(id=lm.Mega_Lucario_ex, hp=50)
+        assert lm._score_retreat_option(plan, megaex, lm.card_table) == -1
+
+    def test_existing_calls_remain_backward_compatible(self):
+        """my_active/card_tableを省略した既存呼び出しは非破壊のまま-1/2000を返す"""
+        assert lm._score_retreat_option(lm.AttackPlan(attacker=0)) == -1
+        assert lm._score_retreat_option(lm.AttackPlan(attacker=1)) == 2000
 
 
 class TestScoreAttackOptionChoice:
