@@ -243,3 +243,18 @@ def calc_attack_plan(
                     new_plan.energy       = more_energy
 
     return new_plan
+
+
+def _score_retreat_option(current_plan: AttackPlan) -> int:
+    """OptionType.RETREAT のスコアを返す"""
+    return 2000 if current_plan.attacker >= 1 else -1
+
+
+def _score_attack_option_choice(o, current_plan: AttackPlan) -> int:
+    """OptionType.ATTACK のスコアを返す"""
+    score = 1000
+    if current_plan.attack_index == 1:
+        score += 100 if o.attackId == 983 else 0  # Mega Brave 優先
+    else:
+        score += 0 if o.attackId == 983 else 100
+    return score

@@ -640,6 +640,36 @@ class TestCrustleAbilityInteraction:
         assert result.remain_hp == 150 - 140
 
 
+class TestScoreRetreatOption:
+    """OptionType.RETREAT のスコアリング（_score_retreat_option）のテスト"""
+
+    def test_negative_when_plan_keeps_current_attacker(self):
+        assert lm._score_retreat_option(lm.AttackPlan(attacker=0)) == -1
+
+    def test_high_score_when_plan_switches_attacker(self):
+        assert lm._score_retreat_option(lm.AttackPlan(attacker=1)) == 2000
+
+    def test_negative_when_no_plan_computed(self):
+        """plan未計算時のデフォルト(attacker=-1)でも退却は選ばれない"""
+        assert lm._score_retreat_option(lm.AttackPlan()) == -1
+
+
+class TestScoreAttackOptionChoice:
+    """OptionType.ATTACK のスコアリング（_score_attack_option_choice）のテスト"""
+
+    def test_prefers_mega_brave_when_plan_selects_it(self):
+        plan = lm.AttackPlan(attack_index=1)
+        mega_brave = Option(type=OptionType.ATTACK, attackId=983)
+        normal     = Option(type=OptionType.ATTACK, attackId=100)
+        assert lm._score_attack_option_choice(mega_brave, plan) > lm._score_attack_option_choice(normal, plan)
+
+    def test_prefers_normal_attack_when_plan_selects_it(self):
+        plan = lm.AttackPlan(attack_index=0)
+        mega_brave = Option(type=OptionType.ATTACK, attackId=983)
+        normal     = Option(type=OptionType.ATTACK, attackId=100)
+        assert lm._score_attack_option_choice(normal, plan) > lm._score_attack_option_choice(mega_brave, plan)
+
+
 # ==================== Task 6: agent() 統合テスト ====================
 from unittest.mock import patch
 from tests.conftest import make_main_obs

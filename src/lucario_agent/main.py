@@ -24,6 +24,8 @@ from lucario_agent.combat import (
     _tera_stadium_cost_bonus,
     _calc_attack_damage,
     calc_attack_plan,
+    _score_retreat_option,
+    _score_attack_option_choice,
 )
 
 EPSILON = 0.28  # 温存判断時に探索的先出しをする確率
@@ -509,14 +511,9 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
                 return 8500 if _safe_draws(my_state) >= 3 and lunar_cycle_ready else -1
             return 30000
         case OptionType.RETREAT:
-            return 2000 if current_plan.attacker >= 1 else -1
+            return _score_retreat_option(current_plan)
         case OptionType.ATTACK:
-            score = 1000
-            if current_plan.attack_index == 1:
-                score += 100 if o.attackId == 983 else 0  # Mega Brave 優先
-            else:
-                score += 0 if o.attackId == 983 else 100
-            return score
+            return _score_attack_option_choice(o, current_plan)
         case _:
             return 0
 
