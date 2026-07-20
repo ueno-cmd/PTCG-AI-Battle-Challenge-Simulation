@@ -45,6 +45,7 @@
 `src/lucario_agent/combat.py`（新規）に以下を移動する。
 
 - `AttackPlan`データクラス（main.py:77-82）
+- `prize_count`（main.py:122-132）・`pokemon_score`（main.py:135-151）：`calc_attack_plan`が内部で直接呼び出しており、かつ両関数とも`card_table`を参照するため、`_tera_stadium_cost_bonus`と同じ理由（main.pyへの逆import回避）で同時に移動する。他の呼び出し元は存在しない（grep確認済み）
 - `energy_score`（main.py:154-181）
 - `_calc_attack_damage`（main.py:252-271）
 - `_tera_stadium_cost_bonus`（main.py:222-226）：`calc_attack_plan`が内部で直接呼び出しており（main.py:335）、切り離すと`main.py`への逆import（循環import）が必要になるため同時に移動する
@@ -89,11 +90,22 @@ case OptionType.ATTACK:
 
 ### `card_table`の暗黙グローバル参照を解消する
 
-現状、`_calc_attack_damage`（`card_table[attacker_id].ex`等）と`_tera_stadium_cost_bonus`（`card_table[pokemon_id].tera`）は、`main.py`モジュール直下のグローバル変数`card_table`（`_build_card_table()`が`global card_table`で更新する辞書）を暗黙に参照している。この2関数を`combat.py`へ移動すると、`combat.py`が`main.py`の同じ辞書インスタンスを暗黙に参照する手段がなくなる（`from lucario_agent.main import card_table`は値のコピーを束縛してしまい、後から`main.py`側で辞書が更新されても`combat.py`側の参照は更新前の空辞書のままになる、かつ循環importでもある）。
+現状、`prize_count`・`pokemon_score`（`card_table[pokemon.id]`）・`_calc_attack_damage`（`card_table[attacker_id].ex`等）・`_tera_stadium_cost_bonus`（`card_table[pokemon_id].tera`）は、`main.py`モジュール直下のグローバル変数`card_table`（`_build_card_table()`が`global card_table`で更新する辞書）を暗黙に参照している。この4関数を`combat.py`へ移動すると、`combat.py`が`main.py`の同じ辞書インスタンスを暗黙に参照する手段がなくなる（`from lucario_agent.main import card_table`は値のコピーを束縛してしまい、後から`main.py`側で辞書が更新されても`combat.py`側の参照は更新前の空辞書のままになる、かつ循環importでもある）。
 
-そのため、この2関数と`calc_attack_plan`のシグネチャに`card_table: dict`を明示的な引数として追加し、暗黙のグローバル参照をやめる。呼び出し元の`agent()`（main.py側に残る）は、既に`_build_card_table()`で取得した`card_table`を持っているため、`calc_attack_plan(...)`呼び出し時に`card_table=card_table`を渡すだけでよい。
+そのため、この4関数と`calc_attack_plan`のシグネチャに`card_table: dict`を明示的な引数として追加し、暗黙のグローバル参照をやめる。呼び出し元の`agent()`（main.py側に残る）は、既に`_build_card_table()`で取得した`card_table`を持っているため、`calc_attack_plan(...)`呼び出し時に`card_table=card_table`を渡すだけでよい。
 
 ```python
+def prize_count(pokemon: Pokemon, card_table: dict) -> int:
+    ...
+    data = card_table[pokemon.id]
+    ...
+
+def pokemon_score(pokemon: Pokemon, card_table: dict) -> int:
+    ...
+    data  = card_table[pokemon.id]
+    score = prize_count(pokemon, card_table) * 1000
+    ...
+
 def _calc_attack_damage(attacker_id: int, base_damage: int, defender_id: int, defender_data, card_table: dict) -> int:
     ...
     attacker_is_ex = card_table[attacker_id].ex or card_table[attacker_id].megaEx
