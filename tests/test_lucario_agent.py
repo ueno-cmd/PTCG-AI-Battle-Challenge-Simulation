@@ -1246,6 +1246,34 @@ class TestDiscardContext:
         assert score == 10
 
 
+class TestScoreCardOptionAttachFrom:
+    """SelectContext.ATTACH_FROM のスコアリング（_score_card_option）で
+    op_active_nullifies_exが正しくenergy_scoreへ転送されることを確認するテスト"""
+
+    def _score(self, pokemon, op_active_nullifies_ex):
+        obs = MagicMock()
+        my_state = make_player_state(bench=[pokemon])
+        obs.current.players = [my_state, make_player_state()]
+        option = Option(type=OptionType.CARD, area=lm.AreaType.BENCH, index=0, playerIndex=0)
+        return lm._score_card_option(
+            obs, option, context=lm.SelectContext.ATTACH_FROM, my_index=0,
+            state=_make_state(), my_state=my_state,
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), ability_used_flag=False,
+            op_active_nullifies_ex=op_active_nullifies_ex,
+        )
+
+    def test_ogerpon_ex_gets_nullify_bonus_via_attach_from(self):
+        """ATTACH_FROM経由でop_active_nullifies_exが転送され、
+        オーガポンexのスコアが相手ex無効化持ち時に上がることを確認する
+        （転送漏れの実バグの回帰テスト）"""
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, energies=[])
+        without_flag = self._score(ogerpon, op_active_nullifies_ex=False)
+        with_flag    = self._score(ogerpon, op_active_nullifies_ex=True)
+        assert with_flag > without_flag
+
+
 class TestLunaCycleAbilityScore:
     def _obs_with_active_lunatone(self):
         lunatone = Card(id=lm.Lunatone, serial=1, playerIndex=0)

@@ -245,7 +245,7 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
             return 10
 
         case SelectContext.ATTACH_FROM:
-            return energy_score(card, o.area == AreaType.ACTIVE, attacker1)
+            return energy_score(card, o.area == AreaType.ACTIVE, attacker1, op_active_nullifies_ex)
 
         case _:
             return 0
