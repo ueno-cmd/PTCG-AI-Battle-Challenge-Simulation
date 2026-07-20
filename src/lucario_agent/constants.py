@@ -1,0 +1,26 @@
+# ==================== カードID定数 ====================
+Lunatone              = 675
+Solrock               = 676
+Riolu                 = 677
+Mega_Lucario_ex       = 678
+Premium_Power_Pro     = 1141
+Fighting_Gong         = 1142
+Poke_Pad              = 1152
+Hero_Cape             = 1159
+Boss_Orders           = 1182
+Lillie_Determination  = 1227
+Gravity_Mountain      = 1252
+Nighttime_Mine        = 1266  # テラスタルポケモンの技コスト+1（両プレイヤー対象）
+Basic_Fighting_Energy = 6
+Rock_Fighting_Energy  = 20  # ロック闘エネルギー：装着ポケモンは相手の技の"効果"を受けない（Alakazam「ハンドパワー」対策）
+Ultra_Ball                 = 1121
+Pokegear                   = 1122
+Night_Stretcher            = 1097
+Judge                      = 1213
+Hilda                      = 1225
+Wally_Compassion           = 1229
+Ciphermaniac_Codebreaking  = 1188
+Ogerpon_ex                 = 117
+Crustle                     = 345  # 特性「ふしぎな岩の宿」：相手の「ポケモン【ex】」の技ダメージを無効化する壁ポケモン
+Sylveon                     = 330  # 特性「Safeguard」：Crustleと同一効果文（相手のポケモンexの技ダメージを無効化）
+EX_DAMAGE_NULLIFIER_IDS = frozenset({Crustle, Sylveon})
