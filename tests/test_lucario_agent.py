@@ -687,6 +687,29 @@ class TestAttackPlanDamageField:
         assert result.damage == 130
 
 
+class TestStayBonusDamageGating:
+    """位置ボーナス(i==0/j==0)がダメージ0のプランに加算されないことを確認する回帰テスト"""
+
+    def test_switches_to_real_damage_plan_over_zero_damage_stay(self, mock_card_table):
+        """Crustle対面で、0ダメージの居座りよりOgerpon_exへの切替(実ダメージ)が選ばれる"""
+        mock_card_table[lm.Crustle] = MockCardData(cardId=lm.Crustle, weakness=EnergyType.FIRE)
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, hp=300, energies=[6, 6])
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, hp=210, energies=[6, 6, 6])
+        my_ps = make_player_state(active_pokemon=lucario, bench=[ogerpon], prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=lm.Crustle, hp=2000), prize_count=6)
+        obs = MagicMock()
+        obs.select.option = []
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int), defaultdict(int),
+            can_switch=True, can_op_switch=False,
+            can_use_mega_brave=False, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
+        )
+        assert result.attacker == 1  # bench[0]=Ogerpon_exへの切替
+        assert result.damage == 140
+
+
 class TestScoreRetreatOption:
     """OptionType.RETREAT のスコアリング（_score_retreat_option）のテスト"""
 

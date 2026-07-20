@@ -231,10 +231,11 @@ def calc_attack_plan(
                 if len(op_state.prize) <= prize:
                     score = 50000
 
-                if i == 0:
-                    score += 220
-                if j == 0:
-                    score += 300
+                if damage > 0:
+                    if i == 0:
+                        score += 220
+                    if j == 0:
+                        score += 300
                 score += energy_count
 
                 if best_score < score:
