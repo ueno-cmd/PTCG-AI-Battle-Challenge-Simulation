@@ -21,6 +21,7 @@ class AttackPlan:
     attack_index: int  = -1
     remain_hp:    int  = -1
     energy:       bool = False
+    damage:       int  = -1
 
 
 def prize_count(pokemon: Pokemon, card_table: dict) -> int:
@@ -243,6 +244,7 @@ def calc_attack_plan(
                     new_plan.attack_index = a
                     new_plan.remain_hp    = op_pokemon.hp - damage
                     new_plan.energy       = more_energy
+                    new_plan.damage       = damage
 
     return new_plan
 
