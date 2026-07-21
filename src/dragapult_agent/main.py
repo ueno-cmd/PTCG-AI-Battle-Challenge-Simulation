@@ -1,4 +1,5 @@
 import os
+import random
 import sys
 from collections import defaultdict
 
@@ -44,6 +45,22 @@ def _build_card_table() -> dict:
     return card_table
 
 UNNECESSARY = -10000000
+BOSS_ORDERS_EXPLORE_EPSILON = 0.28  # ルカリオexのEPSILON（src/lucario_agent/combat.py:13）と同値を初期値として踏襲
+_dragapult_rng = random.Random()  # 本番用の実乱数。テストでは_boss_orders_scoreを直接呼び乱数を注入する
+
+
+def _boss_orders_score(has_pull_target: bool, explore_roll: float, epsilon: float) -> int:
+    """ボスの指令のスコアを返す。
+    has_pull_target: 現在のベスト攻撃プランがベンチの相手を狙っているか（plan_a.attack > 0）
+    explore_roll: 探索的先出し判定用の乱数値（0.0以上1.0未満）
+    epsilon: 探索的先出しを行う確率の閾値
+    """
+    if has_pull_target:
+        return 60000  # ベストプランがベンチ狙いを示している：即使用
+    if explore_roll < epsilon:
+        return 30000  # 確定的な引き剥がし先がなくても、一定確率で探索的に先出しする
+    return 0  # 温存
+
 
 class AttackPlan:
     attack: int = 0
@@ -543,8 +560,7 @@ def agent(obs_dict: dict) -> list[int]:
         elif id == Lucky_Helmet:
             score = 15
         elif id == Boss_Orders:
-            if plan_a.attack > 0:
-                score = 60000
+            score = _boss_orders_score(plan_a.attack > 0, _dragapult_rng.random(), BOSS_ORDERS_EXPLORE_EPSILON)
         elif id == Crispin:
             if not ignore_count or support_count == 0:
                 if deck_counts[Basic_Fire_Energy] == 0 or deck_counts[Basic_Psychic_Energy] == 0:
