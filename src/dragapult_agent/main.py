@@ -3,6 +3,13 @@ import sys
 from collections import defaultdict
 
 from cg.api import AreaType, CardType, Log, LogType, Observation, SelectContext, OptionType, Card, Pokemon, State, all_card_data, to_observation_class
+from dragapult_agent.constants import (
+    Dreepy, Drakloak, Dragapult_ex, Fezandipiti_ex, Latias_ex, Budew,
+    Meowth_ex, Rare_Candy, Unfair_Stamp, Buddy_Buddy_Poffin, Night_Stretcher,
+    Crushing_Hammer, Ultra_Ball, Poke_Pad, Lucky_Helmet, Boss_Orders, Crispin,
+    Brock_Scouting, Lillie_Determination, Team_Rocket_Watchtower,
+    Basic_Fire_Energy, Basic_Psychic_Energy,
+)
 
 """
 Dragapult ex Deck
@@ -35,30 +42,6 @@ def _build_card_table() -> dict:
     if not card_table:
         card_table = {c.cardId: c for c in all_card_data()}
     return card_table
-
-# Decklist
-Dreepy = 119  # ×4
-Drakloak = 120  # ×4
-Dragapult_ex = 121  # ×3
-Fezandipiti_ex = 140  # ×1
-Latias_ex = 184  # ×1
-Budew = 235  # ×2
-Meowth_ex = 1071  # ×1
-Rare_Candy = 1079  # ×2
-Unfair_Stamp = 1080  # ×1
-Buddy_Buddy_Poffin = 1086  # ×4
-Night_Stretcher = 1097  # ×2
-Crushing_Hammer = 1120  # ×4
-Ultra_Ball = 1121  # ×4
-Poke_Pad = 1152  # x3
-Lucky_Helmet = 1156  # ×1
-Boss_Orders = 1182  # ×3
-Crispin = 1198  # ×4
-Brock_Scouting = 1210  # ×2
-Lillie_Determination = 1227  # ×4
-Team_Rocket_Watchtower = 1256  # ×2
-Basic_Fire_Energy = 2  # ×4
-Basic_Psychic_Energy = 5  # ×4
 
 UNNECESSARY = -10000000
 
