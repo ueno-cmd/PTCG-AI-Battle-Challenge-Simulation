@@ -42,7 +42,7 @@ Kaggle公式サンプルの「ドラパルトex」エージェント（`notebook
 ### Task 3: Kaggle公式サンプルの移植
 
 **ファイル作成**:
-- `src/dragapult_agent/main.py`: 867行（サンプル854行＋遅延初期化2箇所）
+- `src/dragapult_agent/main.py`: 866行（サンプル854行＋遅延初期化2箇所、実測値。最終レビュー指摘#3で867行から修正）
 - `tests/test_dragapult_agent_import.py`: importテスト
 
 **実装内容**:

@@ -1,6 +1,5 @@
 import os
 import random
-import sys
 from collections import defaultdict
 
 from cg.api import AreaType, CardType, Log, LogType, Observation, SelectContext, OptionType, Card, Pokemon, State, all_card_data, to_observation_class
@@ -310,6 +309,7 @@ def agent(obs_dict: dict) -> list[int]:
         # In the initial selection, the obs.select is None, and it is necessary to return the deck.
         # The deck is a list of 60 card IDs.
         # The deck must comply with the Pokémon Trading Card Game rules.
+        _load_deck()
         return my_deck
 
     global pre_turn_log
