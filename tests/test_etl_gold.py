@@ -223,3 +223,17 @@ def test_tracker_move_card_to_active_removes_serial_from_bench():
     tracker.apply({"type": 6, "playerIndex": 0, "cardId": 119, "serial": 69, "fromArea": 5, "toArea": 4})
     assert tracker.active_serial == 69
     assert 69 not in tracker.bench_serials
+
+
+def test_tracker_full_game_replay_matches_snapshot_energy_count(sample_log):
+    from etl.gold import _find_energy_count
+
+    tracker = GameStateTracker(target_player_index=1)
+    timeline = build_event_timeline(sample_log, player_index=0)
+    for step_index, event in timeline:
+        tracker.apply(event)
+        if step_index > 20:
+            break
+
+    expected = _find_energy_count(sample_log, step_index=20, owner_index=1, serial=66)
+    assert tracker.energy_count[66] == expected
