@@ -226,14 +226,16 @@ def test_tracker_move_card_to_active_removes_serial_from_bench():
 
 
 def test_tracker_full_game_replay_matches_snapshot_energy_count(sample_log):
+    """step_indexが20以下のイベントのみを適用し、step=20時点での正確な状態を再現することを確認。
+    境界チェックをapply前に行わないと、step>20の最初のイベントが誤ってapplyされてしまう"""
     from etl.gold import _find_energy_count
 
     tracker = GameStateTracker(target_player_index=1)
     timeline = build_event_timeline(sample_log, player_index=0)
     for step_index, event in timeline:
-        tracker.apply(event)
         if step_index > 20:
             break
+        tracker.apply(event)
 
     expected = _find_energy_count(sample_log, step_index=20, owner_index=1, serial=66)
     assert tracker.energy_count[66] == expected
