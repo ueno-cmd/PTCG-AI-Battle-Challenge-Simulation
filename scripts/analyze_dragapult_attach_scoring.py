@@ -26,11 +26,26 @@ from cg.api import Card, CardType  # noqa: E402
 
 import dragapult_agent.main as dm  # noqa: E402
 from etl.gold import (  # noqa: E402
-    GameStateTracker, LOG_TYPE_ATTACH, LOG_TYPE_PLAY, build_event_timeline,
-    find_player_index, load_pokemon_card_ids, load_raw_log, load_tool_card_ids,
+    GameStateTracker, LOG_TYPE_ATTACH, LOG_TYPE_MOVE_CARD, LOG_TYPE_PLAY,
+    build_event_timeline, find_player_index, load_pokemon_card_ids,
+    load_raw_log, load_tool_card_ids,
 )
 
 CARD_DATA_CSV = ROOT / "data" / "competition" / "EN_Card_Data.csv"
+
+
+def _is_crispin_effect_passthrough(event: dict) -> bool:
+    """クリスピン(ID1198)の効果文「...1枚を手札に入れる。もう1枚を...ポケモンに
+    つける。その後、山札を切る」の解決過程で、PLAYとATTACHの間に必ず挟まる
+    自分自身の付随イベントかどうかを判定する。実ログ(data/battle_logs/87204277.json)で
+    2パターン確認済み: MOVE_CARD(山札→手札)と、SHUFFLE(type=0)。
+    どちらもクリスピン由来のATTACH検出でpendingを途切れさせてはいけない。"""
+    event_type = event.get("type")
+    if event_type == 0:  # SHUFFLE
+        return True
+    if event_type == LOG_TYPE_MOVE_CARD and event.get("fromArea") == 1 and event.get("toArea") == 2:
+        return True
+    return False
 
 
 def field_counts_from_tracker(tracker: GameStateTracker) -> dict:
@@ -159,14 +174,18 @@ def build_report(battle_log_paths: list, target_player_name: str) -> str:
         )
         timeline = build_event_timeline(data, player_index=target_index)
         # クリスピン(アカマツ)の効果は「PLAY直後、他の自分イベントを挟まずに続くATTACH」として
-        # 検知する。デッキ検索で異なるタイプのエネルギーが2種見つからなければ何も装着されない
-        # ことがあるため、ATTACH以外の自分イベント(またはログ終端)が来たらフラグを解除する
+        # 検知する。ただし効果解決の途中で発生する自分自身の付随イベント
+        # (山札→手札のMOVE_CARD、SHUFFLE)はpendingを解除しない
+        # (_is_crispin_effect_passthrough参照)。デッキ検索で異なるタイプのエネルギーが
+        # 2種見つからなければ何も装着されないことがあるため、それ以外の自分イベントが
+        # 来たらフラグを解除する
         crispin_pending = False
         for step_index, event in timeline:
             if event.get("playerIndex") == target_index:
-                if event.get("type") == LOG_TYPE_PLAY and event.get("cardId") == dm.Crispin:
+                event_type = event.get("type")
+                if event_type == LOG_TYPE_PLAY and event.get("cardId") == dm.Crispin:
                     crispin_pending = True
-                elif event.get("type") == LOG_TYPE_ATTACH:
+                elif event_type == LOG_TYPE_ATTACH:
                     crispin_bonus_active = crispin_pending
                     crispin_pending = False
                     if (event.get("cardId") not in tool_card_ids
@@ -180,6 +199,8 @@ def build_report(battle_log_paths: list, target_player_name: str) -> str:
                             manual_review.append((log_path.stem, step_index))
                         elif verdict["contradiction"]:
                             contradictions.append((log_path.stem, step_index))
+                elif crispin_pending and _is_crispin_effect_passthrough(event):
+                    pass  # クリスピン自身の効果解決に付随するイベント(山札からハンドへ・シャッフル)。pendingを維持する
                 else:
                     crispin_pending = False
             tracker.apply(event)

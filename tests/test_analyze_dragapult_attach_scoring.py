@@ -12,7 +12,8 @@ from cg.api import CardType
 import dragapult_agent.main as dm
 from etl.gold import GameStateTracker
 from analyze_dragapult_attach_scoring import (
-    evaluate_attach_event, field_counts_from_tracker, is_bench_attacker,
+    _is_crispin_effect_passthrough, evaluate_attach_event,
+    field_counts_from_tracker, is_bench_attacker,
 )
 
 DRAGAPULT_EX = 121
@@ -151,3 +152,20 @@ def test_evaluate_attach_event_crispin_bonus_changes_verdict(mock_card_table):
     )
     assert without_bonus["contradiction"] is False
     assert with_bonus["contradiction"] is True
+
+
+def test_is_crispin_effect_passthrough_accepts_shuffle():
+    assert _is_crispin_effect_passthrough({"type": 0, "playerIndex": 0}) is True
+
+
+def test_is_crispin_effect_passthrough_accepts_deck_to_hand_move():
+    assert _is_crispin_effect_passthrough({"type": 6, "playerIndex": 0, "fromArea": 1, "toArea": 2}) is True
+
+
+def test_is_crispin_effect_passthrough_rejects_other_move_card():
+    """山札からの手札移動以外(例: エネルギーゾーンから捨て札等)は通過扱いしない"""
+    assert _is_crispin_effect_passthrough({"type": 6, "playerIndex": 0, "fromArea": 8, "toArea": 3}) is False
+
+
+def test_is_crispin_effect_passthrough_rejects_attack():
+    assert _is_crispin_effect_passthrough({"type": 15, "playerIndex": 0}) is False
