@@ -43,6 +43,75 @@ def _build_card_table() -> dict:
         card_table = {c.cardId: c for c in all_card_data()}
     return card_table
 
+
+def _attach_score(
+    attach_id: int,
+    pokemon: Pokemon,
+    active: bool,
+    *,
+    card_table: dict,
+    can_switch: bool,
+    bench_attacker: bool,
+    no_more_dex: bool,
+    field_counts: dict,
+    my_asleep: bool,
+    my_paralyzed: bool,
+) -> int:
+    energy_count = len(pokemon.energies)
+    if card_table[attach_id].cardType == CardType.TOOL:
+        # Attach tool
+        score = 60000
+        if active:
+            score += 1000
+        return score
+
+    # Attach energy
+    if pokemon.id == Budew:
+        return -1
+    elif pokemon.id == Meowth_ex or pokemon.id == Fezandipiti_ex or pokemon.id == Latias_ex:
+        if active and not can_switch and not my_asleep and not my_paralyzed:
+            if bench_attacker or field_counts[Budew] >= 1:
+                return 22000
+            else:
+                return 18000
+        else:
+            return -1
+    if active and can_main_attack:
+        return -1
+    score = 20000
+    if energy_count >= 2:
+        if active and not can_switch and not my_asleep and not my_paralyzed:
+            score += 200
+        else:
+            return -1
+    elif energy_count == 1:
+        if attach_id == pokemon.energyCards[0].id:
+            return -1
+        if pokemon.id == Dragapult_ex:
+            score += 250
+        elif pokemon.id == Dreepy:
+            score -= 150
+        else:
+            score -= 200
+        if active:
+            score += 200
+    else:  # energy_count == 0
+        if active:
+            if bench_attacker:
+                score += 400
+        else:
+            if pokemon.id == Dragapult_ex:
+                score += 150
+            elif pokemon.id == Dreepy:
+                score += 100
+            else:
+                score += 50
+            if bench_attacker:
+                score -= 200
+    if no_more_dex and (pokemon.id == Dreepy or pokemon.id == Drakloak):
+        score -= 500
+    return score
+
 UNNECESSARY = -10000000
 BOSS_ORDERS_EXPLORE_EPSILON = 0.28  # ルカリオexのEPSILON（src/lucario_agent/combat.py:13）と同値を初期値として踏襲
 _dragapult_rng = random.Random()  # 本番用の実乱数。テストでは_boss_orders_scoreを直接呼び乱数を注入する
@@ -409,62 +478,6 @@ def agent(obs_dict: dict) -> list[int]:
     for card in my_state.discard:
         discard_counts[card.id] += 1
 
-    def attach_score(attach_id: int, pokemon: Pokemon, active: bool) -> int:
-        energy_count = len(pokemon.energies)
-        if card_table[attach_id].cardType == CardType.TOOL:
-            # Attach tool
-            score = 60000
-            if active:
-                score += 1000
-            return score
-        
-        # Attach energy
-        if pokemon.id == Budew:
-            return -1
-        elif pokemon.id == Meowth_ex or pokemon.id == Fezandipiti_ex or pokemon.id == Latias_ex:
-            if active and not can_switch and not my_state.asleep and not my_state.paralyzed:
-                if bench_attacker or field_counts[Budew] >= 1:
-                    return 22000
-                else:
-                    return 18000
-            else:
-                return -1
-        if active and can_main_attack:
-            return -1
-        score = 20000
-        if energy_count >= 2:
-            if active and not can_switch and not my_state.asleep and not my_state.paralyzed:
-                score += 200
-            else:
-                return -1
-        elif energy_count == 1:
-            if attach_id == pokemon.energyCards[0].id:
-                return -1
-            if pokemon.id == Dragapult_ex:
-                score += 250
-            elif pokemon.id == Dreepy:
-                score -= 150
-            else:
-                score -= 200
-            if active:
-                score += 200
-        else:  # energy_count == 0
-            if active:
-                if bench_attacker:
-                    score += 400
-            else:
-                if pokemon.id == Dragapult_ex:
-                    score += 150
-                elif pokemon.id == Dreepy:
-                    score += 100
-                else:
-                    score += 50
-                if bench_attacker:
-                    score -= 200
-        if no_more_dex and (pokemon.id == Dreepy or pokemon.id == Drakloak):
-            score -= 500
-        return score
-    
     def hand_score(id: int, ignore_count: bool):
         score = 0
         if id == Dreepy:
@@ -590,9 +603,19 @@ def agent(obs_dict: dict) -> list[int]:
                 for pokemon in my_state.active:
                     if pokemon == None:
                         continue
-                    max_score = max(max_score, attach_score(id, pokemon, True))
+                    max_score = max(max_score, _attach_score(
+                        id, pokemon, True,
+                        card_table=card_table, can_switch=can_switch, bench_attacker=bench_attacker,
+                        no_more_dex=no_more_dex, field_counts=field_counts,
+                        my_asleep=my_state.asleep, my_paralyzed=my_state.paralyzed,
+                    ))
                 for pokemon in my_state.bench:
-                    max_score = max(max_score, attach_score(id, pokemon, False))
+                    max_score = max(max_score, _attach_score(
+                        id, pokemon, False,
+                        card_table=card_table, can_switch=can_switch, bench_attacker=bench_attacker,
+                        no_more_dex=no_more_dex, field_counts=field_counts,
+                        my_asleep=my_state.asleep, my_paralyzed=my_state.paralyzed,
+                    ))
                 score = max_score - 5000
                 if can_main_attack or bench_attacker:
                     score /= 10
@@ -727,7 +750,12 @@ def agent(obs_dict: dict) -> list[int]:
                             if no_damage_counter(card):
                                 score = -1
                 elif context == SelectContext.ATTACH_FROM:
-                    score = attach_score(context_card_id, card, o.area == AreaType.ACTIVE)
+                    score = _attach_score(
+                        context_card_id, card, o.area == AreaType.ACTIVE,
+                        card_table=card_table, can_switch=can_switch, bench_attacker=bench_attacker,
+                        no_more_dex=no_more_dex, field_counts=field_counts,
+                        my_asleep=my_state.asleep, my_paralyzed=my_state.paralyzed,
+                    )
                     if card.id == Dragapult_ex:
                         score += 200
         elif o.type == OptionType.ENERGY_CARD or o.type == OptionType.ENERGY:
@@ -823,7 +851,12 @@ def agent(obs_dict: dict) -> list[int]:
         elif o.type == OptionType.ATTACH:
             card = get_card(obs, o.area, o.index, my_index)
             pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
-            score = attach_score(card.id, pokemon, o.inPlayArea == AreaType.ACTIVE)
+            score = _attach_score(
+                card.id, pokemon, o.inPlayArea == AreaType.ACTIVE,
+                card_table=card_table, can_switch=can_switch, bench_attacker=bench_attacker,
+                no_more_dex=no_more_dex, field_counts=field_counts,
+                my_asleep=my_state.asleep, my_paralyzed=my_state.paralyzed,
+            )
         elif o.type == OptionType.EVOLVE:
             pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
             score += len(pokemon.energies)
