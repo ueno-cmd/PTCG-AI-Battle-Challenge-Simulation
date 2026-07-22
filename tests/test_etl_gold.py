@@ -239,3 +239,11 @@ def test_tracker_full_game_replay_matches_snapshot_energy_count(sample_log):
 
     expected = _find_energy_count(sample_log, step_index=20, owner_index=1, serial=66)
     assert tracker.energy_count[66] == expected
+
+
+def test_load_tool_card_ids_returns_pokemon_tool_ids():
+    from etl.gold import load_tool_card_ids
+
+    tool_ids = load_tool_card_ids(CARD_DATA_PATH)
+    assert 1159 in tool_ids  # Hero's Cape (Pokémon Tool、feedback_ace_spec_deck_ruleで既知)
+    assert 1 not in tool_ids  # Basic {G} Energy はTool ではない

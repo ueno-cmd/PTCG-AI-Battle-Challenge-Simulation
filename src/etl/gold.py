@@ -58,6 +58,22 @@ def load_card_names(csv_path: Path) -> dict[int, tuple[str, str]]:
     return mapping
 
 
+def load_tool_card_ids(csv_path: Path) -> frozenset:
+    """EN_Card_Data.csvから「Pokémon Tool」カテゴリのCard IDだけを集めたfrozensetを返す。
+
+    cg.apiのCardType.TOOLと同じ意味だが、ネイティブライブラリ(cg.sim)を使わず
+    CSVだけから判定できるようにする（macOSではall_card_data()が動かないため）。
+    """
+    type_column = "Stage (Pokémon)/Type (Energy and Trainer)"
+    tool_ids = set()
+    with csv_path.open(encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row[type_column] == "Pokémon Tool":
+                tool_ids.add(int(row["Card ID"]))
+    return frozenset(tool_ids)
+
+
 def classify_archetype(deck_card_ids: list[int], card_names: dict[int, tuple[str, str]]) -> str:
     """デッキ内のex Pokémonを出現数の多い順に並べたラベルを返す（簡易アーキタイプ分類）。
 
