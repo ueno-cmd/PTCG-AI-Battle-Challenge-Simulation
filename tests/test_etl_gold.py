@@ -96,3 +96,117 @@ def test_extract_result_reason_returns_none_when_absent(sample_log):
     # フィクスチャ84580427.jsonはRESULTログイベントが記録されていない既知のケース
     from etl.gold import extract_result_reason
     assert extract_result_reason(sample_log) is None
+
+
+from etl.gold import GameStateTracker
+
+
+def test_tracker_move_card_to_active_sets_active_serial():
+    tracker = GameStateTracker(target_player_index=0)
+    tracker.apply({
+        "type": 6, "playerIndex": 0, "cardId": 121, "serial": 10,
+        "fromArea": 2, "toArea": 4,
+    })
+    assert tracker.active_serial == 10
+    assert tracker.species[10] == 121
+    assert tracker.energy_count[10] == 0
+
+
+def test_tracker_move_card_to_bench_adds_bench_serial():
+    tracker = GameStateTracker(target_player_index=0)
+    tracker.apply({
+        "type": 6, "playerIndex": 0, "cardId": 119, "serial": 11,
+        "fromArea": 2, "toArea": 5,
+    })
+    assert 11 in tracker.bench_serials
+    assert tracker.species[11] == 119
+
+
+def test_tracker_move_card_active_to_discard_removes_pokemon():
+    tracker = GameStateTracker(target_player_index=0)
+    tracker.apply({"type": 6, "playerIndex": 0, "cardId": 121, "serial": 10, "fromArea": 2, "toArea": 4})
+    tracker.apply({"type": 6, "playerIndex": 0, "cardId": 121, "serial": 10, "fromArea": 4, "toArea": 3})
+    assert tracker.active_serial is None
+    assert 10 not in tracker.species
+    assert 10 not in tracker.energy_count
+
+
+def test_tracker_ignores_other_players_move_card():
+    tracker = GameStateTracker(target_player_index=0)
+    tracker.apply({"type": 6, "playerIndex": 1, "cardId": 999, "serial": 50, "fromArea": 2, "toArea": 4})
+    assert tracker.active_serial is None
+    assert 50 not in tracker.species
+
+
+def test_tracker_switch_swaps_active_and_bench_correctly():
+    """SWITCHのフィールド名は意味と逆(serialActive=退場/serialBench=登場)。
+    ここを取り違えると2026-07-22に発覚したのと同じ致命的な誤判定が再発する"""
+    tracker = GameStateTracker(target_player_index=0)
+    tracker.apply({"type": 6, "playerIndex": 0, "cardId": 121, "serial": 10, "fromArea": 2, "toArea": 4})
+    tracker.apply({"type": 6, "playerIndex": 0, "cardId": 119, "serial": 11, "fromArea": 2, "toArea": 5})
+    tracker.apply({
+        "type": 8, "playerIndex": 0,
+        "cardIdActive": 121, "serialActive": 10,
+        "cardIdBench": 119, "serialBench": 11,
+    })
+    assert tracker.active_serial == 11
+    assert 10 in tracker.bench_serials
+    assert 11 not in tracker.bench_serials
+
+
+def test_tracker_attach_energy_increments_count():
+    tracker = GameStateTracker(target_player_index=0, tool_card_ids=frozenset({1159}))
+    tracker.apply({"type": 6, "playerIndex": 0, "cardId": 121, "serial": 10, "fromArea": 2, "toArea": 4})
+    tracker.apply({"type": 11, "playerIndex": 0, "cardId": 6, "serial": 90, "cardIdTarget": 121, "serialTarget": 10})
+    assert tracker.energy_count[10] == 1
+
+
+def test_tracker_attach_energy_records_card_id_in_energy_cards_list():
+    """_attach_score()のenergy_count==1分岐がpokemon.energyCards[0].idを参照するため、
+    countだけでなく実際に貼られたエネルギーのcard_idも保持できていないと後段のTask5で
+    再現できない（energy_countをintのみで持つ設計だとここが欠落することに自己レビューで気付いた）"""
+    tracker = GameStateTracker(target_player_index=0, tool_card_ids=frozenset({1159}))
+    tracker.apply({"type": 6, "playerIndex": 0, "cardId": 121, "serial": 10, "fromArea": 2, "toArea": 4})
+    tracker.apply({"type": 11, "playerIndex": 0, "cardId": 6, "serial": 90, "cardIdTarget": 121, "serialTarget": 10})
+    assert tracker.energy_cards[10] == [6]
+
+
+def test_tracker_attach_tool_does_not_increment_energy_count():
+    tracker = GameStateTracker(target_player_index=0, tool_card_ids=frozenset({1159}))
+    tracker.apply({"type": 6, "playerIndex": 0, "cardId": 121, "serial": 10, "fromArea": 2, "toArea": 4})
+    tracker.apply({"type": 11, "playerIndex": 0, "cardId": 1159, "serial": 91, "cardIdTarget": 121, "serialTarget": 10})
+    assert tracker.energy_count[10] == 0
+
+
+def test_tracker_evolve_preserves_position_and_energy():
+    tracker = GameStateTracker(target_player_index=0)
+    tracker.apply({"type": 6, "playerIndex": 0, "cardId": 119, "serial": 11, "fromArea": 2, "toArea": 5})
+    tracker.apply({"type": 11, "playerIndex": 0, "cardId": 6, "serial": 90, "cardIdTarget": 119, "serialTarget": 11})
+    tracker.apply({
+        "type": 12, "playerIndex": 0,
+        "cardId": 121, "serial": 12,
+        "cardIdTarget": 119, "serialTarget": 11,
+    })
+    assert 12 in tracker.bench_serials
+    assert 11 not in tracker.bench_serials
+    assert tracker.species[12] == 121
+    assert tracker.energy_count[12] == 1
+    assert tracker.energy_cards[12] == [6]
+    assert 11 not in tracker.species
+
+
+def test_tracker_asleep_and_paralyzed_toggle_with_is_recover():
+    tracker = GameStateTracker(target_player_index=0)
+    tracker.apply({"type": 19, "playerIndex": 0, "cardId": 121, "serial": 10, "isRecover": False})
+    assert tracker.asleep is True
+    tracker.apply({"type": 19, "playerIndex": 0, "cardId": 121, "serial": 10, "isRecover": True})
+    assert tracker.asleep is False
+    tracker.apply({"type": 20, "playerIndex": 0, "cardId": 121, "serial": 10, "isRecover": False})
+    assert tracker.paralyzed is True
+
+
+def test_tracker_opponent_prize_taken_decrements_remaining():
+    tracker = GameStateTracker(target_player_index=0)
+    assert tracker.opponent_prize_remaining == 6
+    tracker.apply({"type": 6, "playerIndex": 1, "fromArea": 6, "toArea": 2, "cardId": 5, "serial": 40})
+    assert tracker.opponent_prize_remaining == 5

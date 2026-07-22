@@ -81,6 +81,129 @@ LOG_TYPE_SWITCH = 8
 LOG_TYPE_PLAY = 10
 LOG_TYPE_ATTACK = 15
 LOG_TYPE_RESULT = 23
+LOG_TYPE_MOVE_CARD = 6
+LOG_TYPE_ATTACH = 11
+LOG_TYPE_EVOLVE = 12
+LOG_TYPE_ASLEEP = 19
+LOG_TYPE_PARALYZED = 20
+
+AREA_HAND = 2
+AREA_DISCARD = 3
+AREA_ACTIVE = 4
+AREA_BENCH = 5
+AREA_PRIZE = 6
+
+
+class GameStateTracker:
+    """自分(target_player_index)の場の状態と相手の残りサイド枚数を、
+    生イベントを1件ずつ適用してインクリメンタルに追跡する。
+
+    1つの観測ステップに複数ターン分のイベントが混在しうるため、
+    ステップ単位のスナップショット(observation.current)は一切参照しない。
+    build_event_timeline()が返すフラットなイベント列を順番にapply()するだけで、
+    任意の時点の「本当のアクティブ/ベンチ構成」を再現できる。
+    """
+
+    INITIAL_PRIZE_COUNT = 6
+
+    def __init__(self, target_player_index: int, tool_card_ids: frozenset = frozenset()):
+        self.target_player_index = target_player_index
+        self.opponent_index = 1 - target_player_index
+        self.tool_card_ids = tool_card_ids
+        self.active_serial: int | None = None
+        self.bench_serials: set = set()
+        self.species: dict = {}
+        self.energy_count: dict = collections.defaultdict(int)
+        self.energy_cards: dict = collections.defaultdict(list)  # serial -> 装着済みエネルギーcard_idのリスト
+        self.asleep = False
+        self.paralyzed = False
+        self.opponent_prize_remaining = self.INITIAL_PRIZE_COUNT
+
+    def apply(self, event: dict) -> None:
+        event_type = event.get("type")
+        player_index = event.get("playerIndex")
+
+        if (event_type == LOG_TYPE_MOVE_CARD and player_index == self.opponent_index
+                and event.get("fromArea") == AREA_PRIZE and event.get("toArea") == AREA_HAND):
+            self.opponent_prize_remaining -= 1
+
+        if player_index != self.target_player_index:
+            return
+
+        if event_type == LOG_TYPE_MOVE_CARD:
+            self._apply_move_card(event)
+        elif event_type == LOG_TYPE_SWITCH:
+            self._apply_switch(event)
+        elif event_type == LOG_TYPE_ATTACH:
+            self._apply_attach(event)
+        elif event_type == LOG_TYPE_EVOLVE:
+            self._apply_evolve(event)
+        elif event_type == LOG_TYPE_ASLEEP:
+            self.asleep = not event.get("isRecover", False)
+        elif event_type == LOG_TYPE_PARALYZED:
+            self.paralyzed = not event.get("isRecover", False)
+
+    def _apply_move_card(self, event: dict) -> None:
+        serial = event["serial"]
+        card_id = event["cardId"]
+        from_area = event.get("fromArea")
+        to_area = event.get("toArea")
+        if to_area == AREA_ACTIVE:
+            self.active_serial = serial
+            self.species[serial] = card_id
+            self.energy_count[serial]  # defaultdictでキーを作るだけ
+        elif to_area == AREA_BENCH:
+            self.bench_serials.add(serial)
+            self.species[serial] = card_id
+            self.energy_count[serial]
+        elif to_area == AREA_DISCARD and from_area in (AREA_ACTIVE, AREA_BENCH):
+            self._remove_serial(serial)
+
+    def _apply_switch(self, event: dict) -> None:
+        # cardIdActive/serialActive: アクティブから退場しベンチへ行く側
+        # cardIdBench/serialBench: ベンチから登場しアクティブになる側
+        # (cg/api.pyのコメントはフィールド名と意味が逆になっている点に注意。
+        #  2026-07-22に一度取り違えて誤診断した実績があるため、この対応関係を変更する際は要注意)
+        outgoing_serial = event["serialActive"]
+        incoming_serial = event["serialBench"]
+        assert self.active_serial == outgoing_serial, (
+            f"SWITCH整合性エラー: tracker.active_serial={self.active_serial} "
+            f"がイベントのserialActive={outgoing_serial}と一致しない"
+        )
+        self.bench_serials.discard(incoming_serial)
+        self.bench_serials.add(outgoing_serial)
+        self.active_serial = incoming_serial
+
+    def _apply_attach(self, event: dict) -> None:
+        target_serial = event["serialTarget"]
+        card_id = event["cardId"]
+        if card_id not in self.tool_card_ids:
+            self.energy_count[target_serial] += 1
+            self.energy_cards[target_serial].append(card_id)
+
+    def _apply_evolve(self, event: dict) -> None:
+        pre_serial = event["serialTarget"]
+        post_serial = event["serial"]
+        post_card_id = event["cardId"]
+        energy = self.energy_count.pop(pre_serial, 0)
+        energy_cards = self.energy_cards.pop(pre_serial, [])
+        self.species.pop(pre_serial, None)
+        if self.active_serial == pre_serial:
+            self.active_serial = post_serial
+        elif pre_serial in self.bench_serials:
+            self.bench_serials.discard(pre_serial)
+            self.bench_serials.add(post_serial)
+        self.species[post_serial] = post_card_id
+        self.energy_count[post_serial] = energy
+        self.energy_cards[post_serial] = energy_cards
+
+    def _remove_serial(self, serial: int) -> None:
+        self.species.pop(serial, None)
+        self.energy_count.pop(serial, None)
+        self.energy_cards.pop(serial, None)
+        self.bench_serials.discard(serial)
+        if self.active_serial == serial:
+            self.active_serial = None
 
 
 def _find_energy_count(data: dict, step_index: int, owner_index: int, serial: int) -> int | None:
