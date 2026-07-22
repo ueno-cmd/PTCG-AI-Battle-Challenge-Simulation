@@ -114,6 +114,7 @@ LOG_TYPE_PLAY = 10
 LOG_TYPE_ATTACK = 15
 LOG_TYPE_RESULT = 23
 LOG_TYPE_MOVE_CARD = 6
+LOG_TYPE_MOVE_CARD_REVERSE = 7
 LOG_TYPE_ATTACH = 11
 LOG_TYPE_EVOLVE = 12
 LOG_TYPE_ASLEEP = 19
@@ -157,7 +158,8 @@ class GameStateTracker:
         event_type = event.get("type")
         player_index = event.get("playerIndex")
 
-        if (event_type == LOG_TYPE_MOVE_CARD and player_index == self.opponent_index
+        if (event_type in (LOG_TYPE_MOVE_CARD, LOG_TYPE_MOVE_CARD_REVERSE)
+                and player_index == self.opponent_index
                 and event.get("fromArea") == AREA_PRIZE and event.get("toArea") == AREA_HAND):
             self.opponent_prize_remaining -= 1
 

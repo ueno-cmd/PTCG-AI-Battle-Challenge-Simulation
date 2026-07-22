@@ -212,6 +212,17 @@ def test_tracker_opponent_prize_taken_decrements_remaining():
     assert tracker.opponent_prize_remaining == 5
 
 
+def test_tracker_opponent_prize_taken_via_move_card_reverse_decrements_remaining():
+    """相手視点で見た自分のプライズ取得はMOVE_CARD_REVERSE(cardId/serial無し)として
+    しか見えないケースがある(2026-07-22、対象プレイヤーが player_index=1 のログ
+    data/battle_logs/87204845.jsonで実測確認: 相手の本当のプライズ取得3回が
+    全てMOVE_CARD_REVERSEとして記録されMOVE_CARDは0件だった)"""
+    tracker = GameStateTracker(target_player_index=0)
+    assert tracker.opponent_prize_remaining == 6
+    tracker.apply({"type": 7, "playerIndex": 1, "fromArea": 6, "toArea": 2})
+    assert tracker.opponent_prize_remaining == 5
+
+
 def test_tracker_move_card_to_active_removes_serial_from_bench():
     """MOVE_CARD(fromArea=BENCH, toArea=ACTIVE)は気絶後の新アクティブ選出などSWITCH無しで
     起こりうる。ベンチにいたポケモンがアクティブに昇格した際、bench_serialsから

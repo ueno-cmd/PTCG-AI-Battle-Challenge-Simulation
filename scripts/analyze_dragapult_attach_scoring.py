@@ -152,7 +152,7 @@ def build_report(battle_log_paths: list, target_player_name: str) -> str:
             target_player_index=target_index, tool_card_ids=tool_card_ids,
             pokemon_card_ids=pokemon_card_ids,
         )
-        timeline = build_event_timeline(data, player_index=0)
+        timeline = build_event_timeline(data, player_index=target_index)
         for step_index, event in timeline:
             if (event.get("type") == LOG_TYPE_ATTACH
                     and event.get("playerIndex") == target_index
