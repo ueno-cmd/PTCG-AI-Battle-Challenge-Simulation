@@ -26,7 +26,7 @@ from cg.api import Card, CardType  # noqa: E402
 
 import dragapult_agent.main as dm  # noqa: E402
 from etl.gold import (  # noqa: E402
-    GameStateTracker, LOG_TYPE_ATTACH, build_event_timeline,
+    GameStateTracker, LOG_TYPE_ATTACH, LOG_TYPE_PLAY, build_event_timeline,
     find_player_index, load_pokemon_card_ids, load_raw_log, load_tool_card_ids,
 )
 
@@ -58,7 +58,7 @@ def _own_candidates(tracker: GameStateTracker) -> list:
 
 
 def evaluate_attach_event(tracker: GameStateTracker, event: dict, *, card_table: dict,
-                           dragapult_ex_id: int) -> dict:
+                           dragapult_ex_id: int, dragapult_ex_crispin_bonus: bool = False) -> dict:
     """ATTACHイベント時点(適用前)の状態で、実際に選ばれた対象より高スコアの候補が
     存在するかを判定する。can_switchはTrue/False両方で試し、結果が割れる場合は
     'needs_manual_review'をTrueにする。
@@ -93,12 +93,17 @@ def evaluate_attach_event(tracker: GameStateTracker, event: dict, *, card_table:
         # energiesはlen()しか使われないためダミー値で十分
         energy_card_objs = [Card(id=cid, serial=0, playerIndex=0) for cid in tracker.energy_cards[serial]]
         pokemon = _Pokemon(species_id, [0] * energy_n, energy_card_objs)
-        return dm._attach_score(
+        score = dm._attach_score(
             event["cardId"], pokemon, is_active,
             card_table=card_table, can_switch=can_switch, bench_attacker=bench_attacker,
             no_more_dex=no_more_dex, field_counts=field_counts,
             my_asleep=tracker.asleep, my_paralyzed=tracker.paralyzed,
         )
+        # main.py:759-760のSelectContext.ATTACH_FROM分岐(クリスピン効果由来の自動装着)は
+        # OptionType.ATTACH(手動装着)にはない+200ボーナスをドラパルトexターゲットに追加する
+        if dragapult_ex_crispin_bonus and species_id == dragapult_ex_id:
+            score += 200
+        return score
 
     results = {}
     for can_switch in (True, False):
@@ -153,19 +158,30 @@ def build_report(battle_log_paths: list, target_player_name: str) -> str:
             pokemon_card_ids=pokemon_card_ids,
         )
         timeline = build_event_timeline(data, player_index=target_index)
+        # クリスピン(アカマツ)の効果は「PLAY直後、他の自分イベントを挟まずに続くATTACH」として
+        # 検知する。デッキ検索で異なるタイプのエネルギーが2種見つからなければ何も装着されない
+        # ことがあるため、ATTACH以外の自分イベント(またはログ終端)が来たらフラグを解除する
+        crispin_pending = False
         for step_index, event in timeline:
-            if (event.get("type") == LOG_TYPE_ATTACH
-                    and event.get("playerIndex") == target_index
-                    and event.get("cardId") not in tool_card_ids
-                    and event.get("serialTarget") != tracker.active_serial):
-                total_bench_attach += 1
-                verdict = evaluate_attach_event(
-                    tracker, event, card_table=local_card_table, dragapult_ex_id=dm.Dragapult_ex,
-                )
-                if verdict["needs_manual_review"]:
-                    manual_review.append((log_path.stem, step_index))
-                elif verdict["contradiction"]:
-                    contradictions.append((log_path.stem, step_index))
+            if event.get("playerIndex") == target_index:
+                if event.get("type") == LOG_TYPE_PLAY and event.get("cardId") == dm.Crispin:
+                    crispin_pending = True
+                elif event.get("type") == LOG_TYPE_ATTACH:
+                    crispin_bonus_active = crispin_pending
+                    crispin_pending = False
+                    if (event.get("cardId") not in tool_card_ids
+                            and event.get("serialTarget") != tracker.active_serial):
+                        total_bench_attach += 1
+                        verdict = evaluate_attach_event(
+                            tracker, event, card_table=local_card_table, dragapult_ex_id=dm.Dragapult_ex,
+                            dragapult_ex_crispin_bonus=crispin_bonus_active,
+                        )
+                        if verdict["needs_manual_review"]:
+                            manual_review.append((log_path.stem, step_index))
+                        elif verdict["contradiction"]:
+                            contradictions.append((log_path.stem, step_index))
+                else:
+                    crispin_pending = False
             tracker.apply(event)
 
     lines = [

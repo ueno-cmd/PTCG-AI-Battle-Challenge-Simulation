@@ -121,3 +121,33 @@ def test_evaluate_attach_event_treats_ready_active_dragapult_as_unable_to_receiv
     }
     evaluate_attach_event(tracker, event, card_table=mock_card_table, dragapult_ex_id=DRAGAPULT_EX)
     assert dm.can_main_attack is True
+
+
+def test_evaluate_attach_event_crispin_bonus_changes_verdict(mock_card_table):
+    """クリスピン(ID1198)の効果由来の自動装着ではmain.pyのATTACH_FROM分岐が
+    ドラパルトexターゲットに+200ボーナスを追加する。この分岐差を反映しないと
+    クリスピン由来の装着イベントで矛盾判定を誤りうる。
+    アクティブ=ドラパルトex(0エネ,スコア20000)・ベンチ=ドレディア(0エネ,スコア20100)の
+    構成では、ボーナス無しならベンチが上回り矛盾なし、+200ボーナス適用で
+    アクティブが20200に逆転し矛盾ありに変わる、という決定的な検証にする"""
+    tracker = GameStateTracker(target_player_index=0)
+    tracker.active_serial = 1
+    tracker.species[1] = DRAGAPULT_EX
+    tracker.energy_count[1] = 0
+    tracker.bench_serials.add(2)
+    tracker.species[2] = DREEPY
+    tracker.energy_count[2] = 0
+
+    event = {
+        "type": 11, "playerIndex": 0, "cardId": BASIC_FIRE_ENERGY,
+        "serial": 99, "cardIdTarget": DREEPY, "serialTarget": 2,
+    }
+    without_bonus = evaluate_attach_event(
+        tracker, event, card_table=mock_card_table, dragapult_ex_id=DRAGAPULT_EX,
+    )
+    with_bonus = evaluate_attach_event(
+        tracker, event, card_table=mock_card_table, dragapult_ex_id=DRAGAPULT_EX,
+        dragapult_ex_crispin_bonus=True,
+    )
+    assert without_bonus["contradiction"] is False
+    assert with_bonus["contradiction"] is True
