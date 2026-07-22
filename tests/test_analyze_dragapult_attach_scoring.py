@@ -64,6 +64,15 @@ def test_field_counts_from_tracker_counts_active_and_bench():
     assert counts[DREEPY] == 2
 
 
+def test_field_counts_from_tracker_returns_zero_for_absent_card_id():
+    """field_counts[Budew]のように未存在キーへ直接アクセスするproduction側の
+    _attach_score()と挙動を合わせるため、defaultdict(int)でなければならない
+    (2026-07-22、実ログdata/battle_logs/87205390.json等でKeyErrorとして発覚)"""
+    tracker = _tracker_with_field(DRAGAPULT_EX, 1, [])
+    counts = field_counts_from_tracker(tracker)
+    assert counts[9999999] == 0
+
+
 def test_is_bench_attacker_true_when_bench_dragapult_ex_has_two_energy():
     tracker = _tracker_with_field(DREEPY, 1, [(DRAGAPULT_EX, 2, 2)])
     assert is_bench_attacker(tracker, DRAGAPULT_EX) is True

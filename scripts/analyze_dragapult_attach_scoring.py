@@ -34,9 +34,9 @@ CARD_DATA_CSV = ROOT / "data" / "competition" / "EN_Card_Data.csv"
 
 
 def field_counts_from_tracker(tracker: GameStateTracker) -> dict:
-    counts = {}
+    counts = collections.defaultdict(int)
     for card_id in tracker.species.values():
-        counts[card_id] = counts.get(card_id, 0) + 1
+        counts[card_id] += 1
     return counts
 
 
