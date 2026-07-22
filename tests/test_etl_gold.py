@@ -247,3 +247,38 @@ def test_load_tool_card_ids_returns_pokemon_tool_ids():
     tool_ids = load_tool_card_ids(CARD_DATA_PATH)
     assert 1159 in tool_ids  # Hero's Cape (Pokémon Tool、feedback_ace_spec_deck_ruleで既知)
     assert 1 not in tool_ids  # Basic {G} Energy はTool ではない
+
+
+def test_load_pokemon_card_ids_returns_pokemon_category_ids():
+    from etl.gold import load_pokemon_card_ids
+
+    pokemon_ids = load_pokemon_card_ids(CARD_DATA_PATH)
+    assert 119 in pokemon_ids  # Dreepy (Basic Pokémon)
+    assert 121 in pokemon_ids  # Dragapult ex (Stage 2 Pokémon)
+    assert 1 not in pokemon_ids  # Basic {G} Energy はポケモンではない
+    assert 1182 not in pokemon_ids  # Boss's Orders (Supporter) もポケモンではない
+
+
+def test_tracker_play_of_pokemon_adds_to_bench_when_active_occupied():
+    tracker = GameStateTracker(target_player_index=0, pokemon_card_ids=frozenset({119}))
+    tracker.apply({"type": 6, "playerIndex": 0, "cardId": 121, "serial": 10, "fromArea": 2, "toArea": 4})
+    tracker.apply({"type": 10, "playerIndex": 0, "cardId": 119, "serial": 11})
+    assert 11 in tracker.bench_serials
+    assert tracker.species[11] == 119
+    assert tracker.active_serial == 10
+
+
+def test_tracker_play_of_pokemon_becomes_active_when_active_empty():
+    tracker = GameStateTracker(target_player_index=0, pokemon_card_ids=frozenset({119}))
+    tracker.apply({"type": 10, "playerIndex": 0, "cardId": 119, "serial": 11})
+    assert tracker.active_serial == 11
+    assert 11 not in tracker.bench_serials
+
+
+def test_tracker_play_of_non_pokemon_card_is_ignored():
+    """サポートやグッズのPLAYはポケモンの場配置ではないため無視する
+    (pokemon_card_idsに含まれないcardIdは無視される)"""
+    tracker = GameStateTracker(target_player_index=0, pokemon_card_ids=frozenset({119}))
+    tracker.apply({"type": 10, "playerIndex": 0, "cardId": 1182, "serial": 50})
+    assert tracker.active_serial is None
+    assert 50 not in tracker.species

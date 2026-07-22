@@ -74,6 +74,22 @@ def load_tool_card_ids(csv_path: Path) -> frozenset:
     return frozenset(tool_ids)
 
 
+def load_pokemon_card_ids(csv_path: Path) -> frozenset:
+    """EN_Card_Data.csvから「ポケモン」カテゴリ(たね/1進化/2進化)のCard IDだけを
+    集めたfrozensetを返す。GameStateTrackerがPLAYイベント(手札からの新規登場)を
+    ポケモンの場への配置として扱うべきか判定するために使う。
+    """
+    type_column = "Stage (Pokémon)/Type (Energy and Trainer)"
+    pokemon_categories = {"Basic Pokémon", "Stage 1 Pokémon", "Stage 2 Pokémon"}
+    pokemon_ids = set()
+    with csv_path.open(encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row[type_column] in pokemon_categories:
+                pokemon_ids.add(int(row["Card ID"]))
+    return frozenset(pokemon_ids)
+
+
 def classify_archetype(deck_card_ids: list[int], card_names: dict[int, tuple[str, str]]) -> str:
     """デッキ内のex Pokémonを出現数の多い順に並べたラベルを返す（簡易アーキタイプ分類）。
 
@@ -122,10 +138,12 @@ class GameStateTracker:
 
     INITIAL_PRIZE_COUNT = 6
 
-    def __init__(self, target_player_index: int, tool_card_ids: frozenset = frozenset()):
+    def __init__(self, target_player_index: int, tool_card_ids: frozenset = frozenset(),
+                 pokemon_card_ids: frozenset = frozenset()):
         self.target_player_index = target_player_index
         self.opponent_index = 1 - target_player_index
         self.tool_card_ids = tool_card_ids
+        self.pokemon_card_ids = pokemon_card_ids
         self.active_serial: int | None = None
         self.bench_serials: set = set()
         self.species: dict = {}
@@ -150,6 +168,8 @@ class GameStateTracker:
             self._apply_move_card(event)
         elif event_type == LOG_TYPE_SWITCH:
             self._apply_switch(event)
+        elif event_type == LOG_TYPE_PLAY and event.get("cardId") in self.pokemon_card_ids:
+            self._apply_play(event)
         elif event_type == LOG_TYPE_ATTACH:
             self._apply_attach(event)
         elif event_type == LOG_TYPE_EVOLVE:
@@ -175,6 +195,21 @@ class GameStateTracker:
             self.energy_count[serial]
         elif to_area == AREA_DISCARD and from_area in (AREA_ACTIVE, AREA_BENCH):
             self._remove_serial(serial)
+
+    def _apply_play(self, event: dict) -> None:
+        """手札からのポケモン新規登場。たねポケモンを手札から場に出す動作は
+        MOVE_CARDではなくPLAYイベントとしてのみ記録される
+        (2026-07-22、実ログdata/battle_logs/87204277.jsonのstep=80で確認済み:
+        Dreepy(serial=11)がPLAYのみでMOVE_CARDが一切伴わなかった)。
+        アクティブが空ならアクティブへ、埋まっていればベンチへ配置する。"""
+        serial = event["serial"]
+        card_id = event["cardId"]
+        if self.active_serial is None:
+            self.active_serial = serial
+        else:
+            self.bench_serials.add(serial)
+        self.species[serial] = card_id
+        self.energy_count[serial]  # defaultdictでキーを作るだけ
 
     def _apply_switch(self, event: dict) -> None:
         # cardIdActive/serialActive: アクティブから退場しベンチへ行く側

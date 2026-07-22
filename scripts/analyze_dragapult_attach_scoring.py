@@ -27,7 +27,7 @@ from cg.api import Card, CardType  # noqa: E402
 import dragapult_agent.main as dm  # noqa: E402
 from etl.gold import (  # noqa: E402
     GameStateTracker, LOG_TYPE_ATTACH, build_event_timeline,
-    find_player_index, load_raw_log, load_tool_card_ids,
+    find_player_index, load_pokemon_card_ids, load_raw_log, load_tool_card_ids,
 )
 
 CARD_DATA_CSV = ROOT / "data" / "competition" / "EN_Card_Data.csv"
@@ -139,6 +139,7 @@ def _build_local_card_table(tool_card_ids: frozenset) -> dict:
 
 def build_report(battle_log_paths: list, target_player_name: str) -> str:
     tool_card_ids = load_tool_card_ids(CARD_DATA_CSV)
+    pokemon_card_ids = load_pokemon_card_ids(CARD_DATA_CSV)
     local_card_table = _build_local_card_table(tool_card_ids)
     contradictions = []
     manual_review = []
@@ -147,7 +148,10 @@ def build_report(battle_log_paths: list, target_player_name: str) -> str:
     for log_path in battle_log_paths:
         data = load_raw_log(log_path)
         target_index = find_player_index(data, target_player_name)
-        tracker = GameStateTracker(target_player_index=target_index, tool_card_ids=tool_card_ids)
+        tracker = GameStateTracker(
+            target_player_index=target_index, tool_card_ids=tool_card_ids,
+            pokemon_card_ids=pokemon_card_ids,
+        )
         timeline = build_event_timeline(data, player_index=0)
         for step_index, event in timeline:
             if (event.get("type") == LOG_TYPE_ATTACH
