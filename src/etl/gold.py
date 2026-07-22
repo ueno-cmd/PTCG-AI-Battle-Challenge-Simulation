@@ -150,6 +150,7 @@ class GameStateTracker:
         to_area = event.get("toArea")
         if to_area == AREA_ACTIVE:
             self.active_serial = serial
+            self.bench_serials.discard(serial)
             self.species[serial] = card_id
             self.energy_count[serial]  # defaultdictでキーを作るだけ
         elif to_area == AREA_BENCH:
@@ -190,6 +191,7 @@ class GameStateTracker:
         self.species.pop(pre_serial, None)
         if self.active_serial == pre_serial:
             self.active_serial = post_serial
+            self.bench_serials.discard(pre_serial)
         elif pre_serial in self.bench_serials:
             self.bench_serials.discard(pre_serial)
             self.bench_serials.add(post_serial)

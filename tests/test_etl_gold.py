@@ -210,3 +210,16 @@ def test_tracker_opponent_prize_taken_decrements_remaining():
     assert tracker.opponent_prize_remaining == 6
     tracker.apply({"type": 6, "playerIndex": 1, "fromArea": 6, "toArea": 2, "cardId": 5, "serial": 40})
     assert tracker.opponent_prize_remaining == 5
+
+
+def test_tracker_move_card_to_active_removes_serial_from_bench():
+    """MOVE_CARD(fromArea=BENCH, toArea=ACTIVE)は気絶後の新アクティブ選出などSWITCH無しで
+    起こりうる。ベンチにいたポケモンがアクティブに昇格した際、bench_serialsから
+    確実に除去されないと「アクティブかつベンチ」という状態不整合が発生する
+    (2026-07-22のタスク1レビューで実データ(data/battle_logs/84580427.json)から発見)"""
+    tracker = GameStateTracker(target_player_index=0)
+    tracker.apply({"type": 6, "playerIndex": 0, "cardId": 119, "serial": 69, "fromArea": 2, "toArea": 5})
+    assert 69 in tracker.bench_serials
+    tracker.apply({"type": 6, "playerIndex": 0, "cardId": 119, "serial": 69, "fromArea": 5, "toArea": 4})
+    assert tracker.active_serial == 69
+    assert 69 not in tracker.bench_serials
