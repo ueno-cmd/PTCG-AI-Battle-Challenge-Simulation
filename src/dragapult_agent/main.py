@@ -92,7 +92,12 @@ def _attach_score(
         elif pokemon.id == Dreepy:
             score -= 150
         else:
-            score -= 200
+            # energy_count==0の同種族への新規着手(+50)より不利にしない。
+            # 元々ここが-200だったため、1エネルギー投資済みの控え(例: Drakloak)への
+            # 追加装着が常に新規着手より低評価となり、2エネルギー(攻撃可能)への到達を
+            # 遅らせる非対称バグがあった（2026-07-22、実ログ20戦・77件中4件の矛盾で発覚。
+            # 詳細: docs/analyses/20260722-dragapult-attach-scoring-verified.md）
+            score += 50
         if active:
             score += 200
     else:  # energy_count == 0
