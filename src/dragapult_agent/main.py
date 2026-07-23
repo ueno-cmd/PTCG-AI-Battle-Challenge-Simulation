@@ -242,6 +242,14 @@ class TeamRocketWatchtowerPolicy(TrainerCardPolicy):
         return -1
 
 
+class NightStretcherPolicy(TrainerCardPolicy):
+    """手札評価(card_score)が閾値以上(=有用なカードを回収できる)場合のみ使用"""
+    CARD_SCORE_THRESHOLD = 18000
+
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        return 42000 if ctx.card_score >= self.CARD_SCORE_THRESHOLD else -1
+
+
 TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {
     Unfair_Stamp: FixedScorePolicy(15000),
     Crushing_Hammer: FixedScorePolicy(40000),
@@ -249,6 +257,7 @@ TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {
     Lillie_Determination: SupporterSelectedPolicy(14000),
     Rare_Candy: RareCandyPolicy(),
     Team_Rocket_Watchtower: TeamRocketWatchtowerPolicy(),
+    Night_Stretcher: NightStretcherPolicy(),
 }
 
 

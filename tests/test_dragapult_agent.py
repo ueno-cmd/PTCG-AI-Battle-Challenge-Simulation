@@ -294,3 +294,17 @@ def test_rare_candy_and_team_rocket_watchtower_registered():
     assert dm._score_play_trainer_card(
         dm.Team_Rocket_Watchtower, _make_ctx(stadium_id=0, state=_make_state(turn=1))
     ) == 80000
+
+
+def test_night_stretcher_policy_plays_when_card_score_meets_threshold():
+    policy = dm.NightStretcherPolicy()
+    assert policy.play_score(_make_ctx(card_score=18000)) == 42000
+
+
+def test_night_stretcher_policy_holds_below_threshold():
+    policy = dm.NightStretcherPolicy()
+    assert policy.play_score(_make_ctx(card_score=17999)) == -1
+
+
+def test_night_stretcher_registered():
+    assert dm._score_play_trainer_card(dm.Night_Stretcher, _make_ctx(card_score=20000)) == 42000
