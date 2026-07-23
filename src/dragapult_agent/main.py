@@ -157,6 +157,27 @@ def _own_switch_target_score(card_id: int, energy_count: int, bench_attacker: bo
     return 0
 
 
+def _crispin_score(
+    *,
+    deck_counts: dict,
+    can_main_attack: bool,
+    bench_attacker: bool,
+    field_counts: dict,
+) -> int:
+    """アカマツ(Crispin)のスコアを返す。
+    「自分の山札から、それぞれちがうタイプの基本エネルギーを2枚まで選び、
+    1枚を手札に、残りを自分のポケモンに付ける」効果のため、炎・超いずれかの
+    基本エネルギーが山札に0枚だと2種を探せず効果が弱まる。修正前はこの
+    低評価分岐がelifではなく独立したifだったため、直後のif/elseで無条件に
+    上書きされ常に死んでいた（2026-07-23発見、docs/analyses/20260723-dragapult-main-if-else-audit.md参照）。
+    """
+    if deck_counts[Basic_Fire_Energy] == 0 or deck_counts[Basic_Psychic_Energy] == 0:
+        return 10
+    if not can_main_attack and not bench_attacker and field_counts[Dragapult_ex] >= 1:
+        return 55000
+    return 25000
+
+
 class AttackPlan:
     attack: int = 0
     counter: list[int] = []
@@ -603,12 +624,10 @@ def agent(obs_dict: dict) -> list[int]:
             score = _boss_orders_score(plan_a.attack > 0, _dragapult_rng.random(), BOSS_ORDERS_EXPLORE_EPSILON)
         elif id == Crispin:
             if not ignore_count or support_count == 0:
-                if deck_counts[Basic_Fire_Energy] == 0 or deck_counts[Basic_Psychic_Energy] == 0:
-                    score = 10
-                if not can_main_attack and not bench_attacker and field_counts[Dragapult_ex] >= 1:
-                    score = 55000
-                else:
-                    score = 25000
+                score = _crispin_score(
+                    deck_counts=deck_counts, can_main_attack=can_main_attack,
+                    bench_attacker=bench_attacker, field_counts=field_counts,
+                )
         elif id == Brock_Scouting:
             if not ignore_count or support_count == 0:
                 if state.turn == 2 and field_counts[Budew] + field_counts[Latias_ex] == 0:

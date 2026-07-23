@@ -135,3 +135,51 @@ def test_own_switch_target_score_existing_priorities_unchanged():
     assert dm._own_switch_target_score(dm.Fezandipiti_ex, energy_count=0, bench_attacker=False) == -1000
     assert dm._own_switch_target_score(dm.Meowth_ex, energy_count=0, bench_attacker=False) == -2000
     assert dm._own_switch_target_score(999999, energy_count=0, bench_attacker=False) == 0
+
+
+def test_crispin_score_low_when_fire_energy_exhausted_in_deck():
+    """アカマツは山札から「ちがうタイプの基本エネルギーを2枚まで」探す効果のため、
+    炎エネルギーが山札に0枚だと2種探せず効果が弱まる。この場合は他の状況に関わらず
+    低評価(10点)であるべき。修正前は`if`が`elif`になっておらず、この分岐が
+    直後のif/elseで無条件に上書きされ死んでいた（main.py:604-611）"""
+    deck_counts = defaultdict(int, {dm.Basic_Fire_Energy: 0, dm.Basic_Psychic_Energy: 4})
+    field_counts = defaultdict(int, {dm.Dragapult_ex: 1})
+    score = dm._crispin_score(
+        deck_counts=deck_counts, can_main_attack=False, bench_attacker=False,
+        field_counts=field_counts,
+    )
+    assert score == 10
+
+
+def test_crispin_score_low_when_psychic_energy_exhausted_in_deck():
+    """炎エネルギー側と対称に、超エネルギーが山札に0枚の場合も低評価(10点)"""
+    deck_counts = defaultdict(int, {dm.Basic_Fire_Energy: 4, dm.Basic_Psychic_Energy: 0})
+    field_counts = defaultdict(int, {dm.Dragapult_ex: 1})
+    score = dm._crispin_score(
+        deck_counts=deck_counts, can_main_attack=False, bench_attacker=False,
+        field_counts=field_counts,
+    )
+    assert score == 10
+
+
+def test_crispin_score_high_priority_when_energy_available_and_dragapult_ex_needs_it():
+    """両タイプが山札に残っており、かつドラパルトexが場にいるのに攻撃準備が
+    整っていない（本命技も控えの攻撃可能個体も無い）場合は最優先(55000点)"""
+    deck_counts = defaultdict(int, {dm.Basic_Fire_Energy: 2, dm.Basic_Psychic_Energy: 2})
+    field_counts = defaultdict(int, {dm.Dragapult_ex: 1})
+    score = dm._crispin_score(
+        deck_counts=deck_counts, can_main_attack=False, bench_attacker=False,
+        field_counts=field_counts,
+    )
+    assert score == 55000
+
+
+def test_crispin_score_default_priority_when_already_attack_ready():
+    """両タイプが山札に残っていても、既に本命技が撃てる状態なら通常優先度(25000点)"""
+    deck_counts = defaultdict(int, {dm.Basic_Fire_Energy: 2, dm.Basic_Psychic_Energy: 2})
+    field_counts = defaultdict(int, {dm.Dragapult_ex: 1})
+    score = dm._crispin_score(
+        deck_counts=deck_counts, can_main_attack=True, bench_attacker=False,
+        field_counts=field_counts,
+    )
+    assert score == 25000
