@@ -1,6 +1,8 @@
 import os
 import random
+from abc import ABC, abstractmethod
 from collections import defaultdict
+from dataclasses import dataclass
 
 from cg.api import AreaType, CardType, Log, LogType, Observation, SelectContext, OptionType, Card, Pokemon, State, all_card_data, to_observation_class
 from dragapult_agent.constants import (
@@ -176,6 +178,130 @@ def _crispin_score(
     if not can_main_attack and not bench_attacker and field_counts[Dragapult_ex] >= 1:
         return 55000
     return 25000
+
+
+# ==================== PLAYスコアリングのポリシー登録制（トレーナーズカードのみ） ====================
+@dataclass
+class PlayTrainerCardContext:
+    """OptionType.PLAY のトレーナーズカードのスコアリングに必要な情報をまとめる。
+    ポケモンカード分岐(Dreepy/Fezandipiti_ex/Latias_ex/Budew/Meowth_ex)はagent()側に
+    残すため含まない"""
+    card_id: int
+    card_score: int          # hand_scores[o.index]
+    state: State
+    stadium_id: int
+    deck_counts: defaultdict
+    negative_hand_count: int
+    no_draw: bool
+    use_support: int
+    no_more_dex: bool
+
+
+class TrainerCardPolicy(ABC):
+    """1枚のトレーナーズカード（サポート/グッズ/スタジアム）のPLAY判断を表す"""
+    @abstractmethod
+    def play_score(self, ctx: PlayTrainerCardContext) -> int: ...
+
+
+class FixedScorePolicy(TrainerCardPolicy):
+    """固定スコアのみを返すカード用"""
+    def __init__(self, score: int):
+        self._score = score
+
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        return self._score
+
+
+class SupporterSelectedPolicy(TrainerCardPolicy):
+    """このターンの最強サポート(use_support)と一致すれば固定スコア、そうでなければ-1。
+    no_draw_gate=Trueの場合、山札残り僅少(no_draw)ならuse_supportとの一致に関わらず-1にする
+    （現行のelif no_draw連鎖で、この分岐より後ろに書かれているカードだけが受ける
+    暗黙の副作用を明示化したもの。Boss_Orders/Lillie_Determinationはno_drawの影響を
+    受けないため no_draw_gate=False のまま使う）"""
+    def __init__(self, score: int, *, no_draw_gate: bool = False):
+        self._score = score
+        self._no_draw_gate = no_draw_gate
+
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        if self._no_draw_gate and ctx.no_draw:
+            return -1
+        return self._score if ctx.card_id == ctx.use_support else -1
+
+
+class RareCandyPolicy(TrainerCardPolicy):
+    """no_more_dex(プライズ枚数から見てドラパルトexの数が既に十分)ならもう不要"""
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        return -1 if ctx.no_more_dex else 75000
+
+
+class TeamRocketWatchtowerPolicy(TrainerCardPolicy):
+    """スタジアムが既に何か設置済み、または1ターン目なら設置する"""
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        if ctx.stadium_id > 0 or ctx.state.turn == 1:
+            return 80000
+        return -1
+
+
+class NightStretcherPolicy(TrainerCardPolicy):
+    """手札評価(card_score)が閾値以上(=有用なカードを回収できる)場合のみ使用"""
+    CARD_SCORE_THRESHOLD = 18000
+
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        return 42000 if ctx.card_score >= self.CARD_SCORE_THRESHOLD else -1
+
+
+class BuddyBuddyPoffinPolicy(TrainerCardPolicy):
+    """山札にドロディー(Dreepy)が残っている場合のみ使用。山札残り僅少(no_draw)なら使わない"""
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        if ctx.no_draw:
+            return -1
+        return 46000 if ctx.deck_counts[Dreepy] > 0 else -1
+
+
+class UltraBallPolicy(TrainerCardPolicy):
+    """手札に低評価カードが2枚以上ある(=捨てても惜しくない)場合のみ使用。
+    山札残り僅少(no_draw)なら使わない"""
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        if ctx.no_draw:
+            return -1
+        return 44000 if ctx.negative_hand_count >= 2 else -1
+
+
+class PokePadPolicy(TrainerCardPolicy):
+    """山札にドロディー(Dreepy)かイダテヌキ(Drakloak)が残っている場合のみ使用。
+    山札残り僅少(no_draw)なら使わない"""
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        if ctx.no_draw:
+            return -1
+        return 45000 if ctx.deck_counts[Dreepy] + ctx.deck_counts[Drakloak] > 0 else -1
+
+
+TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {
+    Unfair_Stamp: FixedScorePolicy(15000),
+    Crushing_Hammer: FixedScorePolicy(40000),
+    Boss_Orders: SupporterSelectedPolicy(35000),
+    Lillie_Determination: SupporterSelectedPolicy(14000),
+    Rare_Candy: RareCandyPolicy(),
+    Team_Rocket_Watchtower: TeamRocketWatchtowerPolicy(),
+    Night_Stretcher: NightStretcherPolicy(),
+    Buddy_Buddy_Poffin: BuddyBuddyPoffinPolicy(),
+    Ultra_Ball: UltraBallPolicy(),
+    Poke_Pad: PokePadPolicy(),
+    Crispin: SupporterSelectedPolicy(35000, no_draw_gate=True),
+    Brock_Scouting: SupporterSelectedPolicy(35000, no_draw_gate=True),
+}
+
+
+def _score_play_trainer_card(card_id: int, ctx: PlayTrainerCardContext) -> int:
+    """OptionType.PLAY のトレーナーズカード分岐のスコアを返す。
+    未登録カードは現行のif/elif連鎖がどれにも一致しない場合と同じく0を返す。
+    注意：旧if/elif連鎖では`no_draw`時に未一致カードは-1になっていたが
+    （カードID指定の無い`elif no_draw:`が連鎖の途中にあったため）、この
+    フォールバックはno_drawの値に関わらず常に0を返す。現行デッキの
+    トレーナーズカードは全て登録済みのためこの経路には到達しないが、
+    今後カードを追加する際はno_drawとの組み合わせを見落とさないこと"""
+    policy = TRAINER_CARD_POLICIES.get(card_id)
+    return policy.play_score(ctx) if policy is not None else 0
 
 
 class AttackPlan:
@@ -826,57 +952,15 @@ def agent(obs_dict: dict) -> list[int]:
                     score = 50000
                 else:
                     score = -1
-            elif card.id == Rare_Candy:
-                if no_more_dex:
-                    score = -1
-                else:
-                    score = 75000
-            elif card.id == Unfair_Stamp:
-                score = 15000
-            elif card.id == Night_Stretcher:
-                if card_score >= 18000:
-                    score = 42000
-                else:
-                    score = -1
-            elif card.id == Crushing_Hammer:
-                score = 40000
-            elif card.id == Boss_Orders:
-                if card.id == use_support:
-                    score = 35000
-                else:
-                    score = -1
-            elif card.id == Lillie_Determination:
-                if card.id == use_support:
-                    score = 14000
-                else:
-                    score = -1
-            elif card.id == Team_Rocket_Watchtower:
-                if stadium_id > 0 or state.turn == 1:
-                    score = 80000
-                else:
-                    score = -1
-            elif no_draw:
-                score = -1
-            elif card.id == Buddy_Buddy_Poffin:
-                if deck_counts[Dreepy] > 0:
-                    score = 46000
-                else:
-                    score = -1
-            elif card.id == Ultra_Ball:
-                if negative_hand_count >= 2:
-                    score = 44000
-                else:
-                    score = -1
-            elif card.id == Poke_Pad:
-                if deck_counts[Dreepy] + deck_counts[Drakloak] > 0:
-                    score = 45000
-                else:
-                    score = -1
-            elif card.id == Crispin or card.id == Brock_Scouting:
-                if card.id == use_support:
-                    score = 35000
-                else:
-                    score = -1
+            else:
+                # トレーナーズカード(グッズ/サポート/スタジアム)はTrainerCardPolicyへ委譲
+                # (docs/superpowers/plans/2026-07-23-dragapult-trainer-card-policy-migration.md)
+                ctx = PlayTrainerCardContext(
+                    card_id=card.id, card_score=card_score, state=state, stadium_id=stadium_id,
+                    deck_counts=deck_counts, negative_hand_count=negative_hand_count,
+                    no_draw=no_draw, use_support=use_support, no_more_dex=no_more_dex,
+                )
+                score = _score_play_trainer_card(card.id, ctx)
         elif o.type == OptionType.ATTACH:
             card = get_card(obs, o.area, o.index, my_index)
             pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
