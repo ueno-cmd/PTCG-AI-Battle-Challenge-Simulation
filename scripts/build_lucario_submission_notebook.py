@@ -12,6 +12,7 @@ Usage: uv run python scripts/build_lucario_submission_notebook.py
 import ast
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -31,12 +32,16 @@ def validate_syntax(combined: str) -> None:
         sys.exit(1)
 
 
-NOTE_MD = """## Rule-Based Agent for Mega Lucario ex
+def note_md(generated_at: datetime) -> str:
+    return f"""## Rule-Based Agent for Mega Lucario ex
+
+生成日時: {generated_at:%Y-%m-%d %H:%M:%S}
 
 Kaggle提出用notebook。`scripts/build_lucario_submission_notebook.py` により
-`src/lucario_agent/{constants,combat,main}.py` から自動生成されている。
+`src/lucario_agent/{{constants,combat,main}}.py` から自動生成されている。
 手で編集せず、ソース修正後にビルドスクリプトを再実行すること。
 """
+
 
 TAR_CODE = """import glob
 import os
@@ -61,11 +66,11 @@ def md_cell(cell_id: str, source: str) -> dict:
     return {"cell_type": "markdown", "id": cell_id, "metadata": {}, "source": source}
 
 
-def build_notebook(combined: str) -> dict:
+def build_notebook(combined: str, generated_at: datetime) -> dict:
     """結合済みソースから提出用notebookのセル構造（辞書）を組み立てる。"""
     return {
         "cells": [
-            md_cell("submission-note", NOTE_MD),
+            md_cell("submission-note", note_md(generated_at)),
             code_cell("write-main", f"%%writefile main.py\n{combined}"),
             code_cell("package-submission", TAR_CODE),
         ],
@@ -78,7 +83,7 @@ def build_notebook(combined: str) -> dict:
 def main() -> None:
     combined = submission_builder.build()
     validate_syntax(combined)
-    nb = build_notebook(combined)
+    nb = build_notebook(combined, datetime.now())
     DST.parent.mkdir(parents=True, exist_ok=True)
     DST.write_text(json.dumps(nb, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(f"wrote {DST}")
