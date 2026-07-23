@@ -381,3 +381,13 @@ def test_no_draw_gated_cards_registered():
     assert dm._score_play_trainer_card(
         dm.Crispin, _make_ctx(card_id=dm.Crispin, use_support=dm.Crispin, no_draw=True)
     ) == -1
+
+
+def test_trainer_card_policies_cover_exactly_the_migrated_card_set():
+    """現行if/elif連鎖でトレーナーズカードとして扱われている12枚と過不足なく一致することを保証する"""
+    expected = {
+        dm.Rare_Candy, dm.Unfair_Stamp, dm.Night_Stretcher, dm.Crushing_Hammer,
+        dm.Boss_Orders, dm.Lillie_Determination, dm.Team_Rocket_Watchtower,
+        dm.Buddy_Buddy_Poffin, dm.Ultra_Ball, dm.Poke_Pad, dm.Crispin, dm.Brock_Scouting,
+    }
+    assert set(dm.TRAINER_CARD_POLICIES.keys()) == expected
