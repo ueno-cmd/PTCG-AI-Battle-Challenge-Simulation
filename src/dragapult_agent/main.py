@@ -10,7 +10,7 @@ from dragapult_agent.constants import (
     Meowth_ex, Rare_Candy, Unfair_Stamp, Buddy_Buddy_Poffin, Night_Stretcher,
     Ultra_Ball, Poke_Pad, Boss_Orders, Crispin,
     Lillie_Determination,
-    Basic_Fire_Energy, Basic_Psychic_Energy,
+    Basic_Fire_Energy, Basic_Psychic_Energy, Basic_Dark_Energy,
     Munkidori, Duskull, Dusclops, Dusknoir, Moltres, Yveltal,
 )
 
@@ -79,6 +79,17 @@ def _attach_score(
                 return 18000
         else:
             return -1
+    elif pokemon.id == Yveltal:
+        # イベルタルの技コストは悪エネルギーのみ。それ以外は装着しても無意味
+        if attach_id != Basic_Dark_Energy:
+            return -1
+        if active and not can_switch and not my_asleep and not my_paralyzed:
+            return 24000
+        else:
+            return 19000
+    elif pokemon.id == Dusknoir or pokemon.id == Dusclops:
+        # カースドボムはエネルギー不要のため、通常はエネルギー投資の優先度を下げる
+        return 500
     if active and can_main_attack:
         return -1
     score = 20000
@@ -836,7 +847,7 @@ def agent(obs_dict: dict) -> list[int]:
         elif id == Lillie_Determination:
             if not ignore_count or support_count == 0:
                 score = 45000
-        elif id == Basic_Fire_Energy or id == Basic_Psychic_Energy:
+        elif id == Basic_Fire_Energy or id == Basic_Psychic_Energy or id == Basic_Dark_Energy:
             if can_main_attack and (len(op_state.prize) <= 2
                 or (bench_attacker and len(op_state.prize) <= 4)):
                 score = UNNECESSARY

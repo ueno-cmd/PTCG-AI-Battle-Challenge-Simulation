@@ -87,6 +87,47 @@ def test_attach_score_topping_up_non_priority_bench_pokemon_is_not_worse_than_fr
     assert topped_up_score >= fresh_score
 
 
+def test_attach_score_yveltal_prioritizes_dark_energy_when_active():
+    """イベルタルは悪エネルギー装着の最優先先。アクティブかつ攻撃可能状態なら高スコア"""
+    card_table = {dm.Basic_Dark_Energy: _MockCardData(cardId=dm.Basic_Dark_Energy)}
+    pokemon = _MockPokemon(id=dm.Yveltal)
+    score = dm._attach_score(
+        dm.Basic_Dark_Energy, pokemon, True,
+        card_table=card_table, can_switch=False, bench_attacker=False,
+        no_more_dex=False, field_counts=defaultdict(int),
+        my_asleep=False, my_paralyzed=False,
+    )
+    assert score == 24000
+
+
+def test_attach_score_yveltal_rejects_non_dark_energy():
+    """イベルタルの技コストは悪エネルギーのみのため、炎/超エネルギーは無意味"""
+    card_table = {dm.Basic_Fire_Energy: _MockCardData(cardId=dm.Basic_Fire_Energy)}
+    pokemon = _MockPokemon(id=dm.Yveltal)
+    score = dm._attach_score(
+        dm.Basic_Fire_Energy, pokemon, True,
+        card_table=card_table, can_switch=False, bench_attacker=False,
+        no_more_dex=False, field_counts=defaultdict(int),
+        my_asleep=False, my_paralyzed=False,
+    )
+    assert score == -1
+
+
+def test_attach_score_dusknoir_and_dusclops_get_low_priority():
+    """カースドボムはエネルギー不要のため、ヨノワール/サマヨールへの
+    エネルギー投資は低優先度に留める"""
+    card_table = {dm.Basic_Psychic_Energy: _MockCardData(cardId=dm.Basic_Psychic_Energy)}
+    for card_id in (dm.Dusknoir, dm.Dusclops):
+        pokemon = _MockPokemon(id=card_id)
+        score = dm._attach_score(
+            dm.Basic_Psychic_Energy, pokemon, False,
+            card_table=card_table, can_switch=False, bench_attacker=False,
+            no_more_dex=False, field_counts=defaultdict(int),
+            my_asleep=False, my_paralyzed=False,
+        )
+        assert score == 500
+
+
 def test_boss_orders_score_confirmed_pull_target():
     """確定的な引き剥がし先がある場合は最優先スコア"""
     assert dm._boss_orders_score(has_pull_target=True, explore_roll=0.99, epsilon=0.28) == 60000
