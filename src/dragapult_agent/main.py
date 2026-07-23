@@ -212,9 +212,27 @@ class FixedScorePolicy(TrainerCardPolicy):
         return self._score
 
 
+class SupporterSelectedPolicy(TrainerCardPolicy):
+    """このターンの最強サポート(use_support)と一致すれば固定スコア、そうでなければ-1。
+    no_draw_gate=Trueの場合、山札残り僅少(no_draw)ならuse_supportとの一致に関わらず-1にする
+    （現行のelif no_draw連鎖で、この分岐より後ろに書かれているカードだけが受ける
+    暗黙の副作用を明示化したもの。Boss_Orders/Lillie_Determinationはno_drawの影響を
+    受けないため no_draw_gate=False のまま使う）"""
+    def __init__(self, score: int, *, no_draw_gate: bool = False):
+        self._score = score
+        self._no_draw_gate = no_draw_gate
+
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        if self._no_draw_gate and ctx.no_draw:
+            return -1
+        return self._score if ctx.card_id == ctx.use_support else -1
+
+
 TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {
     Unfair_Stamp: FixedScorePolicy(15000),
     Crushing_Hammer: FixedScorePolicy(40000),
+    Boss_Orders: SupporterSelectedPolicy(35000),
+    Lillie_Determination: SupporterSelectedPolicy(14000),
 }
 
 

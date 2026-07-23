@@ -224,3 +224,38 @@ def test_score_play_trainer_card_returns_zero_for_unregistered_card():
 def test_unfair_stamp_and_crushing_hammer_registered():
     assert dm._score_play_trainer_card(dm.Unfair_Stamp, _make_ctx()) == 15000
     assert dm._score_play_trainer_card(dm.Crushing_Hammer, _make_ctx()) == 40000
+
+
+def test_supporter_selected_policy_scores_when_selected_as_use_support():
+    policy = dm.SupporterSelectedPolicy(35000)
+    ctx = _make_ctx(card_id=dm.Boss_Orders, use_support=dm.Boss_Orders)
+    assert policy.play_score(ctx) == 35000
+
+
+def test_supporter_selected_policy_returns_minus_one_when_not_selected():
+    policy = dm.SupporterSelectedPolicy(35000)
+    ctx = _make_ctx(card_id=dm.Boss_Orders, use_support=dm.Lillie_Determination)
+    assert policy.play_score(ctx) == -1
+
+
+def test_supporter_selected_policy_no_draw_gate_suppresses_even_when_selected():
+    """no_draw_gate=Trueの場合、use_supportと一致していてもno_draw中は-1
+    （現行のelif no_draw連鎖でCrispin/Brock_Scoutingが受けている暗黙の副作用を明示化）"""
+    policy = dm.SupporterSelectedPolicy(35000, no_draw_gate=True)
+    ctx = _make_ctx(card_id=dm.Crispin, use_support=dm.Crispin, no_draw=True)
+    assert policy.play_score(ctx) == -1
+
+
+def test_supporter_selected_policy_without_gate_ignores_no_draw():
+    policy = dm.SupporterSelectedPolicy(35000)
+    ctx = _make_ctx(card_id=dm.Boss_Orders, use_support=dm.Boss_Orders, no_draw=True)
+    assert policy.play_score(ctx) == 35000
+
+
+def test_boss_orders_and_lillie_determination_registered():
+    assert dm._score_play_trainer_card(
+        dm.Boss_Orders, _make_ctx(card_id=dm.Boss_Orders, use_support=dm.Boss_Orders)
+    ) == 35000
+    assert dm._score_play_trainer_card(
+        dm.Lillie_Determination, _make_ctx(card_id=dm.Lillie_Determination, use_support=dm.Lillie_Determination)
+    ) == 14000
