@@ -259,3 +259,38 @@ def test_boss_orders_and_lillie_determination_registered():
     assert dm._score_play_trainer_card(
         dm.Lillie_Determination, _make_ctx(card_id=dm.Lillie_Determination, use_support=dm.Lillie_Determination)
     ) == 14000
+
+
+def test_rare_candy_policy_unnecessary_when_no_more_dex():
+    policy = dm.RareCandyPolicy()
+    assert policy.play_score(_make_ctx(no_more_dex=True)) == -1
+
+
+def test_rare_candy_policy_high_priority_otherwise():
+    policy = dm.RareCandyPolicy()
+    assert policy.play_score(_make_ctx(no_more_dex=False)) == 75000
+
+
+def test_team_rocket_watchtower_policy_plays_when_stadium_already_set():
+    policy = dm.TeamRocketWatchtowerPolicy()
+    ctx = _make_ctx(stadium_id=dm.Team_Rocket_Watchtower, state=_make_state(turn=5))
+    assert policy.play_score(ctx) == 80000
+
+
+def test_team_rocket_watchtower_policy_plays_on_turn_one_even_without_stadium():
+    policy = dm.TeamRocketWatchtowerPolicy()
+    ctx = _make_ctx(stadium_id=0, state=_make_state(turn=1))
+    assert policy.play_score(ctx) == 80000
+
+
+def test_team_rocket_watchtower_policy_holds_otherwise():
+    policy = dm.TeamRocketWatchtowerPolicy()
+    ctx = _make_ctx(stadium_id=0, state=_make_state(turn=5))
+    assert policy.play_score(ctx) == -1
+
+
+def test_rare_candy_and_team_rocket_watchtower_registered():
+    assert dm._score_play_trainer_card(dm.Rare_Candy, _make_ctx(no_more_dex=False)) == 75000
+    assert dm._score_play_trainer_card(
+        dm.Team_Rocket_Watchtower, _make_ctx(stadium_id=0, state=_make_state(turn=1))
+    ) == 80000

@@ -228,11 +228,27 @@ class SupporterSelectedPolicy(TrainerCardPolicy):
         return self._score if ctx.card_id == ctx.use_support else -1
 
 
+class RareCandyPolicy(TrainerCardPolicy):
+    """no_more_dex(プライズ枚数から見てドラパルトexの数が既に十分)ならもう不要"""
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        return -1 if ctx.no_more_dex else 75000
+
+
+class TeamRocketWatchtowerPolicy(TrainerCardPolicy):
+    """スタジアムが既に何か設置済み、または1ターン目なら設置する"""
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        if ctx.stadium_id > 0 or ctx.state.turn == 1:
+            return 80000
+        return -1
+
+
 TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {
     Unfair_Stamp: FixedScorePolicy(15000),
     Crushing_Hammer: FixedScorePolicy(40000),
     Boss_Orders: SupporterSelectedPolicy(35000),
     Lillie_Determination: SupporterSelectedPolicy(14000),
+    Rare_Candy: RareCandyPolicy(),
+    Team_Rocket_Watchtower: TeamRocketWatchtowerPolicy(),
 }
 
 
