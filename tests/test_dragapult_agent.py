@@ -138,6 +138,48 @@ def test_own_switch_target_score_existing_priorities_unchanged():
     assert dm._own_switch_target_score(999999, energy_count=0, bench_attacker=False) == 0
 
 
+def test_evolve_score_dreepy_to_drakloak():
+    """Dreepy(たね)の進化(→Drakloak)は既存通り+30000の加点"""
+    assert dm._evolve_score(
+        dm.Dreepy, energy_count=0, dragapult_ex_field_count=0, opponent_prize_count=6,
+    ) == 30000
+
+
+def test_evolve_score_duskull_to_dusclops():
+    """Duskull(ヨマワル)の進化(→サマヨール)は専用の+25000加点"""
+    assert dm._evolve_score(
+        dm.Duskull, energy_count=0, dragapult_ex_field_count=0, opponent_prize_count=6,
+    ) == 25000
+
+
+def test_evolve_score_dusclops_to_dusknoir():
+    """Dusclops(サマヨール)の進化(→ヨノワール)は専用の+60000加点"""
+    assert dm._evolve_score(
+        dm.Dusclops, energy_count=0, dragapult_ex_field_count=0, opponent_prize_count=6,
+    ) == 60000
+
+
+def test_evolve_score_drakloak_to_dragapult_ex_default_fallback():
+    """Duskull/Dusclops/Dreepy以外(=Drakloak→Dragapult_ex)は既存通り+70000の加点"""
+    assert dm._evolve_score(
+        dm.Drakloak, energy_count=0, dragapult_ex_field_count=0, opponent_prize_count=6,
+    ) == 70000
+
+
+def test_evolve_score_drakloak_to_dragapult_ex_suppressed_when_enough_on_field():
+    """ドラパルトexが既に2体以上場にいる場合は既存通り-1で見送る"""
+    assert dm._evolve_score(
+        dm.Drakloak, energy_count=0, dragapult_ex_field_count=2, opponent_prize_count=6,
+    ) == -1
+
+
+def test_evolve_score_adds_energy_count_bonus():
+    """既存通り、進化元のエネルギー数がそのまま加点される"""
+    assert dm._evolve_score(
+        dm.Dreepy, energy_count=2, dragapult_ex_field_count=0, opponent_prize_count=6,
+    ) == 30002
+
+
 def test_crispin_score_low_when_fire_energy_exhausted_in_deck():
     """アカマツは山札から「ちがうタイプの基本エネルギーを2枚まで」探す効果のため、
     炎エネルギーが山札に0枚だと2種探せず効果が弱まる。この場合は他の状況に関わらず

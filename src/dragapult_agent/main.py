@@ -160,6 +160,32 @@ def _own_switch_target_score(card_id: int, energy_count: int, bench_attacker: bo
     return 0
 
 
+def _evolve_score(
+    pre_evolution_id: int, energy_count: int, dragapult_ex_field_count: int,
+    opponent_prize_count: int,
+) -> int:
+    """OptionType.EVOLVEのスコアを返す（進化元ポケモンのエネルギー数は
+    呼び出し側で加算済みの前提ではなく、この関数内で加算する）。
+    既存のDreepy→Drakloak・Drakloak→Dragapult_exの優先度は維持しつつ、
+    新規のDuskull(ヨマワル)→Dusclops(サマヨール)・
+    Dusclops(サマヨール)→Dusknoir(ヨノワール)の優先度を追加する。
+    ドラパルトライン優先の設計方針（設計書参照）に基づき、ヨマワル系統の
+    加点はドラパルトライン（Dreepy=30000、フォールバックのDrakloak=70000）
+    よりやや低く設定している"""
+    score = energy_count
+    if pre_evolution_id == Dreepy:
+        return score + 30000
+    elif pre_evolution_id == Duskull:
+        return score + 25000
+    elif pre_evolution_id == Dusclops:
+        return score + 60000
+    elif (dragapult_ex_field_count >= 2
+          or (dragapult_ex_field_count == 1 and opponent_prize_count <= 2)):
+        return -1
+    else:
+        return score + 70000
+
+
 def _crispin_score(
     *,
     deck_counts: dict,
@@ -996,13 +1022,9 @@ def agent(obs_dict: dict) -> list[int]:
             )
         elif o.type == OptionType.EVOLVE:
             pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
-            score += len(pokemon.energies)
-            if pokemon.id == Dreepy:
-                score += 30000
-            elif field_counts[Dragapult_ex] >= 2 or (field_counts[Dragapult_ex] == 1 and len(op_state.prize) <= 2):
-                score = -1
-            else:
-                score += 70000
+            score = _evolve_score(
+                pokemon.id, len(pokemon.energies), field_counts[Dragapult_ex], len(op_state.prize),
+            )
         elif o.type == OptionType.ABILITY:
             card = get_card(obs, o.area, o.index, my_index)
             if no_draw:
