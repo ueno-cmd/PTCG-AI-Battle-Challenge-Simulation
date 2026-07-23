@@ -947,6 +947,26 @@ def agent(obs_dict: dict) -> list[int]:
                     score = 52000
                 else:
                     score = -1
+            elif card.id == Duskull:
+                if field_counts[Duskull] + field_counts[Dusclops] + field_counts[Dusknoir] == 0:
+                    score = 51000
+                else:
+                    score = -1
+            elif card.id == Munkidori:
+                if field_counts[Munkidori] == 0:
+                    score = 51000
+                else:
+                    score = -1
+            elif card.id == Moltres:
+                if field_counts[Moltres] == 0:
+                    score = 51000
+                else:
+                    score = -1
+            elif card.id == Yveltal:
+                if field_counts[Yveltal] == 0:
+                    score = 51000
+                else:
+                    score = -1
             elif card.id == Meowth_ex:
                 if state.supporterPlayed:
                     score = -1

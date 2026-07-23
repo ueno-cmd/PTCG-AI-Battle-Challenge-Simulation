@@ -396,3 +396,10 @@ def test_deck_ace_spec_limit_is_one():
     deck_module = _load_deck_module()
     counts = dict(deck_module.DECK)
     assert counts[dm.Unfair_Stamp] == 1
+
+
+def test_new_basic_pokemon_are_not_registered_as_trainer_cards():
+    """Duskull/Munkidori/Moltres/YveltalはPokemonカードのため、
+    TrainerCardPolicyには登録されない（agent()内の専用PLAY分岐で処理される）"""
+    for card_id in (dm.Duskull, dm.Munkidori, dm.Moltres, dm.Yveltal):
+        assert card_id not in dm.TRAINER_CARD_POLICIES
