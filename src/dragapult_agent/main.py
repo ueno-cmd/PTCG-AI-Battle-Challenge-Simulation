@@ -186,6 +186,17 @@ def _evolve_score(
         return score + 70000
 
 
+def _fetch_from_discard_score(discard_count: int, bench_space: int) -> int:
+    """ヨマワルの特性「むかえにいく」（トラッシュから最大3枚のヨマワルをベンチに戻す）
+    のスコアを返す。デッキ内はヨマワル2・サマヨール1・ヨノワール1の計4枚のみのため、
+    主目的はハイパーボール等で手札から直接トラッシュされたヨマワルの回収。
+    トラッシュに回収対象がなければ、または自分のベンチに空きがなければ
+    使う意味がない（docs/superpowers/specs/2026-07-23-dragapult-crustle-counter-deck-design.md）"""
+    if discard_count <= 0 or bench_space <= 0:
+        return -1
+    return 42000
+
+
 def _crispin_score(
     *,
     deck_counts: dict,
@@ -1031,6 +1042,9 @@ def agent(obs_dict: dict) -> list[int]:
                 score = -1
             elif card.id == 1267:  # Lumiose City
                 score = 1
+            elif card.id == Duskull:
+                bench_space = my_state.benchMax - len(my_state.bench)
+                score = _fetch_from_discard_score(discard_counts[Duskull], bench_space)
             else:
                 score = 40000
         elif o.type == OptionType.RETREAT:

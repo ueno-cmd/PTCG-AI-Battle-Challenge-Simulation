@@ -445,3 +445,18 @@ def test_new_basic_pokemon_are_not_registered_as_trainer_cards():
     TrainerCardPolicyには登録されない（agent()内の専用PLAY分岐で処理される）"""
     for card_id in (dm.Duskull, dm.Munkidori, dm.Moltres, dm.Yveltal):
         assert card_id not in dm.TRAINER_CARD_POLICIES
+
+
+def test_fetch_from_discard_score_high_when_target_available():
+    """トラッシュにヨマワルがあり、ベンチにも空きがあれば積極的に使う"""
+    assert dm._fetch_from_discard_score(discard_count=1, bench_space=2) == 42000
+
+
+def test_fetch_from_discard_score_low_when_discard_empty():
+    """トラッシュに回収対象のヨマワルが無ければ使う意味がない"""
+    assert dm._fetch_from_discard_score(discard_count=0, bench_space=2) == -1
+
+
+def test_fetch_from_discard_score_low_when_bench_full():
+    """ベンチに空きが無ければ戻す先が無く使う意味がない"""
+    assert dm._fetch_from_discard_score(discard_count=1, bench_space=0) == -1
