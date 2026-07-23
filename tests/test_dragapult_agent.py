@@ -391,3 +391,33 @@ def test_trainer_card_policies_cover_exactly_the_migrated_card_set():
         dm.Buddy_Buddy_Poffin, dm.Ultra_Ball, dm.Poke_Pad, dm.Crispin, dm.Brock_Scouting,
     }
     assert set(dm.TRAINER_CARD_POLICIES.keys()) == expected
+
+
+import importlib.util
+from pathlib import Path
+
+
+def _load_deck_module():
+    deck_path = Path(__file__).resolve().parents[1] / "decks" / "dragapult_20260721.py"
+    spec = importlib.util.spec_from_file_location("dragapult_deck", deck_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_deck_totals_exactly_sixty_cards():
+    deck_module = _load_deck_module()
+    assert sum(count for _, count in deck_module.DECK) == 60
+
+
+def test_deck_has_no_duplicate_card_ids():
+    deck_module = _load_deck_module()
+    card_ids = [card_id for card_id, _ in deck_module.DECK]
+    assert len(card_ids) == len(set(card_ids))
+
+
+def test_deck_ace_spec_limit_is_one():
+    """ACE SPECカード(Unfair_Stamp)は1枚制限を遵守する"""
+    deck_module = _load_deck_module()
+    counts = dict(deck_module.DECK)
+    assert counts[dm.Unfair_Stamp] == 1
