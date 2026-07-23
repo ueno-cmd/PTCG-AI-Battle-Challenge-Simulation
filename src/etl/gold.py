@@ -125,6 +125,7 @@ AREA_DISCARD = 3
 AREA_ACTIVE = 4
 AREA_BENCH = 5
 AREA_PRIZE = 6
+AREA_ENERGY = 8
 
 
 class GameStateTracker:
@@ -150,6 +151,7 @@ class GameStateTracker:
         self.species: dict = {}
         self.energy_count: dict = collections.defaultdict(int)
         self.energy_cards: dict = collections.defaultdict(list)  # serial -> 装着済みエネルギーcard_idのリスト
+        self.energy_card_owner: dict = {}  # 装着済みエネルギーカード自身のserial -> 所有ポケモンのserial
         self.asleep = False
         self.paralyzed = False
         self.opponent_prize_remaining = self.INITIAL_PRIZE_COUNT
@@ -197,6 +199,8 @@ class GameStateTracker:
             self.energy_count[serial]
         elif to_area == AREA_DISCARD and from_area in (AREA_ACTIVE, AREA_BENCH):
             self._remove_serial(serial)
+        elif from_area == AREA_ENERGY:
+            self._detach_energy(serial, card_id)
 
     def _apply_play(self, event: dict) -> None:
         """手札からのポケモン新規登場。たねポケモンを手札から場に出す動作は
@@ -234,6 +238,18 @@ class GameStateTracker:
         if card_id not in self.tool_card_ids:
             self.energy_count[target_serial] += 1
             self.energy_cards[target_serial].append(card_id)
+            self.energy_card_owner[event["serial"]] = target_serial
+
+    def _detach_energy(self, energy_card_serial: int, card_id: int) -> None:
+        """Crushing Hammer等でポケモンから装着済みエネルギーだけがはがされて
+        移動する(MOVE_CARD、fromArea=ENERGY)場合の処理。ポケモン自体は場に残るため
+        _remove_serial()は使わず、所有ポケモンのenergy_count/energy_cardsだけを戻す"""
+        owner_serial = self.energy_card_owner.pop(energy_card_serial, None)
+        if owner_serial is None:
+            return
+        self.energy_count[owner_serial] -= 1
+        if card_id in self.energy_cards[owner_serial]:
+            self.energy_cards[owner_serial].remove(card_id)
 
     def _apply_evolve(self, event: dict) -> None:
         pre_serial = event["serialTarget"]
@@ -242,6 +258,9 @@ class GameStateTracker:
         energy = self.energy_count.pop(pre_serial, 0)
         energy_cards = self.energy_cards.pop(pre_serial, [])
         self.species.pop(pre_serial, None)
+        for energy_card_serial, owner_serial in self.energy_card_owner.items():
+            if owner_serial == pre_serial:
+                self.energy_card_owner[energy_card_serial] = post_serial
         if self.active_serial == pre_serial:
             self.active_serial = post_serial
             self.bench_serials.discard(pre_serial)

@@ -236,6 +236,25 @@ def test_tracker_move_card_to_active_removes_serial_from_bench():
     assert 69 not in tracker.bench_serials
 
 
+def test_tracker_energy_discarded_from_pokemon_decrements_count():
+    """MOVE_CARD(fromArea=ENERGY(8), toArea=DISCARD(3))は、Crushing Hammer等の効果で
+    ポケモンに装着済みのエネルギーだけがはがされて捨てられたことを表す。ポケモン自体は
+    まだ場に残っているため_remove_serial()による全体除去では対応できず、energy_countを
+    個別に減算しないと、後で進化してもこの分が消えないまま引き継がれてしまう
+    (2026-07-23、実ログdata/battle_logs/87581662.jsonのstep=16で実測確認:
+    このイベントが未対応だったため、はがされたはずのエネルギーが進化後も
+    カウントされ続け、attach_score()の矛盾検証で偽陽性を生んでいた)"""
+    tracker = GameStateTracker(target_player_index=0, tool_card_ids=frozenset({1159}))
+    tracker.apply({"type": 6, "playerIndex": 0, "cardId": 121, "serial": 10, "fromArea": 2, "toArea": 4})
+    tracker.apply({"type": 11, "playerIndex": 0, "cardId": 6, "serial": 90, "cardIdTarget": 121, "serialTarget": 10})
+    assert tracker.energy_count[10] == 1
+
+    tracker.apply({"type": 6, "playerIndex": 0, "cardId": 6, "serial": 90, "fromArea": 8, "toArea": 3})
+
+    assert tracker.energy_count[10] == 0
+    assert tracker.energy_cards[10] == []
+
+
 def test_tracker_full_game_replay_matches_snapshot_energy_count(sample_log):
     """step_indexが20以下のイベントのみを適用し、step=20時点での正確な状態を再現することを確認。
     境界チェックをapply前に行わないと、step>20の最初のイベントが誤ってapplyされてしまう"""
