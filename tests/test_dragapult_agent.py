@@ -477,12 +477,46 @@ def test_no_draw_gated_cards_registered():
     ) == -1
 
 
-def test_trainer_card_policies_cover_exactly_the_migrated_card_set():
-    """現行TRAINER_CARD_POLICIESに登録されているカードと過不足なく一致することを保証する"""
+def test_jamming_tower_policy_plays_when_no_own_stadium():
+    policy = dm.JammingTowerPolicy()
+    ctx = _make_ctx(stadium_id=0)
+    assert policy.play_score(ctx) == 30000
+
+
+def test_jamming_tower_policy_holds_when_already_active():
+    policy = dm.JammingTowerPolicy()
+    ctx = _make_ctx(stadium_id=dm.Jamming_Tower)
+    assert policy.play_score(ctx) == -1
+
+
+def test_jamming_tower_policy_replays_over_opponent_stadium():
+    """相手のスタジアムが設置済みでも、ジャミングタワー(自分のもの)ではないので
+    常時採用の方針通りプレイする"""
+    policy = dm.JammingTowerPolicy()
+    ctx = _make_ctx(stadium_id=999999)
+    assert policy.play_score(ctx) == 30000
+
+
+def test_dawn_and_rosas_encouragement_and_jamming_tower_registered():
+    assert dm._score_play_trainer_card(
+        dm.Dawn, _make_ctx(card_id=dm.Dawn, use_support=dm.Dawn)
+    ) == 22000
+    assert dm._score_play_trainer_card(
+        dm.Rosas_Encouragement,
+        _make_ctx(card_id=dm.Rosas_Encouragement, use_support=dm.Rosas_Encouragement)
+    ) == 21000
+    assert dm._score_play_trainer_card(
+        dm.Jamming_Tower, _make_ctx(stadium_id=0)
+    ) == 30000
+
+
+def test_trainer_card_policies_cover_updated_card_set():
+    """Task 2の更新に、ヒカリ・メイのはげまし・ジャミングタワーを追加した最終集合と一致すること"""
     expected = {
         dm.Rare_Candy, dm.Unfair_Stamp, dm.Night_Stretcher,
         dm.Boss_Orders, dm.Lillie_Determination,
         dm.Buddy_Buddy_Poffin, dm.Ultra_Ball, dm.Poke_Pad, dm.Crispin,
+        dm.Dawn, dm.Rosas_Encouragement, dm.Jamming_Tower,
     }
     assert set(dm.TRAINER_CARD_POLICIES.keys()) == expected
 

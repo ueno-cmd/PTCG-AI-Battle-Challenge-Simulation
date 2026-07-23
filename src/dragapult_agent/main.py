@@ -9,7 +9,7 @@ from dragapult_agent.constants import (
     Dreepy, Drakloak, Dragapult_ex, Fezandipiti_ex, Budew,
     Meowth_ex, Rare_Candy, Unfair_Stamp, Buddy_Buddy_Poffin, Night_Stretcher,
     Ultra_Ball, Poke_Pad, Boss_Orders, Crispin,
-    Lillie_Determination,
+    Lillie_Determination, Dawn, Rosas_Encouragement, Jamming_Tower,
     Basic_Fire_Energy, Basic_Psychic_Energy, Basic_Dark_Energy,
     Munkidori, Duskull, Dusclops, Dusknoir, Moltres, Yveltal,
 )
@@ -354,6 +354,16 @@ class PokePadPolicy(TrainerCardPolicy):
         return 45000 if ctx.deck_counts[Dreepy] + ctx.deck_counts[Drakloak] > 0 else -1
 
 
+class JammingTowerPolicy(TrainerCardPolicy):
+    """両者の「どうぐ」を無効化するスタジアム。自デッキはツールカードを
+    採用していないため実質相手のみ不利化する。常時採用する方針とし、
+    既に自分のジャミングタワーが場にある場合のみ見送る"""
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        if ctx.stadium_id == Jamming_Tower:
+            return -1
+        return 30000
+
+
 TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {
     Unfair_Stamp: FixedScorePolicy(15000),
     Boss_Orders: SupporterSelectedPolicy(35000),
@@ -364,6 +374,9 @@ TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {
     Ultra_Ball: UltraBallPolicy(),
     Poke_Pad: PokePadPolicy(),
     Crispin: SupporterSelectedPolicy(35000, no_draw_gate=True),
+    Dawn: SupporterSelectedPolicy(22000),
+    Rosas_Encouragement: SupporterSelectedPolicy(21000),
+    Jamming_Tower: JammingTowerPolicy(),
 }
 
 
@@ -860,6 +873,12 @@ def agent(obs_dict: dict) -> list[int]:
         elif id == Lillie_Determination:
             if not ignore_count or support_count == 0:
                 score = 45000
+        elif id == Dawn:
+            score = 22000
+        elif id == Rosas_Encouragement:
+            score = 21000 if prize_diff < 0 else UNNECESSARY
+        elif id == Jamming_Tower:
+            score = 8000
         elif id == Basic_Fire_Energy or id == Basic_Psychic_Energy or id == Basic_Dark_Energy:
             if can_main_attack and (len(op_state.prize) <= 2
                 or (bench_attacker and len(op_state.prize) <= 4)):
