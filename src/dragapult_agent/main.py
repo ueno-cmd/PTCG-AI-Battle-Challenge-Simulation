@@ -135,6 +135,28 @@ def _boss_orders_score(has_pull_target: bool, explore_roll: float, epsilon: floa
     return 0  # 温存
 
 
+def _own_switch_target_score(card_id: int, energy_count: int, bench_attacker: bool) -> int:
+    """SelectContext.SWITCH/TO_ACTIVE/SETUP_ACTIVE_POKEMON共通で、
+    自分のポケモンをアクティブへ送る候補への優先度スコアを返す
+    （hp・energy_count*1000の共通加点は呼び出し側で加算する）。
+    強制入場時のみスボミーを特別優先していた分岐は、実戦で効果が
+    機能している確証がなく、本命アタッカーを出し損ねるリスクの方が
+    明確なため削除した（2026-07-23、docs/analyses/20260723-dragapult-post-attach-fix-20-games.md参照）。"""
+    if card_id == Dreepy:
+        return 10000
+    elif card_id == Drakloak:
+        return 20000 if energy_count >= 1 else -10000
+    elif card_id == Dragapult_ex:
+        return 50000
+    elif card_id == Budew:
+        return 30000 if not bench_attacker else 0
+    elif card_id == Fezandipiti_ex:
+        return -1000
+    elif card_id == Meowth_ex:
+        return -2000
+    return 0
+
+
 class AttackPlan:
     attack: int = 0
     counter: list[int] = []
@@ -689,24 +711,7 @@ def agent(obs_dict: dict) -> list[int]:
                     or context == SelectContext.SETUP_ACTIVE_POKEMON):
                     # Selection of the Pokémon to send to the Active Spot
                     if o.playerIndex == my_index:
-                        if card.id == Dreepy:
-                            score += 10000
-                        elif card.id == Drakloak:
-                            if energy_count >= 1:
-                                score += 20000
-                            else:
-                                score -= 10000
-                        elif card.id == Dragapult_ex:
-                            score += 50000
-                        elif card.id == Budew:
-                            if context != SelectContext.SWITCH:
-                                score += 100000
-                            elif not bench_attacker:
-                                score += 30000
-                        elif card.id == Fezandipiti_ex:
-                            score -= 1000
-                        elif card.id == Meowth_ex:
-                            score -= 2000
+                        score += _own_switch_target_score(card.id, energy_count, bench_attacker)
                     else:
                         if plan_a.attack == o.index + 1:
                             score += 100000

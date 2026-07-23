@@ -104,3 +104,34 @@ def test_boss_orders_score_conserve_outside_epsilon():
 def test_boss_orders_score_boundary_is_exclusive():
     """explore_roll == epsilon ちょうどは温存側（lucario_agentのrng.random() < EPSILONと同じ境界）"""
     assert dm._boss_orders_score(has_pull_target=False, explore_roll=0.28, epsilon=0.28) == 0
+
+
+def test_own_switch_target_score_dragapult_ex_beats_budew_even_without_bench_attacker():
+    """強制入場時のみスボミーへ+100000を与える分岐を削除した後、
+    Dragapult_exが常にスボミーより優先されることを確認する回帰テスト。
+    2026-07-23、docs/analyses/20260723-dragapult-post-attach-fix-20-games.mdの検証で、
+    強制入場時のスボミー優先(旧+100000)が実戦で機能している確証がなく、
+    本命アタッカーを出し損ねるリスクの方が明確なため削除した
+    （docs/superpowers/specs/2026-07-23-dragapult-forced-switch-budew-priority-design.md）"""
+    dragapult_ex_score = dm._own_switch_target_score(dm.Dragapult_ex, energy_count=0, bench_attacker=False)
+    budew_score = dm._own_switch_target_score(dm.Budew, energy_count=0, bench_attacker=False)
+    assert dragapult_ex_score > budew_score
+    assert dragapult_ex_score == 50000
+    assert budew_score == 30000
+
+
+def test_own_switch_target_score_budew_is_zero_when_bench_attacker_ready():
+    """既にベンチに攻撃可能な控えがいる場合、スボミーの優先度は0点になる
+    （SelectContext.SWITCHでの既存挙動を維持）"""
+    assert dm._own_switch_target_score(dm.Budew, energy_count=0, bench_attacker=True) == 0
+
+
+def test_own_switch_target_score_existing_priorities_unchanged():
+    """Dreepy/Drakloak/フェザンディピティex/ニャースex/未知カードの
+    既存優先度が変わっていないことの回帰確認"""
+    assert dm._own_switch_target_score(dm.Dreepy, energy_count=0, bench_attacker=False) == 10000
+    assert dm._own_switch_target_score(dm.Drakloak, energy_count=1, bench_attacker=False) == 20000
+    assert dm._own_switch_target_score(dm.Drakloak, energy_count=0, bench_attacker=False) == -10000
+    assert dm._own_switch_target_score(dm.Fezandipiti_ex, energy_count=0, bench_attacker=False) == -1000
+    assert dm._own_switch_target_score(dm.Meowth_ex, energy_count=0, bench_attacker=False) == -2000
+    assert dm._own_switch_target_score(999999, energy_count=0, bench_attacker=False) == 0
