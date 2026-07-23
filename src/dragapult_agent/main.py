@@ -250,6 +250,32 @@ class NightStretcherPolicy(TrainerCardPolicy):
         return 42000 if ctx.card_score >= self.CARD_SCORE_THRESHOLD else -1
 
 
+class BuddyBuddyPoffinPolicy(TrainerCardPolicy):
+    """山札にドロディー(Dreepy)が残っている場合のみ使用。山札残り僅少(no_draw)なら使わない"""
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        if ctx.no_draw:
+            return -1
+        return 46000 if ctx.deck_counts[Dreepy] > 0 else -1
+
+
+class UltraBallPolicy(TrainerCardPolicy):
+    """手札に低評価カードが2枚以上ある(=捨てても惜しくない)場合のみ使用。
+    山札残り僅少(no_draw)なら使わない"""
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        if ctx.no_draw:
+            return -1
+        return 44000 if ctx.negative_hand_count >= 2 else -1
+
+
+class PokePadPolicy(TrainerCardPolicy):
+    """山札にドロディー(Dreepy)かイダテヌキ(Drakloak)が残っている場合のみ使用。
+    山札残り僅少(no_draw)なら使わない"""
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        if ctx.no_draw:
+            return -1
+        return 45000 if ctx.deck_counts[Dreepy] + ctx.deck_counts[Drakloak] > 0 else -1
+
+
 TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {
     Unfair_Stamp: FixedScorePolicy(15000),
     Crushing_Hammer: FixedScorePolicy(40000),
@@ -258,6 +284,11 @@ TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {
     Rare_Candy: RareCandyPolicy(),
     Team_Rocket_Watchtower: TeamRocketWatchtowerPolicy(),
     Night_Stretcher: NightStretcherPolicy(),
+    Buddy_Buddy_Poffin: BuddyBuddyPoffinPolicy(),
+    Ultra_Ball: UltraBallPolicy(),
+    Poke_Pad: PokePadPolicy(),
+    Crispin: SupporterSelectedPolicy(35000, no_draw_gate=True),
+    Brock_Scouting: SupporterSelectedPolicy(35000, no_draw_gate=True),
 }
 
 

@@ -308,3 +308,76 @@ def test_night_stretcher_policy_holds_below_threshold():
 
 def test_night_stretcher_registered():
     assert dm._score_play_trainer_card(dm.Night_Stretcher, _make_ctx(card_score=20000)) == 42000
+
+
+def test_buddy_buddy_poffin_policy_plays_when_dreepy_in_deck():
+    policy = dm.BuddyBuddyPoffinPolicy()
+    ctx = _make_ctx(deck_counts=defaultdict(int, {dm.Dreepy: 1}))
+    assert policy.play_score(ctx) == 46000
+
+
+def test_buddy_buddy_poffin_policy_holds_when_no_dreepy_in_deck():
+    policy = dm.BuddyBuddyPoffinPolicy()
+    ctx = _make_ctx(deck_counts=defaultdict(int))
+    assert policy.play_score(ctx) == -1
+
+
+def test_buddy_buddy_poffin_policy_suppressed_by_no_draw():
+    policy = dm.BuddyBuddyPoffinPolicy()
+    ctx = _make_ctx(deck_counts=defaultdict(int, {dm.Dreepy: 1}), no_draw=True)
+    assert policy.play_score(ctx) == -1
+
+
+def test_ultra_ball_policy_plays_when_two_or_more_negative_cards():
+    policy = dm.UltraBallPolicy()
+    assert policy.play_score(_make_ctx(negative_hand_count=2)) == 44000
+
+
+def test_ultra_ball_policy_holds_below_threshold():
+    policy = dm.UltraBallPolicy()
+    assert policy.play_score(_make_ctx(negative_hand_count=1)) == -1
+
+
+def test_ultra_ball_policy_suppressed_by_no_draw():
+    policy = dm.UltraBallPolicy()
+    assert policy.play_score(_make_ctx(negative_hand_count=2, no_draw=True)) == -1
+
+
+def test_poke_pad_policy_plays_when_dreepy_or_drakloak_in_deck():
+    policy = dm.PokePadPolicy()
+    ctx = _make_ctx(deck_counts=defaultdict(int, {dm.Drakloak: 1}))
+    assert policy.play_score(ctx) == 45000
+
+
+def test_poke_pad_policy_holds_when_neither_in_deck():
+    policy = dm.PokePadPolicy()
+    ctx = _make_ctx(deck_counts=defaultdict(int))
+    assert policy.play_score(ctx) == -1
+
+
+def test_poke_pad_policy_suppressed_by_no_draw():
+    policy = dm.PokePadPolicy()
+    ctx = _make_ctx(deck_counts=defaultdict(int, {dm.Dreepy: 1}), no_draw=True)
+    assert policy.play_score(ctx) == -1
+
+
+def test_no_draw_gated_cards_registered():
+    assert dm._score_play_trainer_card(
+        dm.Buddy_Buddy_Poffin, _make_ctx(deck_counts=defaultdict(int, {dm.Dreepy: 1}))
+    ) == 46000
+    assert dm._score_play_trainer_card(
+        dm.Ultra_Ball, _make_ctx(negative_hand_count=2)
+    ) == 44000
+    assert dm._score_play_trainer_card(
+        dm.Poke_Pad, _make_ctx(deck_counts=defaultdict(int, {dm.Drakloak: 1}))
+    ) == 45000
+    assert dm._score_play_trainer_card(
+        dm.Crispin, _make_ctx(card_id=dm.Crispin, use_support=dm.Crispin)
+    ) == 35000
+    assert dm._score_play_trainer_card(
+        dm.Brock_Scouting, _make_ctx(card_id=dm.Brock_Scouting, use_support=dm.Brock_Scouting)
+    ) == 35000
+    # no_drawが真なら、use_supportと一致していてもCrispin/Brock_Scoutingは-1
+    assert dm._score_play_trainer_card(
+        dm.Crispin, _make_ctx(card_id=dm.Crispin, use_support=dm.Crispin, no_draw=True)
+    ) == -1
