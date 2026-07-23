@@ -149,13 +149,20 @@ def _boss_orders_score(has_pull_target: bool, explore_roll: float, epsilon: floa
     return 0  # 温存
 
 
-def _own_switch_target_score(card_id: int, energy_count: int, bench_attacker: bool) -> int:
+def _own_switch_target_score(
+    card_id: int, energy_count: int, bench_attacker: bool, opponent_active_is_ex: bool,
+) -> int:
     """SelectContext.SWITCH/TO_ACTIVE/SETUP_ACTIVE_POKEMON共通で、
     自分のポケモンをアクティブへ送る候補への優先度スコアを返す
     （hp・energy_count*1000の共通加点は呼び出し側で加算する）。
     強制入場時のみスボミーを特別優先していた分岐は、実戦で効果が
     機能している確証がなく、本命アタッカーを出し損ねるリスクの方が
-    明確なため削除した（2026-07-23、docs/analyses/20260723-dragapult-post-attach-fix-20-games.md参照）。"""
+    明確なため削除した（2026-07-23、docs/analyses/20260723-dragapult-post-attach-fix-20-games.md参照）。
+    ファイヤーは相手アクティブがexの時のみドラパルトexと同等の優先度
+    （非ex攻撃で110ダメージを狙えるため）、イベルタルは主力が倒れた際の
+    つなぎとして中程度の優先度、ヨノワールは貴重な1枚をカースドボム抜きで
+    晒すと丸損なため低優先度とする
+    （docs/superpowers/specs/2026-07-23-dragapult-crustle-counter-deck-design.md）"""
     if card_id == Dreepy:
         return 10000
     elif card_id == Drakloak:
@@ -168,6 +175,12 @@ def _own_switch_target_score(card_id: int, energy_count: int, bench_attacker: bo
         return -1000
     elif card_id == Meowth_ex:
         return -2000
+    elif card_id == Moltres:
+        return 49000 if opponent_active_is_ex else 5000
+    elif card_id == Yveltal:
+        return 15000
+    elif card_id == Dusknoir:
+        return -500
     return 0
 
 
@@ -937,7 +950,13 @@ def agent(obs_dict: dict) -> list[int]:
                     or context == SelectContext.SETUP_ACTIVE_POKEMON):
                     # Selection of the Pokémon to send to the Active Spot
                     if o.playerIndex == my_index:
-                        score += _own_switch_target_score(card.id, energy_count, bench_attacker)
+                        # 相手アクティブがexかどうかでファイヤーの優先度を切り替えるため判定する
+                        opponent_active_is_ex = (
+                            len(op_state.active) > 0 and op_state.active[0] is not None
+                            and card_table[op_state.active[0].id].ex
+                        )
+                        score += _own_switch_target_score(
+                            card.id, energy_count, bench_attacker, opponent_active_is_ex)
                     else:
                         if plan_a.attack == o.index + 1:
                             score += 100000

@@ -155,8 +155,10 @@ def test_own_switch_target_score_dragapult_ex_beats_budew_even_without_bench_att
     強制入場時のスボミー優先(旧+100000)が実戦で機能している確証がなく、
     本命アタッカーを出し損ねるリスクの方が明確なため削除した
     （docs/superpowers/specs/2026-07-23-dragapult-forced-switch-budew-priority-design.md）"""
-    dragapult_ex_score = dm._own_switch_target_score(dm.Dragapult_ex, energy_count=0, bench_attacker=False)
-    budew_score = dm._own_switch_target_score(dm.Budew, energy_count=0, bench_attacker=False)
+    dragapult_ex_score = dm._own_switch_target_score(
+        dm.Dragapult_ex, energy_count=0, bench_attacker=False, opponent_active_is_ex=False)
+    budew_score = dm._own_switch_target_score(
+        dm.Budew, energy_count=0, bench_attacker=False, opponent_active_is_ex=False)
     assert dragapult_ex_score > budew_score
     assert dragapult_ex_score == 50000
     assert budew_score == 30000
@@ -165,18 +167,52 @@ def test_own_switch_target_score_dragapult_ex_beats_budew_even_without_bench_att
 def test_own_switch_target_score_budew_is_zero_when_bench_attacker_ready():
     """既にベンチに攻撃可能な控えがいる場合、スボミーの優先度は0点になる
     （SelectContext.SWITCHでの既存挙動を維持）"""
-    assert dm._own_switch_target_score(dm.Budew, energy_count=0, bench_attacker=True) == 0
+    assert dm._own_switch_target_score(
+        dm.Budew, energy_count=0, bench_attacker=True, opponent_active_is_ex=False) == 0
 
 
 def test_own_switch_target_score_existing_priorities_unchanged():
     """Dreepy/Drakloak/フェザンディピティex/ニャースex/未知カードの
     既存優先度が変わっていないことの回帰確認"""
-    assert dm._own_switch_target_score(dm.Dreepy, energy_count=0, bench_attacker=False) == 10000
-    assert dm._own_switch_target_score(dm.Drakloak, energy_count=1, bench_attacker=False) == 20000
-    assert dm._own_switch_target_score(dm.Drakloak, energy_count=0, bench_attacker=False) == -10000
-    assert dm._own_switch_target_score(dm.Fezandipiti_ex, energy_count=0, bench_attacker=False) == -1000
-    assert dm._own_switch_target_score(dm.Meowth_ex, energy_count=0, bench_attacker=False) == -2000
-    assert dm._own_switch_target_score(999999, energy_count=0, bench_attacker=False) == 0
+    assert dm._own_switch_target_score(
+        dm.Dreepy, energy_count=0, bench_attacker=False, opponent_active_is_ex=False) == 10000
+    assert dm._own_switch_target_score(
+        dm.Drakloak, energy_count=1, bench_attacker=False, opponent_active_is_ex=False) == 20000
+    assert dm._own_switch_target_score(
+        dm.Drakloak, energy_count=0, bench_attacker=False, opponent_active_is_ex=False) == -10000
+    assert dm._own_switch_target_score(
+        dm.Fezandipiti_ex, energy_count=0, bench_attacker=False, opponent_active_is_ex=False) == -1000
+    assert dm._own_switch_target_score(
+        dm.Meowth_ex, energy_count=0, bench_attacker=False, opponent_active_is_ex=False) == -2000
+    assert dm._own_switch_target_score(
+        999999, energy_count=0, bench_attacker=False, opponent_active_is_ex=False) == 0
+
+
+def test_own_switch_target_score_moltres_prioritized_when_opponent_active_is_ex():
+    """相手アクティブがexの時のみドラパルトexと同等の高優先度、それ以外は低優先度"""
+    high = dm._own_switch_target_score(
+        dm.Moltres, energy_count=0, bench_attacker=False, opponent_active_is_ex=True)
+    low = dm._own_switch_target_score(
+        dm.Moltres, energy_count=0, bench_attacker=False, opponent_active_is_ex=False)
+    assert high == 49000
+    assert low == 5000
+    assert high > low
+
+
+def test_own_switch_target_score_yveltal_is_mid_priority():
+    """イベルタルはドラパルトexより低い中程度の優先度（主力が倒れた際のつなぎ）"""
+    yveltal_score = dm._own_switch_target_score(
+        dm.Yveltal, energy_count=0, bench_attacker=False, opponent_active_is_ex=False)
+    dragapult_ex_score = dm._own_switch_target_score(
+        dm.Dragapult_ex, energy_count=0, bench_attacker=False, opponent_active_is_ex=False)
+    assert 0 < yveltal_score < dragapult_ex_score
+    assert yveltal_score == 15000
+
+
+def test_own_switch_target_score_dusknoir_is_low_priority():
+    """貴重な1枚をカースドボム抜きで晒すと丸損なため、低優先度"""
+    assert dm._own_switch_target_score(
+        dm.Dusknoir, energy_count=0, bench_attacker=False, opponent_active_is_ex=False) < 0
 
 
 def test_evolve_score_dreepy_to_drakloak():
