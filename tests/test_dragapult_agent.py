@@ -221,9 +221,8 @@ def test_score_play_trainer_card_returns_zero_for_unregistered_card():
     assert dm._score_play_trainer_card(999999, _make_ctx()) == 0
 
 
-def test_unfair_stamp_and_crushing_hammer_registered():
+def test_unfair_stamp_registered():
     assert dm._score_play_trainer_card(dm.Unfair_Stamp, _make_ctx()) == 15000
-    assert dm._score_play_trainer_card(dm.Crushing_Hammer, _make_ctx()) == 40000
 
 
 def test_supporter_selected_policy_scores_when_selected_as_use_support():
@@ -271,29 +270,8 @@ def test_rare_candy_policy_high_priority_otherwise():
     assert policy.play_score(_make_ctx(no_more_dex=False)) == 75000
 
 
-def test_team_rocket_watchtower_policy_plays_when_stadium_already_set():
-    policy = dm.TeamRocketWatchtowerPolicy()
-    ctx = _make_ctx(stadium_id=dm.Team_Rocket_Watchtower, state=_make_state(turn=5))
-    assert policy.play_score(ctx) == 80000
-
-
-def test_team_rocket_watchtower_policy_plays_on_turn_one_even_without_stadium():
-    policy = dm.TeamRocketWatchtowerPolicy()
-    ctx = _make_ctx(stadium_id=0, state=_make_state(turn=1))
-    assert policy.play_score(ctx) == 80000
-
-
-def test_team_rocket_watchtower_policy_holds_otherwise():
-    policy = dm.TeamRocketWatchtowerPolicy()
-    ctx = _make_ctx(stadium_id=0, state=_make_state(turn=5))
-    assert policy.play_score(ctx) == -1
-
-
-def test_rare_candy_and_team_rocket_watchtower_registered():
+def test_rare_candy_registered():
     assert dm._score_play_trainer_card(dm.Rare_Candy, _make_ctx(no_more_dex=False)) == 75000
-    assert dm._score_play_trainer_card(
-        dm.Team_Rocket_Watchtower, _make_ctx(stadium_id=0, state=_make_state(turn=1))
-    ) == 80000
 
 
 def test_night_stretcher_policy_plays_when_card_score_meets_threshold():
@@ -374,21 +352,18 @@ def test_no_draw_gated_cards_registered():
     assert dm._score_play_trainer_card(
         dm.Crispin, _make_ctx(card_id=dm.Crispin, use_support=dm.Crispin)
     ) == 35000
-    assert dm._score_play_trainer_card(
-        dm.Brock_Scouting, _make_ctx(card_id=dm.Brock_Scouting, use_support=dm.Brock_Scouting)
-    ) == 35000
-    # no_drawが真なら、use_supportと一致していてもCrispin/Brock_Scoutingは-1
+    # no_drawが真なら、use_supportと一致していてもCrispinは-1
     assert dm._score_play_trainer_card(
         dm.Crispin, _make_ctx(card_id=dm.Crispin, use_support=dm.Crispin, no_draw=True)
     ) == -1
 
 
 def test_trainer_card_policies_cover_exactly_the_migrated_card_set():
-    """現行if/elif連鎖でトレーナーズカードとして扱われている12枚と過不足なく一致することを保証する"""
+    """現行TRAINER_CARD_POLICIESに登録されているカードと過不足なく一致することを保証する"""
     expected = {
-        dm.Rare_Candy, dm.Unfair_Stamp, dm.Night_Stretcher, dm.Crushing_Hammer,
-        dm.Boss_Orders, dm.Lillie_Determination, dm.Team_Rocket_Watchtower,
-        dm.Buddy_Buddy_Poffin, dm.Ultra_Ball, dm.Poke_Pad, dm.Crispin, dm.Brock_Scouting,
+        dm.Rare_Candy, dm.Unfair_Stamp, dm.Night_Stretcher,
+        dm.Boss_Orders, dm.Lillie_Determination,
+        dm.Buddy_Buddy_Poffin, dm.Ultra_Ball, dm.Poke_Pad, dm.Crispin,
     }
     assert set(dm.TRAINER_CARD_POLICIES.keys()) == expected
 

@@ -6,10 +6,10 @@ from dataclasses import dataclass
 
 from cg.api import AreaType, CardType, Log, LogType, Observation, SelectContext, OptionType, Card, Pokemon, State, all_card_data, to_observation_class
 from dragapult_agent.constants import (
-    Dreepy, Drakloak, Dragapult_ex, Fezandipiti_ex, Latias_ex, Budew,
+    Dreepy, Drakloak, Dragapult_ex, Fezandipiti_ex, Budew,
     Meowth_ex, Rare_Candy, Unfair_Stamp, Buddy_Buddy_Poffin, Night_Stretcher,
-    Crushing_Hammer, Ultra_Ball, Poke_Pad, Lucky_Helmet, Boss_Orders, Crispin,
-    Brock_Scouting, Lillie_Determination, Team_Rocket_Watchtower,
+    Ultra_Ball, Poke_Pad, Boss_Orders, Crispin,
+    Lillie_Determination,
     Basic_Fire_Energy, Basic_Psychic_Energy,
 )
 
@@ -70,7 +70,7 @@ def _attach_score(
     # Attach energy
     if pokemon.id == Budew:
         return -1
-    elif pokemon.id == Meowth_ex or pokemon.id == Fezandipiti_ex or pokemon.id == Latias_ex:
+    elif pokemon.id == Meowth_ex or pokemon.id == Fezandipiti_ex:
         if active and not can_switch and not my_asleep and not my_paralyzed:
             if bench_attacker or field_counts[Budew] >= 1:
                 return 22000
@@ -184,7 +184,7 @@ def _crispin_score(
 @dataclass
 class PlayTrainerCardContext:
     """OptionType.PLAY のトレーナーズカードのスコアリングに必要な情報をまとめる。
-    ポケモンカード分岐(Dreepy/Fezandipiti_ex/Latias_ex/Budew/Meowth_ex)はagent()側に
+    ポケモンカード分岐(Dreepy/Fezandipiti_ex/Budew/Meowth_ex)はagent()側に
     残すため含まない"""
     card_id: int
     card_score: int          # hand_scores[o.index]
@@ -234,14 +234,6 @@ class RareCandyPolicy(TrainerCardPolicy):
         return -1 if ctx.no_more_dex else 75000
 
 
-class TeamRocketWatchtowerPolicy(TrainerCardPolicy):
-    """スタジアムが既に何か設置済み、または1ターン目なら設置する"""
-    def play_score(self, ctx: PlayTrainerCardContext) -> int:
-        if ctx.stadium_id > 0 or ctx.state.turn == 1:
-            return 80000
-        return -1
-
-
 class NightStretcherPolicy(TrainerCardPolicy):
     """手札評価(card_score)が閾値以上(=有用なカードを回収できる)場合のみ使用"""
     CARD_SCORE_THRESHOLD = 18000
@@ -278,17 +270,14 @@ class PokePadPolicy(TrainerCardPolicy):
 
 TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {
     Unfair_Stamp: FixedScorePolicy(15000),
-    Crushing_Hammer: FixedScorePolicy(40000),
     Boss_Orders: SupporterSelectedPolicy(35000),
     Lillie_Determination: SupporterSelectedPolicy(14000),
     Rare_Candy: RareCandyPolicy(),
-    Team_Rocket_Watchtower: TeamRocketWatchtowerPolicy(),
     Night_Stretcher: NightStretcherPolicy(),
     Buddy_Buddy_Poffin: BuddyBuddyPoffinPolicy(),
     Ultra_Ball: UltraBallPolicy(),
     Poke_Pad: PokePadPolicy(),
     Crispin: SupporterSelectedPolicy(35000, no_draw_gate=True),
-    Brock_Scouting: SupporterSelectedPolicy(35000, no_draw_gate=True),
 }
 
 
@@ -688,21 +677,13 @@ def agent(obs_dict: dict) -> list[int]:
                 score = 5
             elif len(op_state.prize) == 1:
                 score = UNNECESSARY
-        elif id == Latias_ex:
-            if active_id == Fezandipiti_ex or active_id == Meowth_ex or active_id == Dreepy:
-                if field_counts[Drakloak] + field_counts[Dragapult_ex] == 0:
-                    score = 28000
-                else:
-                    score = 15000
-            else:
-                score = 10
         elif id == Budew:
             if field_counts[id] + field_counts[Drakloak] + field_counts[Dragapult_ex] >= 1:
                 score = UNNECESSARY
             elif state.turn >= 2:
                 score = 30000
         elif id == Meowth_ex:
-            if support_count > hand_counts[Boss_Orders] or stadium_id == Team_Rocket_Watchtower:
+            if support_count > hand_counts[Boss_Orders]:
                 score = 5
             elif state.supporterPlayed:
                 score = 40
@@ -735,8 +716,6 @@ def agent(obs_dict: dict) -> list[int]:
                     card_type = card_table[i].cardType
                     if card_type == CardType.POKEMON or card_type == CardType.BASIC_ENERGY:
                         score = max(score, hand_score(i, ignore_count))
-        elif id == Crushing_Hammer:
-            score = 20
         elif id == Ultra_Ball:
             if main_pokemon_count <= 2 or field_counts[Dreepy] >= 1:
                 score = 70
@@ -744,8 +723,6 @@ def agent(obs_dict: dict) -> list[int]:
                 score = 5
         elif id == Poke_Pad:
             score = max(hand_score(Dreepy, ignore_count), hand_score(Drakloak, ignore_count))
-        elif id == Lucky_Helmet:
-            score = 15
         elif id == Boss_Orders:
             score = _boss_orders_score(plan_a.attack > 0, _dragapult_rng.random(), BOSS_ORDERS_EXPLORE_EPSILON)
         elif id == Crispin:
@@ -754,18 +731,9 @@ def agent(obs_dict: dict) -> list[int]:
                     deck_counts=deck_counts, can_main_attack=can_main_attack,
                     bench_attacker=bench_attacker, field_counts=field_counts,
                 )
-        elif id == Brock_Scouting:
-            if not ignore_count or support_count == 0:
-                if state.turn == 2 and field_counts[Budew] + field_counts[Latias_ex] == 0:
-                    score = 50000
-                else:
-                    score = 30000
         elif id == Lillie_Determination:
             if not ignore_count or support_count == 0:
                 score = 45000
-        elif id == Team_Rocket_Watchtower:
-            if stadium_id != 0 and stadium_id != Team_Rocket_Watchtower:
-                score = 4000
         elif id == Basic_Fire_Energy or id == Basic_Psychic_Energy:
             if can_main_attack and (len(op_state.prize) <= 2
                 or (bench_attacker and len(op_state.prize) <= 4)):
@@ -933,18 +901,13 @@ def agent(obs_dict: dict) -> list[int]:
                     score = 53000
                 else:
                     score = -1
-            elif card.id == Latias_ex:
-                if active_id != Drakloak and active_id != Dragapult_ex:
-                    score = 51000
-                else:
-                    score = -1
             elif card.id == Budew:
                 if field_counts[Budew] == 0 and field_counts[Dragapult_ex] == 0:
                     score = 52000
                 else:
                     score = -1
             elif card.id == Meowth_ex:
-                if state.supporterPlayed or stadium_id == Team_Rocket_Watchtower:
+                if state.supporterPlayed:
                     score = -1
                 elif support_count == 0:
                     score = 50000
