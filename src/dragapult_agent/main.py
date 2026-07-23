@@ -11,6 +11,7 @@ from dragapult_agent.constants import (
     Ultra_Ball, Poke_Pad, Boss_Orders, Crispin,
     Lillie_Determination,
     Basic_Fire_Energy, Basic_Psychic_Energy,
+    Munkidori, Duskull, Dusclops, Dusknoir, Moltres, Yveltal,
 )
 
 """
@@ -607,6 +608,8 @@ def agent(obs_dict: dict) -> list[int]:
     can_evolve_dreepy = False
     evolve_dreepy_count = 0
     can_evolve_drakloak = False
+    can_evolve_yomawaru = False
+    can_evolve_samayouru = False
     damage = 200
     for card in my_state.active:
         if card == None:
@@ -619,6 +622,10 @@ def agent(obs_dict: dict) -> list[int]:
                 evolve_dreepy_count += 1
             elif card.id == Drakloak:
                 can_evolve_drakloak = True
+            elif card.id == Duskull:
+                can_evolve_yomawaru = True
+            elif card.id == Dusclops:
+                can_evolve_samayouru = True
     for card in my_state.bench:
         field_counts[card.id] += 1
         if not card.appearThisTurn:
@@ -627,6 +634,10 @@ def agent(obs_dict: dict) -> list[int]:
                 evolve_dreepy_count += 1
             elif card.id == Drakloak:
                 can_evolve_drakloak = True
+            elif card.id == Duskull:
+                can_evolve_yomawaru = True
+            elif card.id == Dusclops:
+                can_evolve_samayouru = True
         if card.id == Dragapult_ex and len(card.energies) >= 2:
             bench_attacker = True
     main_pokemon_count = field_counts[Dreepy] + field_counts[Drakloak] + field_counts[Dragapult_ex]
@@ -682,6 +693,36 @@ def agent(obs_dict: dict) -> list[int]:
                 score = UNNECESSARY
             elif state.turn >= 2:
                 score = 30000
+        elif id == Duskull:
+            if field_counts[id] + field_counts[Dusclops] + field_counts[Dusknoir] >= 1:
+                score = 1000
+            else:
+                score = 15000
+        elif id == Dusclops:
+            if can_evolve_yomawaru and field_counts[Dusclops] + field_counts[Dusknoir] == 0:
+                score = 16000
+            else:
+                score = 1000
+        elif id == Dusknoir:
+            if can_evolve_samayouru and field_counts[Dusknoir] == 0:
+                score = 17000
+            else:
+                score = 1000
+        elif id == Munkidori:
+            if field_counts[id] == 0:
+                score = 12000
+            else:
+                score = 500
+        elif id == Moltres:
+            if field_counts[id] == 0:
+                score = 12000
+            else:
+                score = 500
+        elif id == Yveltal:
+            if field_counts[id] == 0:
+                score = 13000
+            else:
+                score = 500
         elif id == Meowth_ex:
             if support_count > hand_counts[Boss_Orders]:
                 score = 5
