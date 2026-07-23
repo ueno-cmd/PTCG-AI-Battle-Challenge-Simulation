@@ -219,3 +219,8 @@ def test_score_play_trainer_card_returns_zero_for_unregistered_card():
     """未登録カードは現行のif/elif連鎖がどれにも一致しない場合のデフォルト値0と一致させる
     （main.py:712の`score = 0  # The default and baseline score is 0.`と同じ）"""
     assert dm._score_play_trainer_card(999999, _make_ctx()) == 0
+
+
+def test_unfair_stamp_and_crushing_hammer_registered():
+    assert dm._score_play_trainer_card(dm.Unfair_Stamp, _make_ctx()) == 15000
+    assert dm._score_play_trainer_card(dm.Crushing_Hammer, _make_ctx()) == 40000

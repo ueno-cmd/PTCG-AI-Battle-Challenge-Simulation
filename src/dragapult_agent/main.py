@@ -212,7 +212,10 @@ class FixedScorePolicy(TrainerCardPolicy):
         return self._score
 
 
-TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {}
+TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {
+    Unfair_Stamp: FixedScorePolicy(15000),
+    Crushing_Hammer: FixedScorePolicy(40000),
+}
 
 
 def _score_play_trainer_card(card_id: int, ctx: PlayTrainerCardContext) -> int:
