@@ -947,57 +947,15 @@ def agent(obs_dict: dict) -> list[int]:
                     score = 50000
                 else:
                     score = -1
-            elif card.id == Rare_Candy:
-                if no_more_dex:
-                    score = -1
-                else:
-                    score = 75000
-            elif card.id == Unfair_Stamp:
-                score = 15000
-            elif card.id == Night_Stretcher:
-                if card_score >= 18000:
-                    score = 42000
-                else:
-                    score = -1
-            elif card.id == Crushing_Hammer:
-                score = 40000
-            elif card.id == Boss_Orders:
-                if card.id == use_support:
-                    score = 35000
-                else:
-                    score = -1
-            elif card.id == Lillie_Determination:
-                if card.id == use_support:
-                    score = 14000
-                else:
-                    score = -1
-            elif card.id == Team_Rocket_Watchtower:
-                if stadium_id > 0 or state.turn == 1:
-                    score = 80000
-                else:
-                    score = -1
-            elif no_draw:
-                score = -1
-            elif card.id == Buddy_Buddy_Poffin:
-                if deck_counts[Dreepy] > 0:
-                    score = 46000
-                else:
-                    score = -1
-            elif card.id == Ultra_Ball:
-                if negative_hand_count >= 2:
-                    score = 44000
-                else:
-                    score = -1
-            elif card.id == Poke_Pad:
-                if deck_counts[Dreepy] + deck_counts[Drakloak] > 0:
-                    score = 45000
-                else:
-                    score = -1
-            elif card.id == Crispin or card.id == Brock_Scouting:
-                if card.id == use_support:
-                    score = 35000
-                else:
-                    score = -1
+            else:
+                # トレーナーズカード(グッズ/サポート/スタジアム)はTrainerCardPolicyへ委譲
+                # (docs/superpowers/plans/2026-07-23-dragapult-trainer-card-policy-migration.md)
+                ctx = PlayTrainerCardContext(
+                    card_id=card.id, card_score=card_score, state=state, stadium_id=stadium_id,
+                    deck_counts=deck_counts, negative_hand_count=negative_hand_count,
+                    no_draw=no_draw, use_support=use_support, no_more_dex=no_more_dex,
+                )
+                score = _score_play_trainer_card(card.id, ctx)
         elif o.type == OptionType.ATTACH:
             card = get_card(obs, o.area, o.index, my_index)
             pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
