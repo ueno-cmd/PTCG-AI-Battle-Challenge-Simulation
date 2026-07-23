@@ -1,6 +1,8 @@
 import os
 import random
+from abc import ABC, abstractmethod
 from collections import defaultdict
+from dataclasses import dataclass
 
 from cg.api import AreaType, CardType, Log, LogType, Observation, SelectContext, OptionType, Card, Pokemon, State, all_card_data, to_observation_class
 from dragapult_agent.constants import (
@@ -176,6 +178,48 @@ def _crispin_score(
     if not can_main_attack and not bench_attacker and field_counts[Dragapult_ex] >= 1:
         return 55000
     return 25000
+
+
+# ==================== PLAYスコアリングのポリシー登録制（トレーナーズカードのみ） ====================
+@dataclass
+class PlayTrainerCardContext:
+    """OptionType.PLAY のトレーナーズカードのスコアリングに必要な情報をまとめる。
+    ポケモンカード分岐(Dreepy/Fezandipiti_ex/Latias_ex/Budew/Meowth_ex)はagent()側に
+    残すため含まない"""
+    card_id: int
+    card_score: int          # hand_scores[o.index]
+    state: State
+    stadium_id: int
+    deck_counts: defaultdict
+    negative_hand_count: int
+    no_draw: bool
+    use_support: int
+    no_more_dex: bool
+
+
+class TrainerCardPolicy(ABC):
+    """1枚のトレーナーズカード（サポート/グッズ/スタジアム）のPLAY判断を表す"""
+    @abstractmethod
+    def play_score(self, ctx: PlayTrainerCardContext) -> int: ...
+
+
+class FixedScorePolicy(TrainerCardPolicy):
+    """固定スコアのみを返すカード用"""
+    def __init__(self, score: int):
+        self._score = score
+
+    def play_score(self, ctx: PlayTrainerCardContext) -> int:
+        return self._score
+
+
+TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {}
+
+
+def _score_play_trainer_card(card_id: int, ctx: PlayTrainerCardContext) -> int:
+    """OptionType.PLAY のトレーナーズカード分岐のスコアを返す。
+    未登録カードは現行のif/elif連鎖がどれにも一致しない場合と同じく0を返す"""
+    policy = TRAINER_CARD_POLICIES.get(card_id)
+    return policy.play_score(ctx) if policy is not None else 0
 
 
 class AttackPlan:

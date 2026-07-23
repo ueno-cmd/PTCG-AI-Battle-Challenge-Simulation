@@ -1,8 +1,9 @@
 # tests/test_dragapult_agent.py
+import pytest
 from collections import defaultdict
 from dataclasses import dataclass, field as dc_field
 
-from cg.api import CardType
+from cg.api import CardType, State
 
 import dragapult_agent.main as dm
 
@@ -183,3 +184,38 @@ def test_crispin_score_default_priority_when_already_attack_ready():
         field_counts=field_counts,
     )
     assert score == 25000
+
+
+def _make_state(turn: int = 3, supporter_played: bool = False) -> State:
+    return State(
+        turn=turn, turnActionCount=0, yourIndex=0, firstPlayer=0,
+        supporterPlayed=supporter_played, stadiumPlayed=False,
+        energyAttached=False, retreated=False, result=-1,
+        stadium=[], looking=None, players=[],
+    )
+
+
+def _make_ctx(**overrides) -> dm.PlayTrainerCardContext:
+    defaults = dict(
+        card_id=0, card_score=0, state=_make_state(), stadium_id=0,
+        deck_counts=defaultdict(int), negative_hand_count=0,
+        no_draw=False, use_support=0, no_more_dex=False,
+    )
+    defaults.update(overrides)
+    return dm.PlayTrainerCardContext(**defaults)
+
+
+def test_trainer_card_policy_is_abstract():
+    with pytest.raises(TypeError):
+        dm.TrainerCardPolicy()
+
+
+def test_fixed_score_policy_returns_constant():
+    policy = dm.FixedScorePolicy(1234)
+    assert policy.play_score(_make_ctx()) == 1234
+
+
+def test_score_play_trainer_card_returns_zero_for_unregistered_card():
+    """未登録カードは現行のif/elif連鎖がどれにも一致しない場合のデフォルト値0と一致させる
+    （main.py:712の`score = 0  # The default and baseline score is 0.`と同じ）"""
+    assert dm._score_play_trainer_card(999999, _make_ctx()) == 0
