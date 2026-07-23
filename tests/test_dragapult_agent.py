@@ -476,3 +476,22 @@ def test_cursed_bomb_score_low_for_normal_opponent():
 def test_cursed_bomb_score_low_when_no_opponent_active():
     """相手アクティブが存在しない（Noneが渡された）場合も温存する"""
     assert dm._cursed_bomb_score(opponent_active_id=None) == -1
+
+
+def test_adrena_brain_score_high_when_opponent_active_blocks_direct_damage():
+    """マシマシラの特性「アドレナブレイン」は、カースドボムと同じ理由
+    （ダメカンの直接配置は攻撃ダメージではないため）でイワパレスの特性を迂回できるため、
+    相手アクティブがno_damage_dex()該当（イワパレス等）の時は積極的に使う"""
+    assert dm._adrena_brain_score(opponent_active_id=345) == 85000  # Crustle
+
+
+def test_adrena_brain_score_low_for_normal_opponent():
+    """通常の相手（直接攻撃が通る）には温存する。アドレナブレインは移し替え対象が
+    限定的（自分のポケモン・相手のポケモン両側に制約あり）のため、イワパレス対策以外では
+    使う意義が薄い"""
+    assert dm._adrena_brain_score(opponent_active_id=1) == -1
+
+
+def test_adrena_brain_score_low_when_no_opponent_active():
+    """相手アクティブが存在しない（Noneが渡された）場合も温存する"""
+    assert dm._adrena_brain_score(opponent_active_id=None) == -1

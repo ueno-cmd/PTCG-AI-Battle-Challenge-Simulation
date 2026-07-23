@@ -209,6 +209,18 @@ def _cursed_bomb_score(opponent_active_id: int | None) -> int:
     return -1
 
 
+def _adrena_brain_score(opponent_active_id: int | None) -> int:
+    """マシマシラの特性「アドレナブレイン」
+    （悪エネルギー装着時、自分の場のポケモン1匹のダメカン最大3個を
+    相手のポケモン1匹に移し替え。自爆なし・毎ターン使用可）のスコアを返す。
+    カースドボムと同じ理由（ダメカンの直接配置は攻撃ダメージではないため）で
+    イワパレスの特性を迂回できる。発動条件のみを実装し、対象選択（どのポケモンの
+    ダメカンを何個移すか）は既存の汎用ロジックに委ねる（次回以降のログ検証待ち）"""
+    if opponent_active_id is not None and no_damage_dex(opponent_active_id):
+        return 85000
+    return -1
+
+
 def _crispin_score(
     *,
     deck_counts: dict,
@@ -1060,6 +1072,9 @@ def agent(obs_dict: dict) -> list[int]:
             elif card.id == Dusknoir or card.id == Dusclops:
                 opponent_active_id = op_state.active[0].id if op_state.active else None
                 score = _cursed_bomb_score(opponent_active_id)
+            elif card.id == Munkidori:
+                opponent_active_id = op_state.active[0].id if op_state.active else None
+                score = _adrena_brain_score(opponent_active_id)
             else:
                 score = 40000
         elif o.type == OptionType.RETREAT:
