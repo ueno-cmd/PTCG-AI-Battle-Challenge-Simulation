@@ -294,7 +294,12 @@ TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {
 
 def _score_play_trainer_card(card_id: int, ctx: PlayTrainerCardContext) -> int:
     """OptionType.PLAY のトレーナーズカード分岐のスコアを返す。
-    未登録カードは現行のif/elif連鎖がどれにも一致しない場合と同じく0を返す"""
+    未登録カードは現行のif/elif連鎖がどれにも一致しない場合と同じく0を返す。
+    注意：旧if/elif連鎖では`no_draw`時に未一致カードは-1になっていたが
+    （カードID指定の無い`elif no_draw:`が連鎖の途中にあったため）、この
+    フォールバックはno_drawの値に関わらず常に0を返す。現行デッキの
+    トレーナーズカードは全て登録済みのためこの経路には到達しないが、
+    今後カードを追加する際はno_drawとの組み合わせを見落とさないこと"""
     policy = TRAINER_CARD_POLICIES.get(card_id)
     return policy.play_score(ctx) if policy is not None else 0
 
