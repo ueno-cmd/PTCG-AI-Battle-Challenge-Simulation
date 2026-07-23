@@ -460,3 +460,19 @@ def test_fetch_from_discard_score_low_when_discard_empty():
 def test_fetch_from_discard_score_low_when_bench_full():
     """ベンチに空きが無ければ戻す先が無く使う意味がない"""
     assert dm._fetch_from_discard_score(discard_count=1, bench_space=0) == -1
+
+
+def test_cursed_bomb_score_high_when_opponent_active_blocks_direct_damage():
+    """相手アクティブがno_damage_dex()該当（イワパレス等、直接攻撃を完全ブロックする
+    相手）の時は、カースドボム(自爆技)を積極的に使う"""
+    assert dm._cursed_bomb_score(opponent_active_id=345) == 90000  # Crustle
+
+
+def test_cursed_bomb_score_low_for_normal_opponent():
+    """通常の相手（直接攻撃が通る）には温存し、自爆技は使わない"""
+    assert dm._cursed_bomb_score(opponent_active_id=1) == -1
+
+
+def test_cursed_bomb_score_low_when_no_opponent_active():
+    """相手アクティブが存在しない（Noneが渡された）場合も温存する"""
+    assert dm._cursed_bomb_score(opponent_active_id=None) == -1

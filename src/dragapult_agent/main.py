@@ -197,6 +197,18 @@ def _fetch_from_discard_score(discard_count: int, bench_space: int) -> int:
     return 42000
 
 
+def _cursed_bomb_score(opponent_active_id: int | None) -> int:
+    """ヨノワール／サマヨールの特性「カースドボム」
+    （自分を気絶させ、相手ポケモン1匹にダメカンを直接配置）のスコアを返す。
+    「ダメカンの直接配置」は「攻撃ダメージ」ではないため、イワパレスのような
+    no_damage_dex()該当の特性ブロックを迂回できる。自爆前提のため、
+    相手アクティブが直接攻撃を完全ブロックする相手の時のみ発動する
+    （docs/superpowers/specs/2026-07-23-dragapult-crustle-counter-deck-design.md）"""
+    if opponent_active_id is not None and no_damage_dex(opponent_active_id):
+        return 90000
+    return -1
+
+
 def _crispin_score(
     *,
     deck_counts: dict,
@@ -1045,6 +1057,9 @@ def agent(obs_dict: dict) -> list[int]:
             elif card.id == Duskull:
                 bench_space = my_state.benchMax - len(my_state.bench)
                 score = _fetch_from_discard_score(discard_counts[Duskull], bench_space)
+            elif card.id == Dusknoir or card.id == Dusclops:
+                opponent_active_id = op_state.active[0].id if op_state.active else None
+                score = _cursed_bomb_score(opponent_active_id)
             else:
                 score = 40000
         elif o.type == OptionType.RETREAT:
