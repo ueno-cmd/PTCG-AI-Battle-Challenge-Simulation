@@ -87,6 +87,14 @@ def _attach_score(
             return 24000
         else:
             return 19000
+    elif pokemon.id in (Dreepy, Drakloak, Dragapult_ex) and attach_id not in (Basic_Fire_Energy, Basic_Psychic_Energy):
+        # ドラパルト系統の技コストは炎/超エネルギーのみ。悪エネルギー等を誤装着させない
+        # (2026-07-24、実測30戦で誤装着30件を確認して追加)
+        return -1
+    elif pokemon.id == Munkidori and attach_id != Basic_Dark_Energy:
+        # マシマシラの特性発動には悪エネルギーの装着が必須。それ以外は無意味
+        # (2026-07-24、実測30戦で誤装着10件を確認して追加)
+        return -1
     elif pokemon.id == Dusknoir or pokemon.id == Dusclops:
         # カースドボムはエネルギー不要のため、通常はエネルギー投資の優先度を下げる
         return 500

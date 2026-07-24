@@ -128,6 +128,73 @@ def test_attach_score_dusknoir_and_dusclops_get_low_priority():
         assert score == 500
 
 
+def test_attach_score_dragon_line_rejects_dark_energy():
+    """ドラパルト系統(ドラメシヤ/ドロンチ/ドラパルトex)の技コストは炎/超エネルギーのみ。
+    悪エネルギーを装着しても無意味なため-1を返す。
+    2026-07-24、実測30戦のATTACHイベント検証でドラパルト系統への悪エネルギー
+    誤装着30件を確認（_attach_score()にエネルギー種別チェックが無かったため）"""
+    card_table = {dm.Basic_Dark_Energy: _MockCardData(cardId=dm.Basic_Dark_Energy)}
+    for card_id in (dm.Dreepy, dm.Drakloak, dm.Dragapult_ex):
+        pokemon = _MockPokemon(id=card_id)
+        score = dm._attach_score(
+            dm.Basic_Dark_Energy, pokemon, True,
+            card_table=card_table, can_switch=False, bench_attacker=False,
+            no_more_dex=False, field_counts=defaultdict(int),
+            my_asleep=False, my_paralyzed=False,
+        )
+        assert score == -1
+
+
+def test_attach_score_dragon_line_accepts_fire_or_psychic_energy():
+    """ドラパルト系統は炎/超エネルギーなら既存の汎用スコアリングがそのまま適用される
+    （新規ガードを追加しても既存挙動が変わらないことの回帰確認）"""
+    card_table = {
+        dm.Basic_Fire_Energy: _MockCardData(cardId=dm.Basic_Fire_Energy),
+        dm.Basic_Psychic_Energy: _MockCardData(cardId=dm.Basic_Psychic_Energy),
+    }
+    pokemon = _MockPokemon(id=dm.Dragapult_ex)
+    score = dm._attach_score(
+        dm.Basic_Fire_Energy, pokemon, True,
+        card_table=card_table, can_switch=False, bench_attacker=True,
+        no_more_dex=False, field_counts=defaultdict(int),
+        my_asleep=False, my_paralyzed=False,
+    )
+    assert score == 20000 + 400
+
+
+def test_attach_score_munkidori_rejects_fire_or_psychic_energy():
+    """マシマシラの特性「アドレナブレイン」は悪エネルギー装着が発動条件のため、
+    炎/超エネルギーを装着しても無意味。
+    2026-07-24、実測30戦でマシマシラへの炎/超エネルギー誤装着10件を確認"""
+    card_table = {
+        dm.Basic_Fire_Energy: _MockCardData(cardId=dm.Basic_Fire_Energy),
+        dm.Basic_Psychic_Energy: _MockCardData(cardId=dm.Basic_Psychic_Energy),
+    }
+    pokemon = _MockPokemon(id=dm.Munkidori)
+    for energy_id in (dm.Basic_Fire_Energy, dm.Basic_Psychic_Energy):
+        score = dm._attach_score(
+            energy_id, pokemon, True,
+            card_table=card_table, can_switch=False, bench_attacker=False,
+            no_more_dex=False, field_counts=defaultdict(int),
+            my_asleep=False, my_paralyzed=False,
+        )
+        assert score == -1
+
+
+def test_attach_score_munkidori_accepts_dark_energy():
+    """マシマシラは悪エネルギーなら既存の汎用スコアリングがそのまま適用される
+    （新規ガードを追加しても既存挙動が変わらないことの回帰確認）"""
+    card_table = {dm.Basic_Dark_Energy: _MockCardData(cardId=dm.Basic_Dark_Energy)}
+    pokemon = _MockPokemon(id=dm.Munkidori)
+    score = dm._attach_score(
+        dm.Basic_Dark_Energy, pokemon, True,
+        card_table=card_table, can_switch=False, bench_attacker=True,
+        no_more_dex=False, field_counts=defaultdict(int),
+        my_asleep=False, my_paralyzed=False,
+    )
+    assert score == 20000 + 400
+
+
 def test_boss_orders_score_confirmed_pull_target():
     """確定的な引き剥がし先がある場合は最優先スコア"""
     assert dm._boss_orders_score(has_pull_target=True, explore_roll=0.99, epsilon=0.28) == 60000
