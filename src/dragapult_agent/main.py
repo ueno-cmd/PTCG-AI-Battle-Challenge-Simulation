@@ -178,7 +178,10 @@ def _own_switch_target_score(
     elif card_id == Dragapult_ex:
         return 50000
     elif card_id == Budew:
-        return 30000 if not bench_attacker else 0
+        # 2026-07-24、実測30戦でイベルタル/ファイヤー等の非exアタッカーより
+        # 優先されて敗因になっていたケースを確認したため、非exアタッカー
+        # (イベルタル15000・ファイヤー5000/49000)を下回る値に引き下げる
+        return 3000 if not bench_attacker else 0
     elif card_id == Fezandipiti_ex:
         return -1000
     elif card_id == Meowth_ex:

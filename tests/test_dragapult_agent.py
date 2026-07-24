@@ -228,7 +228,7 @@ def test_own_switch_target_score_dragapult_ex_beats_budew_even_without_bench_att
         dm.Budew, energy_count=0, bench_attacker=False, opponent_active_is_ex=False)
     assert dragapult_ex_score > budew_score
     assert dragapult_ex_score == 50000
-    assert budew_score == 30000
+    assert budew_score == 3000
 
 
 def test_own_switch_target_score_budew_is_zero_when_bench_attacker_ready():
@@ -236,6 +236,22 @@ def test_own_switch_target_score_budew_is_zero_when_bench_attacker_ready():
     （SelectContext.SWITCHでの既存挙動を維持）"""
     assert dm._own_switch_target_score(
         dm.Budew, energy_count=0, bench_attacker=True, opponent_active_is_ex=False) == 0
+
+
+def test_own_switch_target_score_budew_loses_to_non_ex_attackers():
+    """2026-07-24、実測30戦のうち87674403/87675484/87677096の3敗戦試合で、
+    ベンチにドラパルトexがおらず相手アクティブが非exの局面で、
+    実戦的な非exアタッカー（イベルタル・ファイヤー）が選択肢にあったのに
+    スボミー(HP30・攻撃10ダメージのみ)が優先されていたことを確認。
+    スボミーの優先度を、非exアタッカーの優先度を下回る値に引き下げる"""
+    budew_score = dm._own_switch_target_score(
+        dm.Budew, energy_count=0, bench_attacker=False, opponent_active_is_ex=False)
+    yveltal_score = dm._own_switch_target_score(
+        dm.Yveltal, energy_count=0, bench_attacker=False, opponent_active_is_ex=False)
+    moltres_score_vs_non_ex = dm._own_switch_target_score(
+        dm.Moltres, energy_count=0, bench_attacker=False, opponent_active_is_ex=False)
+    assert budew_score < yveltal_score
+    assert budew_score < moltres_score_vs_non_ex
 
 
 def test_own_switch_target_score_existing_priorities_unchanged():
