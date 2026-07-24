@@ -658,18 +658,43 @@ def test_fetch_from_discard_score_low_when_bench_full():
 
 def test_cursed_bomb_score_high_when_opponent_active_blocks_direct_damage():
     """相手アクティブがno_damage_dex()該当（イワパレス等、直接攻撃を完全ブロックする
-    相手）の時は、カースドボム(自爆技)を積極的に使う"""
-    assert dm._cursed_bomb_score(opponent_active_id=345) == 90000  # Crustle
+    相手）の時は、カースドボム(自爆技)を積極的に使う。energy_count/has_other_attackerの
+    値に関わらず最優先される"""
+    assert dm._cursed_bomb_score(
+        opponent_active_id=345, energy_count=0, has_other_attacker=False) == 90000  # Crustle
+    assert dm._cursed_bomb_score(
+        opponent_active_id=345, energy_count=0, has_other_attacker=True) == 90000  # Crustle
 
 
-def test_cursed_bomb_score_low_for_normal_opponent():
-    """通常の相手（直接攻撃が通る）には温存し、自爆技は使わない"""
-    assert dm._cursed_bomb_score(opponent_active_id=1) == -1
+def test_cursed_bomb_score_low_for_normal_opponent_with_no_other_attacker():
+    """通常の相手（直接攻撃が通る）かつ自分に他の攻撃可能な駒が無い場合、
+    本命アタッカーを犠牲にする自爆は避け、温存する"""
+    assert dm._cursed_bomb_score(
+        opponent_active_id=1, energy_count=0, has_other_attacker=False) == -1
 
 
 def test_cursed_bomb_score_low_when_no_opponent_active():
     """相手アクティブが存在しない（Noneが渡された）場合も温存する"""
-    assert dm._cursed_bomb_score(opponent_active_id=None) == -1
+    assert dm._cursed_bomb_score(
+        opponent_active_id=None, energy_count=0, has_other_attacker=False) == -1
+
+
+def test_cursed_bomb_score_dead_weight_case_allows_self_destruct():
+    """2026-07-24、実測30戦のうちヨノワール/サマヨールまで進化した21戦全てで
+    進化後に一度も攻撃していなかったことを確認（_attach_score()側でエネルギー
+    投資を避けているため攻撃手段が無いことが原因）。相手が壁でなくても、
+    自分にエネルギー(energy_count==0)が無く、かつ他に攻撃可能な駒がある場合は、
+    試合終了まで何もしない「文鎮」になるより自爆してダメカンを置く方が
+    価値があると判断し、中程度の優先度で発動を許可する"""
+    assert dm._cursed_bomb_score(
+        opponent_active_id=1, energy_count=0, has_other_attacker=True) == 20000
+
+
+def test_cursed_bomb_score_not_dead_weight_when_energy_attached():
+    """energy_countが1以上ある場合は文鎮ではない（攻撃できる可能性が残る）ため、
+    このケースの対象外とし温存する"""
+    assert dm._cursed_bomb_score(
+        opponent_active_id=1, energy_count=1, has_other_attacker=True) == -1
 
 
 def test_adrena_brain_score_high_when_opponent_active_blocks_direct_damage():

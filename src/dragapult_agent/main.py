@@ -232,15 +232,24 @@ def _fetch_from_discard_score(discard_count: int, bench_space: int) -> int:
     return 42000
 
 
-def _cursed_bomb_score(opponent_active_id: int | None) -> int:
+def _cursed_bomb_score(opponent_active_id: int | None, energy_count: int, has_other_attacker: bool) -> int:
     """ヨノワール／サマヨールの特性「カースドボム」
     （自分を気絶させ、相手ポケモン1匹にダメカンを直接配置）のスコアを返す。
     「ダメカンの直接配置」は「攻撃ダメージ」ではないため、イワパレスのような
     no_damage_dex()該当の特性ブロックを迂回できる。自爆前提のため、
-    相手アクティブが直接攻撃を完全ブロックする相手の時のみ発動する
-    （docs/superpowers/specs/2026-07-23-dragapult-crustle-counter-deck-design.md）"""
+    相手アクティブが直接攻撃を完全ブロックする相手の時は最優先で発動する。
+    それ以外でも、_attach_score()側でエネルギー投資を避けられているため
+    このポケモンは攻撃手段を持たず(energy_count==0)、かつ自分の場に
+    他の攻撃可能な駒がある(has_other_attacker)場合は、試合終了まで何も
+    しない「文鎮」になるより自爆してダメカンを置く方が価値があると判断し、
+    中程度の優先度で発動を許可する（2026-07-24、実測30戦中21戦で
+    ヨノワール/サマヨール到達後に一度も攻撃しない事例を確認して追加。
+    本命アタッカーを犠牲にするリスクを避けるため、他に攻撃札が無い場合は
+    発動しない）"""
     if opponent_active_id is not None and no_damage_dex(opponent_active_id):
         return 90000
+    if energy_count == 0 and has_other_attacker:
+        return 20000
     return -1
 
 
@@ -1131,7 +1140,9 @@ def agent(obs_dict: dict) -> list[int]:
                 score = _fetch_from_discard_score(discard_counts[Duskull], bench_space)
             elif card.id == Dusknoir or card.id == Dusclops:
                 opponent_active_id = op_state.active[0].id if op_state.active else None
-                score = _cursed_bomb_score(opponent_active_id)
+                score = _cursed_bomb_score(
+                    opponent_active_id, len(card.energies), bench_attacker or can_main_attack,
+                )
             elif card.id == Munkidori:
                 opponent_active_id = op_state.active[0].id if op_state.active else None
                 score = _adrena_brain_score(opponent_active_id)
