@@ -195,6 +195,23 @@ def _own_switch_target_score(
     return 0
 
 
+def _should_switch(
+    can_main_attack: bool, bench_attacker: bool, active_id: int,
+    active_energy_count: int, budew_in_field: bool, turn: int,
+) -> bool:
+    """RETREAT(にげる)を検討すべきかを返す。
+    bench_attacker: ベンチに攻撃準備済み(2エネ以上)のドラパルトexがいるか
+    budew_in_field: 自分の場にスボミー(Budew)が存在するか（アクティブ・ベンチ問わず）
+    Budew節は、アクティブにまだエネルギー投資が無い場合のみ発火させる
+    （エネルギー装着直後の交代で投資が無駄になる問題への対応。2026-07-25実測20戦で
+    12戦・16件確認。docs/analyses/20260725-dragapult-ver8-5symptoms-investigation.md）"""
+    if can_main_attack:
+        return False
+    if bench_attacker:
+        return True
+    return active_id != Budew and budew_in_field and turn >= 2 and active_energy_count == 0
+
+
 def _evolve_score(
     pre_evolution_id: int, energy_count: int, dragapult_ex_field_count: int,
     opponent_prize_count: int,

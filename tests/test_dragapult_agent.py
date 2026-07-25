@@ -714,3 +714,54 @@ def test_adrena_brain_score_low_for_normal_opponent():
 def test_adrena_brain_score_low_when_no_opponent_active():
     """相手アクティブが存在しない（Noneが渡された）場合も温存する"""
     assert dm._adrena_brain_score(opponent_active_id=None) == -1
+
+
+def test_should_switch_true_when_bench_attacker_ready_regardless_of_energy():
+    """bench_attackerが真なら、アクティブのエネルギー投資額やBudewの有無に関わらず
+    交代を検討する（既存挙動を維持）"""
+    assert dm._should_switch(
+        can_main_attack=False, bench_attacker=True, active_id=dm.Drakloak,
+        active_energy_count=2, budew_in_field=False, turn=5,
+    ) is True
+
+
+def test_should_switch_budew_clause_fires_only_when_active_has_no_energy():
+    """Budew節は、アクティブに既にエネルギー投資がある場合は発火しない
+    （2026-07-25実測20戦で12戦・16件、装着直後の交代でエネルギーが
+    無駄になる問題への対応。docs/analyses/20260725-dragapult-ver8-5symptoms-investigation.md）"""
+    assert dm._should_switch(
+        can_main_attack=False, bench_attacker=False, active_id=dm.Drakloak,
+        active_energy_count=0, budew_in_field=True, turn=2,
+    ) is True
+    assert dm._should_switch(
+        can_main_attack=False, bench_attacker=False, active_id=dm.Drakloak,
+        active_energy_count=1, budew_in_field=True, turn=2,
+    ) is False
+
+
+def test_should_switch_false_when_can_main_attack():
+    """このターン攻撃できるなら交代を検討しない"""
+    assert dm._should_switch(
+        can_main_attack=True, bench_attacker=True, active_id=dm.Drakloak,
+        active_energy_count=0, budew_in_field=True, turn=5,
+    ) is False
+
+
+def test_should_switch_budew_clause_requires_budew_in_field_and_turn_2_plus():
+    """Budew節は、Budewが場におらず、またはturn<2なら発火しない"""
+    assert dm._should_switch(
+        can_main_attack=False, bench_attacker=False, active_id=dm.Drakloak,
+        active_energy_count=0, budew_in_field=False, turn=5,
+    ) is False
+    assert dm._should_switch(
+        can_main_attack=False, bench_attacker=False, active_id=dm.Drakloak,
+        active_energy_count=0, budew_in_field=True, turn=1,
+    ) is False
+
+
+def test_should_switch_budew_clause_does_not_fire_when_active_is_budew():
+    """アクティブ自身がBudewなら、Budew節での交代は不要（既存挙動を維持）"""
+    assert dm._should_switch(
+        can_main_attack=False, bench_attacker=False, active_id=dm.Budew,
+        active_energy_count=0, budew_in_field=True, turn=5,
+    ) is False
