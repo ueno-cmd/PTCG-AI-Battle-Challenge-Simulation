@@ -979,7 +979,11 @@ def agent(obs_dict: dict) -> list[int]:
             support_count += 1
 
     no_draw = (my_state.deckCount <= 8)  # Whether to restrict actions that reduce the deck
-    do_switch = (not can_main_attack and (bench_attacker or (active_id != Budew and field_counts[Budew] >= 1 and state.turn >= 2)))
+    active_energy_count = len(my_state.active[0].energies) if my_state.active else 0
+    do_switch = _should_switch(
+        can_main_attack, bench_attacker, active_id, active_energy_count,
+        field_counts[Budew] >= 1, state.turn,
+    )
     effect_card_id = 0 if select.effect == None else select.effect.id
     context_card_id = 0 if select.contextCard == None else select.contextCard.id
     
