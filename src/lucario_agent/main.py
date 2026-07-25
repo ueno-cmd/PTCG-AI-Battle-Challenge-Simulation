@@ -386,11 +386,19 @@ class JudgePolicy(TrainerCardPolicy):
 class SwitchPolicy(TrainerCardPolicy):
     """ポケモンいれかえ：_score_retreat_optionと同条件で発火するが、
     にげるコスト(エネルギー破棄)を伴わないぶんRETREATより+100して優先する。
-    条件不成立時(-1)はそのまま-1を返す（負のスコアに加算してはいけない）"""
+    ただしAir Balloon等でアクティブの実効にげるコストが既に0の場合は
+    RETREATも同様にエネルギーを失わないため、1枚しかないSwitchを温存し
+    RETREATを優先させる(base-100)。条件不成立時(-1)はそのまま-1を返す"""
     def play_score(self, ctx: PlayScoringContext) -> int:
         my_active = ctx.my_state.active[0] if ctx.my_state.active else None
         base = _score_retreat_option(ctx.current_plan, my_active, card_table)
-        return base + 100 if base > 0 else -1
+        if base <= 0:
+            return -1
+        if my_active is None:
+            return base + 100
+        balloons = sum(1 for t in my_active.tools if t.id == Air_Balloon)
+        effective_cost = max(0, card_table[my_active.id].retreatCost - 2 * balloons)
+        return base + 100 if effective_cost > 0 else base - 100
 
 
 class WallyCompassionPolicy(TrainerCardPolicy):
@@ -469,7 +477,9 @@ def _score_attach_option(obs, o, my_index, current_plan, attacker1, op_active_nu
         return score
     if card.id == Air_Balloon:
         pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
-        score = 7000
+        # ベーススコアはHero's Cape(7000)より低い6900とし、同一ポケモン対象での
+        # 同点（装着先が実質ランダムに決まる問題）を避ける（最終レビュー指摘）
+        score = 6900
         if pokemon.id == Mega_Lucario_ex:
             score += 200
         elif pokemon.id == Riolu:

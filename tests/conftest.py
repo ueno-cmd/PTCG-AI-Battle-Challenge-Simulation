@@ -24,6 +24,7 @@ def make_pokemon(
     max_hp: int = None,
     appear_this_turn: bool = False,
     energies: list = None,
+    tools: list = None,
 ) -> Pokemon:
     """テスト用Pokemonオブジェクトを生成する"""
     return Pokemon(
@@ -34,7 +35,7 @@ def make_pokemon(
         appearThisTurn=appear_this_turn,
         energies=energies or [],
         energyCards=[],
-        tools=[],
+        tools=tools or [],
         preEvolution=[],
     )
 

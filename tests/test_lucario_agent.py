@@ -18,6 +18,7 @@ class MockCardData:
     cardType:   CardType          = CardType.POKEMON
     weakness:   EnergyType | None = None
     resistance: EnergyType | None = None
+    retreatCost: int              = 0
 
 
 def _card(card_id: int, **kwargs) -> MockCardData:
@@ -30,8 +31,8 @@ def mock_card_table(monkeypatch):
     table = {
         lm.Lunatone:              _card(lm.Lunatone),
         lm.Solrock:               _card(lm.Solrock),
-        lm.Riolu:                 _card(lm.Riolu),
-        lm.Mega_Lucario_ex:       _card(lm.Mega_Lucario_ex, megaEx=True),
+        lm.Riolu:                 _card(lm.Riolu, retreatCost=2),
+        lm.Mega_Lucario_ex:       _card(lm.Mega_Lucario_ex, megaEx=True, retreatCost=2),
         lm.Ogerpon_ex:            _card(lm.Ogerpon_ex, ex=True, tera=True),  # Cornerstone Mask Ogerpon ex
         144:  _card(144,  ex=True),   # Squawkabilly ex
         322:  _card(322),             # Noctowl
@@ -868,6 +869,36 @@ class TestSwitchPolicy:
         assert lm.SwitchPolicy().play_score(self._ctx(plan, my_state)) == retreat_score + 100
 
 
+class TestSwitchPolicyAirBalloon:
+    """最終レビュー指摘2：Air Balloon装着でアクティブの実効にげるコストが0になった場合、
+    RETREATも一切エネルギーを失わなくなるため、1枚しかないSwitchを温存し
+    RETREATを優先させる（base-100）。未装着なら従来通りbase+100でSwitchを優先する"""
+
+    def _ctx(self, current_plan, my_state):
+        return lm.PlayScoringContext(
+            obs=MagicMock(), o=Option(type=OptionType.PLAY, index=0), my_index=0,
+            current_plan=current_plan, can_attack=False,
+            state=_make_state(), my_state=my_state,
+            hand_counts=defaultdict(int), field_counts=defaultdict(int), stadium_id=0,
+        )
+
+    def test_without_air_balloon_still_prefers_switch(self):
+        """Air Balloon未装着（にげるコスト実質2）なら従来通り+100でSwitch優先（回帰確認）"""
+        plan = lm.AttackPlan(attacker=1)
+        my_state = make_player_state(active_pokemon=make_pokemon(id=lm.Mega_Lucario_ex, hp=50))
+        base = lm._score_retreat_option(plan, my_state.active[0], lm.card_table)
+        assert lm.SwitchPolicy().play_score(self._ctx(plan, my_state)) == base + 100
+
+    def test_with_air_balloon_prefers_retreat_instead(self):
+        """Air Balloon装着（にげるコスト実質0）ならSwitchを温存しRETREATを優先（base-100）"""
+        plan = lm.AttackPlan(attacker=1)
+        balloon = Card(id=lm.Air_Balloon, serial=1, playerIndex=0)
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, hp=50, tools=[balloon])
+        my_state = make_player_state(active_pokemon=lucario)
+        base = lm._score_retreat_option(plan, my_state.active[0], lm.card_table)
+        assert lm.SwitchPolicy().play_score(self._ctx(plan, my_state)) == base - 100
+
+
 class TestScoreOptionPlaySwitchWiring:
     """main.py側でPLAYのSwitchケースがTRAINER_CARD_POLICIES経由で
     SwitchPolicyへ正しく配線されていることの統合テスト"""
@@ -1471,7 +1502,8 @@ class TestScoreCardOptionAttachFrom:
 
 class TestScoreAttachOptionAirBalloon:
     """_score_attach_optionのふうせん(Air Balloon)分岐：メガルカリオex最優先、
-    次いでリオル（両者ともにげるコスト2で、-2の効果を最大限活かせるため）"""
+    次いでリオル（両者ともにげるコスト2で、-2の効果を最大限活かせるため）。
+    ベーススコアはHero's Capeとの同点回避のため6900（最終レビュー指摘対応）"""
 
     def _score(self, pokemon):
         obs = MagicMock()
@@ -1488,18 +1520,51 @@ class TestScoreAttachOptionAirBalloon:
 
     def test_mega_lucario_ex_highest_priority(self):
         lucario = make_pokemon(id=lm.Mega_Lucario_ex)
-        assert self._score(lucario) == 7200
+        assert self._score(lucario) == 7100
 
     def test_riolu_second_priority(self):
         riolu = make_pokemon(id=lm.Riolu)
-        assert self._score(riolu) == 7100
+        assert self._score(riolu) == 7000
 
     def test_other_pokemon_base_score(self):
         solrock = make_pokemon(id=lm.Solrock)
-        assert self._score(solrock) == 7000
+        assert self._score(solrock) == 6900
 
     def test_mega_lucario_ex_scores_higher_than_riolu(self):
         assert self._score(make_pokemon(id=lm.Mega_Lucario_ex)) > self._score(make_pokemon(id=lm.Riolu))
+
+
+class TestScoreAttachOptionHeroCapeVsAirBalloon:
+    """最終レビュー指摘1：Hero's Cape(ACE SPEC・装着ポケモンの最大HP+100の恒久バフ)は
+    Air Balloon(にげるコスト-2)より長期的価値が高いため、同一ポケモンを対象とした場合
+    Hero's Capeのスコアが常にAir Balloonを上回ることを確認する回帰テスト
+    （修正前は両者ともメガルカリオex=7200、リオル=7100で同点になり、装着先が
+    エンジンの選択肢並び順で実質ランダムに決まっていた）"""
+
+    def _score(self, card_id, pokemon):
+        obs = MagicMock()
+        card = Card(id=card_id, serial=1, playerIndex=0)
+        my_state = make_player_state(active_pokemon=pokemon, hand=[card])
+        obs.current.players = [my_state, make_player_state()]
+        option = Option(
+            type=OptionType.ATTACH, area=lm.AreaType.HAND, index=0,
+            inPlayArea=lm.AreaType.ACTIVE, inPlayIndex=0,
+        )
+        return lm._score_attach_option(
+            obs, option, my_index=0, current_plan=lm.AttackPlan(), attacker1=False,
+        )
+
+    def test_hero_cape_beats_air_balloon_for_mega_lucario_ex(self):
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex)
+        hero_cape_score   = self._score(lm.Hero_Cape, lucario)
+        air_balloon_score = self._score(lm.Air_Balloon, lucario)
+        assert hero_cape_score > air_balloon_score
+
+    def test_hero_cape_beats_air_balloon_for_riolu(self):
+        riolu = make_pokemon(id=lm.Riolu)
+        hero_cape_score   = self._score(lm.Hero_Cape, riolu)
+        air_balloon_score = self._score(lm.Air_Balloon, riolu)
+        assert hero_cape_score > air_balloon_score
 
 
 class TestScoreAttachOptionRockFightingEnergy:
