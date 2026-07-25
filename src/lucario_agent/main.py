@@ -15,7 +15,7 @@ from lucario_agent.constants import (
     Nighttime_Mine, Basic_Fighting_Energy, Rock_Fighting_Energy, Ultra_Ball,
     Pokegear, Night_Stretcher, Judge, Hilda, Wally_Compassion,
     Ciphermaniac_Codebreaking, Ogerpon_ex, Crustle, Sylveon, EX_DAMAGE_NULLIFIER_IDS,
-    Switch,
+    Switch, Air_Balloon,
 )
 from lucario_agent.combat import (
     AttackPlan,
@@ -466,6 +466,14 @@ def _score_attach_option(obs, o, my_index, current_plan, attacker1, op_active_nu
             score += 100
         elif pokemon.id == Mega_Lucario_ex:
             score += 200
+        return score
+    if card.id == Air_Balloon:
+        pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
+        score = 7000
+        if pokemon.id == Mega_Lucario_ex:
+            score += 200
+        elif pokemon.id == Riolu:
+            score += 100
         return score
     pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
     score = energy_score(pokemon, o.inPlayArea == AreaType.ACTIVE, attacker1, op_active_nullifies_ex)

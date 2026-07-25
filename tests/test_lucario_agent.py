@@ -57,9 +57,7 @@ def mock_card_table(monkeypatch):
         lm.Wally_Compassion:      _card(lm.Wally_Compassion,      cardType=CardType.SUPPORTER),
         lm.Ciphermaniac_Codebreaking: _card(lm.Ciphermaniac_Codebreaking, cardType=CardType.SUPPORTER),
         lm.Switch:                _card(lm.Switch,                cardType=CardType.ITEM),
-        # Air_Balloonはmain.py側でまだimportされていない（Task 4で追加予定）ため、
-        # ここで追加するとlm.Air_Balloonの属性参照がAttributeErrorとなり全テストが
-        # 壊れる。Task 3の対象範囲外のためTask 4で追加する。
+        lm.Air_Balloon:           _card(lm.Air_Balloon,           cardType=CardType.TOOL),
     }
     monkeypatch.setattr(lm, "card_table", table)
     return table
@@ -1469,6 +1467,39 @@ class TestScoreCardOptionAttachFrom:
         without_flag = self._score(ogerpon, op_active_nullifies_ex=False)
         with_flag    = self._score(ogerpon, op_active_nullifies_ex=True)
         assert with_flag > without_flag
+
+
+class TestScoreAttachOptionAirBalloon:
+    """_score_attach_optionのふうせん(Air Balloon)分岐：メガルカリオex最優先、
+    次いでリオル（両者ともにげるコスト2で、-2の効果を最大限活かせるため）"""
+
+    def _score(self, pokemon):
+        obs = MagicMock()
+        air_balloon_card = Card(id=lm.Air_Balloon, serial=1, playerIndex=0)
+        my_state = make_player_state(active_pokemon=pokemon, hand=[air_balloon_card])
+        obs.current.players = [my_state, make_player_state()]
+        option = Option(
+            type=OptionType.ATTACH, area=lm.AreaType.HAND, index=0,
+            inPlayArea=lm.AreaType.ACTIVE, inPlayIndex=0,
+        )
+        return lm._score_attach_option(
+            obs, option, my_index=0, current_plan=lm.AttackPlan(), attacker1=False,
+        )
+
+    def test_mega_lucario_ex_highest_priority(self):
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex)
+        assert self._score(lucario) == 7200
+
+    def test_riolu_second_priority(self):
+        riolu = make_pokemon(id=lm.Riolu)
+        assert self._score(riolu) == 7100
+
+    def test_other_pokemon_base_score(self):
+        solrock = make_pokemon(id=lm.Solrock)
+        assert self._score(solrock) == 7000
+
+    def test_mega_lucario_ex_scores_higher_than_riolu(self):
+        assert self._score(make_pokemon(id=lm.Mega_Lucario_ex)) > self._score(make_pokemon(id=lm.Riolu))
 
 
 class TestScoreAttachOptionRockFightingEnergy:
