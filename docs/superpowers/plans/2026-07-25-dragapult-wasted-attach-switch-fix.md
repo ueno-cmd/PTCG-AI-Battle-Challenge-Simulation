@@ -186,6 +186,8 @@ EOF
 
 ### Task 3: `_attach_score()`の`energy_count==0`分岐にアクティブ側種族ボーナスを追加
 
+**2026-07-25追記：** 当初のテストコード（`test_attach_score_active_drakloak_beats_bench_dreepy_when_no_bench_attacker_ready`）は種族ボーナス階層を誤認しており数学的に矛盾していたため、実装中に`test_attach_score_active_dragapult_ex_beats_bench_lower_priority_species_when_no_bench_attacker_ready`へ差し替えた（詳細は`docs/implementations/20260725-dragapult-wasted-attach-switch-fix.md`参照）。以下のStep記載は差し替え後の内容。
+
 **Files:**
 - Modify: `src/dragapult_agent/main.py:125-137`
 - Modify: `tests/test_dragapult_agent.py:24-34`（既存テストの期待値更新）
