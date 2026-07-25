@@ -791,6 +791,40 @@ class TestScoreAttackOptionChoice:
         assert lm._score_attack_option_choice(normal, plan) > lm._score_attack_option_choice(mega_brave, plan)
 
 
+class TestAnalyzeMainOptionsSwitch:
+    """_analyze_main_options: ポケモンいれかえ(Switch)がPLAY選択肢にあれば、
+    RETREATが選択肢に無くてもcan_switchがTrueになることを確認する
+    （2026-07-03に削除された旧ロジックの復活。エネルギー不足でRETREATが
+    出せない局面でも、Switchがあればベンチ交代を検討できるようにする）"""
+
+    def _analyze(self, hand_cards):
+        obs = MagicMock()
+        my_state = make_player_state(hand=hand_cards)
+        obs.current.players = [my_state, make_player_state()]
+        select = MagicMock()
+        select.option = [Option(type=OptionType.PLAY, index=0)]
+        return lm._analyze_main_options(obs, select, my_index=0)
+
+    def test_can_switch_true_when_switch_in_play_options(self):
+        switch_card = Card(id=lm.Switch, serial=1, playerIndex=0)
+        can_switch, _, _, _ = self._analyze([switch_card])
+        assert can_switch is True
+
+    def test_can_switch_false_when_only_unrelated_card_playable(self):
+        other_card = Card(id=lm.Boss_Orders, serial=1, playerIndex=0)
+        can_switch, _, _, _ = self._analyze([other_card])
+        assert can_switch is False
+
+    def test_can_switch_still_true_when_retreat_option_present(self):
+        """既存挙動の回帰確認：RETREATが選択肢にあれば従来通りTrue"""
+        obs = MagicMock()
+        obs.current.players = [make_player_state(), make_player_state()]
+        select = MagicMock()
+        select.option = [Option(type=OptionType.RETREAT)]
+        can_switch, _, _, _ = lm._analyze_main_options(obs, select, my_index=0)
+        assert can_switch is True
+
+
 # ==================== Task 6: agent() 統合テスト ====================
 from unittest.mock import patch
 from tests.conftest import make_main_obs

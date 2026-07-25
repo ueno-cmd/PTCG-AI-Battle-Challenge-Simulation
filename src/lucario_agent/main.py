@@ -15,6 +15,7 @@ from lucario_agent.constants import (
     Nighttime_Mine, Basic_Fighting_Energy, Rock_Fighting_Energy, Ultra_Ball,
     Pokegear, Night_Stretcher, Judge, Hilda, Wally_Compassion,
     Ciphermaniac_Codebreaking, Ogerpon_ex, Crustle, Sylveon, EX_DAMAGE_NULLIFIER_IDS,
+    Switch,
 )
 from lucario_agent.combat import (
     AttackPlan,
@@ -152,6 +153,8 @@ def _analyze_main_options(obs: Observation, select, my_index: int) -> tuple[bool
             card = get_card(obs, AreaType.HAND, o.index, my_index)
             if card.id == Boss_Orders:
                 can_op_switch = True
+            elif card.id == Switch:
+                can_switch = True
         elif o.type == OptionType.RETREAT:
             can_switch = True
         elif o.type == OptionType.ATTACK:
