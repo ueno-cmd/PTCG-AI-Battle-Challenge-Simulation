@@ -123,16 +123,16 @@ def _attach_score(
         if active:
             score += 200
     else:  # energy_count == 0
+        if pokemon.id == Dragapult_ex:
+            score += 150
+        elif pokemon.id == Dreepy:
+            score += 100
+        else:
+            score += 50
         if active:
             if bench_attacker:
                 score += 400
         else:
-            if pokemon.id == Dragapult_ex:
-                score += 150
-            elif pokemon.id == Dreepy:
-                score += 100
-            else:
-                score += 50
             if bench_attacker:
                 score -= 200
     if no_more_dex and (pokemon.id == Dreepy or pokemon.id == Drakloak):

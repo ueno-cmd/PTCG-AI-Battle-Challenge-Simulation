@@ -218,23 +218,29 @@ def test_attach_score_active_gets_priority_when_bench_attacker_ready_and_zero_en
 続けて、`tests/test_dragapult_agent.py`の末尾（Task 1で追加した`test_should_switch_*`群の後）に以下を追記する:
 
 ```python
-def test_attach_score_active_drakloak_beats_bench_dreepy_when_no_bench_attacker_ready():
+def test_attach_score_active_dragapult_ex_beats_bench_lower_priority_species_when_no_bench_attacker_ready():
     """所感bの再現ケース：bench_attacker=Falseの場面で、アクティブの
-    未攻撃可Drakloak(energy_count=0)は、種族優先度がより低いベンチのDreepy
-    (energy_count=0)より高いスコアを得るべき（2026-07-25修正前は種族ボーナスの
-    非対称でベンチが常に勝っていた）"""
+    未攻撃可Dragapult_ex(energy_count=0、最優先種族)は、種族優先度がより低い
+    ベンチのDrakloak(energy_count=0、elseの+50枠)より高いスコアを得るべき
+    （2026-07-25修正前はアクティブに種族ボーナスが一切無く、bench_attacker=False
+    の場面ではベンチが種族に関係なく常に勝っていた）。
+    なお、Dreepyはelse枠(+50)より優先度の高い専用枠(+100)を持つため、
+    「アクティブelse枠 vs ベンチDreepy」の比較では修正後もベンチが上回りうる
+    （これはactive/bench非対称バグとは別の、意図された種族間優先度差であり
+    今回の修正対象外）。本テストはその混同を避けるため、アクティブに
+    最優先種族(Dragapult_ex)を置き、非対称の解消だけを検証する"""
     card_table = {dm.Basic_Psychic_Energy: _MockCardData(cardId=dm.Basic_Psychic_Energy)}
-    active_drakloak = _MockPokemon(id=dm.Drakloak)
-    bench_dreepy = _MockPokemon(id=dm.Dreepy)
+    active_dragapult_ex = _MockPokemon(id=dm.Dragapult_ex)
+    bench_drakloak = _MockPokemon(id=dm.Drakloak)
 
     active_score = dm._attach_score(
-        dm.Basic_Psychic_Energy, active_drakloak, True,
+        dm.Basic_Psychic_Energy, active_dragapult_ex, True,
         card_table=card_table, can_switch=False, bench_attacker=False,
         no_more_dex=False, field_counts=defaultdict(int),
         my_asleep=False, my_paralyzed=False,
     )
     bench_score = dm._attach_score(
-        dm.Basic_Psychic_Energy, bench_dreepy, False,
+        dm.Basic_Psychic_Energy, bench_drakloak, False,
         card_table=card_table, can_switch=False, bench_attacker=False,
         no_more_dex=False, field_counts=defaultdict(int),
         my_asleep=False, my_paralyzed=False,
@@ -260,7 +266,7 @@ def test_attach_score_active_energy_zero_species_bonus_matches_bench():
 
 - [ ] **Step 2: テストが失敗することを確認する**
 
-Run: `uv run pytest tests/test_dragapult_agent.py -k "test_attach_score_active_gets_priority_when_bench_attacker_ready_and_zero_energy or test_attach_score_active_drakloak_beats_bench_dreepy_when_no_bench_attacker_ready or test_attach_score_active_energy_zero_species_bonus_matches_bench" -v`
+Run: `uv run pytest tests/test_dragapult_agent.py -k "test_attach_score_active_gets_priority_when_bench_attacker_ready_and_zero_energy or test_attach_score_active_dragapult_ex_beats_bench_lower_priority_species_when_no_bench_attacker_ready or test_attach_score_active_energy_zero_species_bonus_matches_bench" -v`
 Expected: FAIL（3件とも。既存テストは`20000+400=20400`を期待するが実際は`20000+400=20400`のまま変わらず一致してしまう可能性があるため、必ず新しい期待値`20000+150+400=20550`に書き換えた後で実行し、現行実装(修正前)では`20400`が返り`20550`との不一致でFAILすることを確認する）
 
 - [ ] **Step 3: 最小限の実装を書く**

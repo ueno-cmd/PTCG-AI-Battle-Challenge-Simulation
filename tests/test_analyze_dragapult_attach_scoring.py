@@ -20,6 +20,7 @@ DRAGAPULT_EX = 121
 DRAKLOAK = 120
 DREEPY = 119
 BASIC_FIRE_ENERGY = 2
+BASIC_PSYCHIC_ENERGY = 5
 
 
 @dataclass
@@ -128,20 +129,29 @@ def test_evaluate_attach_event_crispin_bonus_changes_verdict(mock_card_table):
     """クリスピン(ID1198)の効果由来の自動装着ではmain.pyのATTACH_FROM分岐が
     ドラパルトexターゲットに+200ボーナスを追加する。この分岐差を反映しないと
     クリスピン由来の装着イベントで矛盾判定を誤りうる。
-    アクティブ=ドラパルトex(0エネ,スコア20000)・ベンチ=ドレディア(0エネ,スコア20100)の
-    構成では、ボーナス無しならベンチが上回り矛盾なし、+200ボーナス適用で
-    アクティブが20200に逆転し矛盾ありに変わる、という決定的な検証にする"""
+
+    2026-07-25のenergy_count==0分岐修正（アクティブ側にも種族ボーナスを追加）
+    により、ドラパルトex(150枠)は場のどこにいても0エネの他種族(最大100枠)より
+    常に高スコアになった。そのため「アクティブ=ドラパルトex・ベンチ=ドレディア」
+    という組み合わせでは、ボーナス無しの時点で既にアクティブが上回り矛盾ありと
+    なってしまい、旧来の「ボーナスの有無で判定が変わる」ケースを再現できなくなった。
+    本テストはこの制約を踏まえ、対象(target)をアクティブのドロンチ(1エネ, else枠
+    +50+active200=20250)に、非対象のドラパルトex(0エネ, 150枠, ベンチ, bench_attacker
+    無しなので加減点なし=20150)をベンチに置く構成に差し替える。
+    ボーナス無し: 20150 < 20250 で矛盾なし。+200ボーナス適用でベンチのドラパルトexが
+    20350に逆転し矛盾ありに変わる、という決定的な検証にする"""
     tracker = GameStateTracker(target_player_index=0)
     tracker.active_serial = 1
-    tracker.species[1] = DRAGAPULT_EX
-    tracker.energy_count[1] = 0
+    tracker.species[1] = DRAKLOAK
+    tracker.energy_count[1] = 1
+    tracker.energy_cards[1] = [BASIC_PSYCHIC_ENERGY]
     tracker.bench_serials.add(2)
-    tracker.species[2] = DREEPY
+    tracker.species[2] = DRAGAPULT_EX
     tracker.energy_count[2] = 0
 
     event = {
         "type": 11, "playerIndex": 0, "cardId": BASIC_FIRE_ENERGY,
-        "serial": 99, "cardIdTarget": DREEPY, "serialTarget": 2,
+        "serial": 99, "cardIdTarget": DRAKLOAK, "serialTarget": 1,
     }
     without_bonus = evaluate_attach_event(
         tracker, event, card_table=mock_card_table, dragapult_ex_id=DRAGAPULT_EX,

@@ -22,7 +22,10 @@ class _MockPokemon:
 
 
 def test_attach_score_active_gets_priority_when_bench_attacker_ready_and_zero_energy():
-    """energy_count=0・active=True・bench_attackerありなら+400点される既存挙動を維持"""
+    """energy_count=0・active=True・bench_attackerありなら、種族ボーナス(+150)と
+    bench_attackerボーナス(+400)の両方が加算される。
+    2026-07-25修正前はアクティブ側に種族ボーナスが無く、bench_attacker=Falseの
+    場面でベンチが常に勝つ非対称バグがあった(所感b、docs/analyses/20260725-dragapult-ver8-5symptoms-investigation.md)"""
     card_table = {dm.Basic_Fire_Energy: _MockCardData(cardId=dm.Basic_Fire_Energy)}
     pokemon = _MockPokemon(id=dm.Dragapult_ex)
     score = dm._attach_score(
@@ -31,7 +34,7 @@ def test_attach_score_active_gets_priority_when_bench_attacker_ready_and_zero_en
         no_more_dex=False, field_counts=defaultdict(int),
         my_asleep=False, my_paralyzed=False,
     )
-    assert score == 20000 + 400
+    assert score == 20000 + 150 + 400
 
 
 def test_attach_score_returns_minus_one_for_bench_pokemon_with_full_energy():
@@ -159,7 +162,9 @@ def test_attach_score_dragon_line_accepts_fire_or_psychic_energy():
         no_more_dex=False, field_counts=defaultdict(int),
         my_asleep=False, my_paralyzed=False,
     )
-    assert score == 20000 + 400
+    # 2026-07-25、energy_count==0分岐にアクティブ側種族ボーナス(+150、ドラパルトex)が
+    # 追加されたため、既存のbench_attacker由来の+400と合算した値に更新
+    assert score == 20000 + 400 + 150
 
 
 def test_attach_score_munkidori_rejects_fire_or_psychic_energy():
@@ -192,7 +197,9 @@ def test_attach_score_munkidori_accepts_dark_energy():
         no_more_dex=False, field_counts=defaultdict(int),
         my_asleep=False, my_paralyzed=False,
     )
-    assert score == 20000 + 400
+    # 2026-07-25、energy_count==0分岐にアクティブ側種族ボーナス(+50、マシマシラはelse枠)が
+    # 追加されたため、既存のbench_attacker由来の+400と合算した値に更新
+    assert score == 20000 + 400 + 50
 
 
 def test_boss_orders_score_confirmed_pull_target():
@@ -765,3 +772,49 @@ def test_should_switch_budew_clause_does_not_fire_when_active_is_budew():
         can_main_attack=False, bench_attacker=False, active_id=dm.Budew,
         active_energy_count=0, budew_in_field=True, turn=5,
     ) is False
+
+
+def test_attach_score_active_dragapult_ex_beats_bench_lower_priority_species_when_no_bench_attacker_ready():
+    """所感bの再現ケース：bench_attacker=Falseの場面で、アクティブの
+    未攻撃可Dragapult_ex(energy_count=0、最優先種族)は、種族優先度がより低い
+    ベンチのDrakloak(energy_count=0、elseの+50枠)より高いスコアを得るべき
+    （2026-07-25修正前はアクティブに種族ボーナスが一切無く、bench_attacker=False
+    の場面ではベンチが種族に関係なく常に勝っていた）。
+    なお、Dreepyはelse枠(+50)より優先度の高い専用枠(+100)を持つため、
+    「アクティブelse枠 vs ベンチDreepy」の比較では修正後もベンチが上回りうる
+    （これはactive/bench非対称バグとは別の、意図された種族間優先度差であり
+    今回の修正対象外）。本テストはその混同を避けるため、アクティブに
+    最優先種族(Dragapult_ex)を置き、非対称の解消だけを検証する"""
+    card_table = {dm.Basic_Psychic_Energy: _MockCardData(cardId=dm.Basic_Psychic_Energy)}
+    active_dragapult_ex = _MockPokemon(id=dm.Dragapult_ex)
+    bench_drakloak = _MockPokemon(id=dm.Drakloak)
+
+    active_score = dm._attach_score(
+        dm.Basic_Psychic_Energy, active_dragapult_ex, True,
+        card_table=card_table, can_switch=False, bench_attacker=False,
+        no_more_dex=False, field_counts=defaultdict(int),
+        my_asleep=False, my_paralyzed=False,
+    )
+    bench_score = dm._attach_score(
+        dm.Basic_Psychic_Energy, bench_drakloak, False,
+        card_table=card_table, can_switch=False, bench_attacker=False,
+        no_more_dex=False, field_counts=defaultdict(int),
+        my_asleep=False, my_paralyzed=False,
+    )
+    assert active_score > bench_score
+
+
+def test_attach_score_active_energy_zero_species_bonus_matches_bench():
+    """energy_count==0の種族ボーナスは、active/bench問わず同じ値
+    （Dragapult_ex +150 / Dreepy +100 / それ以外 +50）であるべき
+    （bench_attackerによる加減点は別途アクティブ/ベンチで異なる）"""
+    card_table = {dm.Basic_Psychic_Energy: _MockCardData(cardId=dm.Basic_Psychic_Energy)}
+    for card_id, bonus in ((dm.Dragapult_ex, 150), (dm.Dreepy, 100), (dm.Drakloak, 50)):
+        active_pokemon = _MockPokemon(id=card_id)
+        active_score = dm._attach_score(
+            dm.Basic_Psychic_Energy, active_pokemon, True,
+            card_table=card_table, can_switch=False, bench_attacker=False,
+            no_more_dex=False, field_counts=defaultdict(int),
+            my_asleep=False, my_paralyzed=False,
+        )
+        assert active_score == 20000 + bonus, f"card_id={card_id}"
