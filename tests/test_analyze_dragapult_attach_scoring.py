@@ -139,7 +139,31 @@ def test_evaluate_attach_event_crispin_bonus_changes_verdict(mock_card_table):
     +50+active200=20250)に、非対象のドラパルトex(0エネ, 150枠, ベンチ, bench_attacker
     無しなので加減点なし=20150)をベンチに置く構成に差し替える。
     ボーナス無し: 20150 < 20250 で矛盾なし。+200ボーナス適用でベンチのドラパルトexが
-    20350に逆転し矛盾ありに変わる、という決定的な検証にする"""
+    20350に逆転し矛盾ありに変わる、という決定的な検証にする
+
+    【既知の制約・意図的なギャップ】
+    1. 本テストのevent["serialTarget"]はtracker.active_serial(=1)と一致する、
+       つまり装着対象(target)はアクティブ自身であり、元テスト(装着対象=ベンチの
+       ドレディア)とは逆になっている。本番のbuild_report()はserialTarget ==
+       tracker.active_serialの装着イベントをそもそもevaluate_attach_event()に
+       渡さない(scripts/analyze_dragapult_attach_scoring.py:191-192の
+       `event.get("serialTarget") != tracker.active_serial`フィルタでベンチ対象
+       のみ通過させているため)。つまり本テストが再現している「target=active」の
+       状況は、本番では発生し得ないケースである。
+    2. なぜベンチ対象で再構成できないか: 2026-07-25のenergy_count==0分岐修正
+       (アクティブ側にも種族ボーナスを追加、src/dragapult_agent/main.py:125-131)
+       により、ドラパルトex候補はenergy_count==0であればactive/bench問わず
+       同分岐の上限スコア(+150)を取るようになった。そのため競合するドラパルトex
+       候補は、クリスピンボーナス(+200、ドラパルトex種族の候補全般に付与)が
+       適用される前の時点で、既に大半の非ドラパルトex候補と同点かそれ以上になって
+       しまい、本テストが必要とする「ボーナス適用前は矛盾なし」という前提を
+       ベンチ対象のまま満たす組み合わせが構造的に作れない。
+    3. 結果として「クリスピンボーナスが矛盾判定をFalse→Trueへ反転させる」という
+       挙動自体は本テストで引き続き検証できるが、それは「target=active」の
+       ケースに限られる。現状、同じ反転挙動を「target=bench」(本番相当)で
+       検証する回帰テストは存在しない。これは見落としではなく、上記の理由により
+       現行のスコアリング式では構成不可能と判断した上での既知の受容ギャップである
+       (タスクレビュー2026-07-25のImportant指摘を参照)"""
     tracker = GameStateTracker(target_player_index=0)
     tracker.active_serial = 1
     tracker.species[1] = DRAKLOAK
