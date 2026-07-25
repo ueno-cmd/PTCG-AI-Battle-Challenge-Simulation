@@ -56,6 +56,10 @@ def mock_card_table(monkeypatch):
         lm.Hilda:                 _card(lm.Hilda,                 cardType=CardType.SUPPORTER),
         lm.Wally_Compassion:      _card(lm.Wally_Compassion,      cardType=CardType.SUPPORTER),
         lm.Ciphermaniac_Codebreaking: _card(lm.Ciphermaniac_Codebreaking, cardType=CardType.SUPPORTER),
+        lm.Switch:                _card(lm.Switch,                cardType=CardType.ITEM),
+        # Air_Balloonはmain.py側でまだimportされていない（Task 4で追加予定）ため、
+        # ここで追加するとlm.Air_Balloonの属性参照がAttributeErrorとなり全テストが
+        # 壊れる。Task 3の対象範囲外のためTask 4で追加する。
     }
     monkeypatch.setattr(lm, "card_table", table)
     return table
@@ -823,6 +827,71 @@ class TestAnalyzeMainOptionsSwitch:
         select.option = [Option(type=OptionType.RETREAT)]
         can_switch, _, _, _ = lm._analyze_main_options(obs, select, my_index=0)
         assert can_switch is True
+
+
+class TestSwitchPolicy:
+    """SwitchPolicy: ポケモンいれかえのPLAYスコアリング。
+    _score_retreat_optionと同条件で発火するが、にげるコスト(エネルギー破棄)を
+    伴わないぶんRETREATより優先されるよう+100して返す"""
+
+    def _ctx(self, current_plan, my_state):
+        return lm.PlayScoringContext(
+            obs=MagicMock(), o=Option(type=OptionType.PLAY, index=0), my_index=0,
+            current_plan=current_plan, can_attack=False,
+            state=_make_state(), my_state=my_state,
+            hand_counts=defaultdict(int), field_counts=defaultdict(int), stadium_id=0,
+        )
+
+    def test_negative_when_plan_keeps_current_attacker_and_active_is_effective(self):
+        plan = lm.AttackPlan(attacker=0, damage=130)
+        my_state = make_player_state(active_pokemon=make_pokemon(id=lm.Mega_Lucario_ex, hp=50))
+        assert lm.SwitchPolicy().play_score(self._ctx(plan, my_state)) == -1
+
+    def test_high_score_when_plan_switches_attacker(self):
+        plan = lm.AttackPlan(attacker=1)
+        my_state = make_player_state(active_pokemon=make_pokemon(id=lm.Mega_Lucario_ex, hp=50))
+        assert lm.SwitchPolicy().play_score(self._ctx(plan, my_state)) == 2100
+
+    def test_positive_when_ineffective_attack_and_high_value_active(self):
+        plan = lm.AttackPlan(attacker=0, damage=0)
+        my_state = make_player_state(active_pokemon=make_pokemon(id=lm.Mega_Lucario_ex, hp=50))
+        assert lm.SwitchPolicy().play_score(self._ctx(plan, my_state)) == 2100
+
+    def test_negative_when_ineffective_attack_but_regular_pokemon(self):
+        plan = lm.AttackPlan(attacker=0, damage=0)
+        my_state = make_player_state(active_pokemon=make_pokemon(id=lm.Riolu, hp=50))
+        assert lm.SwitchPolicy().play_score(self._ctx(plan, my_state)) == -1
+
+    def test_scores_higher_than_retreat_when_same_condition_fires(self):
+        """RETREATと同条件が成立するとき、エネルギーを失わないSwitchが+100分だけ優先される"""
+        plan = lm.AttackPlan(attacker=1)
+        my_state = make_player_state(active_pokemon=make_pokemon(id=lm.Mega_Lucario_ex, hp=50))
+        retreat_score = lm._score_retreat_option(plan, my_state.active[0], lm.card_table)
+        assert lm.SwitchPolicy().play_score(self._ctx(plan, my_state)) == retreat_score + 100
+
+
+class TestScoreOptionPlaySwitchWiring:
+    """main.py側でPLAYのSwitchケースがTRAINER_CARD_POLICIES経由で
+    SwitchPolicyへ正しく配線されていることの統合テスト"""
+
+    def test_score_option_play_switch_uses_switch_policy(self):
+        switch_card = Card(id=lm.Switch, serial=1, playerIndex=0)
+        my_state = make_player_state(
+            active_pokemon=make_pokemon(id=lm.Mega_Lucario_ex, hp=50), hand=[switch_card],
+        )
+        op_state = make_player_state(active_pokemon=make_pokemon(id=lm.Riolu, hp=100))
+        plan = lm.AttackPlan(attacker=1)
+        obs = MagicMock()
+        obs.current.players = [my_state, op_state]
+        option = Option(type=OptionType.PLAY, index=0)
+        score = lm._score_option(
+            obs=obs, o=option, context=lm.SelectContext.MAIN, my_index=0,
+            state=_make_state(), my_state=my_state, op_state=op_state,
+            field_counts=defaultdict(int), hand_counts=defaultdict(int), discard_counts=defaultdict(int),
+            attacker1=False, current_plan=plan, can_attack=True,
+            stadium_id=0, ability_used_flag=False,
+        )
+        assert score == 2100
 
 
 # ==================== Task 6: agent() 統合テスト ====================

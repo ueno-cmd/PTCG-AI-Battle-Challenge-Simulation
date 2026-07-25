@@ -383,6 +383,16 @@ class JudgePolicy(TrainerCardPolicy):
         return 7000 if no_fighting_energy_in_hand and not ctx.attacker1 else -1
 
 
+class SwitchPolicy(TrainerCardPolicy):
+    """ポケモンいれかえ：_score_retreat_optionと同条件で発火するが、
+    にげるコスト(エネルギー破棄)を伴わないぶんRETREATより+100して優先する。
+    条件不成立時(-1)はそのまま-1を返す（負のスコアに加算してはいけない）"""
+    def play_score(self, ctx: PlayScoringContext) -> int:
+        my_active = ctx.my_state.active[0] if ctx.my_state.active else None
+        base = _score_retreat_option(ctx.current_plan, my_active, card_table)
+        return base + 100 if base > 0 else -1
+
+
 class WallyCompassionPolicy(TrainerCardPolicy):
     def play_score(self, ctx: PlayScoringContext) -> int:
         my_lucario = next(
@@ -408,6 +418,7 @@ TRAINER_CARD_POLICIES: dict[int, TrainerCardPolicy] = {
     Pokegear: FixedScorePolicy(5200),
     Night_Stretcher: FixedScorePolicy(4800),
     Judge: JudgePolicy(),
+    Switch: SwitchPolicy(),
     Hilda: FixedScorePolicy(5300),
     Ciphermaniac_Codebreaking: FixedScorePolicy(5100),
     Wally_Compassion: WallyCompassionPolicy(),
