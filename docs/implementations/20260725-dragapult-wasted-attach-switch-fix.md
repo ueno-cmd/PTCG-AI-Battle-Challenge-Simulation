@@ -1,0 +1,61 @@
+# ドラパルトex 所感a・b修正 実装サマリー（2026-07-25）
+
+## 対象
+
+2026-07-25の実測20戦ログ調査（`docs/analyses/20260725-dragapult-ver8-5symptoms-investigation.md`）で確定した2件のバグのうち、ユーザー選択で優先度最高の2件のみを修正した。
+
+- **所感a「無駄なエネルギー消費→にげる」の主因**（20戦中12戦・16件）
+- **所感b「ドロンチ在場中の無駄なベンチ手張り」**（20戦中8戦・9件）
+
+設計書：`docs/superpowers/specs/2026-07-25-dragapult-wasted-attach-switch-fix-design.md`
+計画書：`docs/superpowers/plans/2026-07-25-dragapult-wasted-attach-switch-fix.md`
+ブランチ：`feature/dragapult-wasted-attach-switch-fix`
+
+## 実施内容
+
+### Task 1（コミット`f5e58b6`）：`_should_switch()`新規関数の追加
+
+`agent()`内にベタ書きだった`do_switch`変数を、テスト可能な純粋関数`_should_switch()`として抽出。Budew節に「アクティブが未投資(energy_count==0)の時だけ発火」という条件を追加した。`bench_attacker`分岐（攻撃準備済みの控えがいれば無条件に交代）は変更していない。この時点では`agent()`からはまだ呼ばれていない（Task 2で配線）。
+
+### Task 2（コミット`865e110`）：`agent()`への配線
+
+`agent()`内の`do_switch = (...)`インライン式を`_should_switch()`呼び出しに置き換え。純粋な配線変更で、`bench_attacker`分岐を含む既存の全挙動は変更なし。
+
+### Task 3（コミット`e2dc7c1`→`aec010f`）：`_attach_score()`のenergy_count==0分岐修正
+
+ベンチ側にのみあった種族ボーナス（Dragapult_ex +150 / Dreepy +100 / それ以外 +50）をアクティブ側にも対称に追加。`bench_attacker`による加減点（+400/-200）のみactive/benchで分岐させる形にリファクタした。
+
+**実装中の逸脱（計画からの変更）**：
+1. 計画書の新規テスト`test_attach_score_active_drakloak_beats_bench_dreepy_when_no_bench_attacker_ready`が数学的に矛盾していた（Drakloakの種族ボーナス+50がDreepyの+100に勝つとアサートしていたが、修正後の実装ではあり得ない）ことを実装者が発見・BLOCKED報告。controllerが計画書を修正（`test_attach_score_active_dragapult_ex_beats_bench_lower_priority_species_when_no_bench_attacker_ready`に差し替え）し、実装者を再開させた。
+2. 修正の副作用で既存テスト3件が新規に失敗することを実装者が発見・対応：
+   - `test_attach_score_dragon_line_accepts_fire_or_psychic_energy`・`test_attach_score_munkidori_accepts_dark_energy`：期待値の機械的な更新
+   - `test_evaluate_attach_event_crispin_bonus_changes_verdict`（`tests/test_analyze_dragapult_attach_scoring.py`）：ドラパルトexの種族ボーナスがenergy_count==0分岐の上限になったため、旧シナリオが「ボーナス無しでも既に矛盾あり」に変化し検証が成立しなくなっていた。シナリオを再設計し対応。
+3. タスクレビューで、再設計後のシナリオが「装着対象＝アクティブ自身」という、本番の`build_report()`が実際には渡さないケースを検証してしまっている点をImportant指摘。レビュアー自身の検証で、ベンチ対象のまま同じ検証を再構成することは現行のスコア式では構造的に不可能と確認されたため、その事情を説明するコメントを追加する形で対応（コミット`aec010f`）。
+
+## テスト結果
+
+`uv run pytest tests/ -q` → **711 passed, 0 failed**（開始時点704件 → Task1で+5 → Task3で既存1件更新+新規2件 → 711件）
+
+## 変更ファイル
+
+- `src/dragapult_agent/main.py`：`_should_switch()`新規追加、`agent()`内配線、`_attach_score()`の`energy_count==0`分岐リファクタ
+- `tests/test_dragapult_agent.py`：新規テスト7件追加、既存テスト3件の期待値更新
+- `tests/test_analyze_dragapult_attach_scoring.py`：既存テスト1件のシナリオ再設計＋説明コメント追加
+
+## 未実装のまま残した項目（意図的にスコープ外）
+
+- 所感aの副因（`_attach_score()`の`bench_attacker`準備時+400ボーナスが瞬間的な無駄装着を誘発、全体4/16件）
+- RETREATスコアリング自体（`main.py:1151-1155`）がエネルギー投資額を無視している点
+- 所感c（ミラー戦の敗因）・所感d（動けないターン、既存no_drawゲート課題）・所感e（サマヨール自爆、意図的設計と判定済み）
+- クリスピンボーナステストのベンチ対象版の再構築（現行スコア式では構造的に不可能と判明。将来スコア式が変わった際に再検討する候補として`tests/test_analyze_dragapult_attach_scoring.py`のコメントに記録済み）
+
+## フォローアップ（設計書より）
+
+修正後の実戦での効果は、Kaggle再提出後に新規バトルログが貯まり次第、以下を再確認する（[[feedback_log_driven_debugging]]踏襲）：
+- 所感bのパターンが実際に解消しているか
+- 種族ボーナス対称化による意図しない副作用（例：ベンチのDragapult_ex完成を過度に遅らせる等）が発生していないか
+- 所感aのパターンについても、Budew節の限定で想定通りの効果が出ているか
+
+## 提出用notebook
+
+`uv run python scripts/build_dragapult_submission_notebook.py`で再生成済み（`_should_switch`・更新後の`_attach_score()`を含むことを確認済み）。Kaggleアップロード・push はユーザー側で実施予定。
