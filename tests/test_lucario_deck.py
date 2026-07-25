@@ -28,11 +28,10 @@ def test_makuhita_hariyama_line_removed():
     assert 674 not in ids, "Hariyama は今回の改修で削除されたはず"
 
 
-def test_dusk_ball_and_carmine_and_switch_removed():
+def test_dusk_ball_and_carmine_removed():
     ids = {card_id for card_id, _ in DECK}
     assert 1102 not in ids, "Dusk Ball は今回の改修で削除されたはず"
     assert 1192 not in ids, "Carmine は今回の改修で削除されたはず"
-    assert 1123 not in ids, "Switch は今回の改修で削除されたはず"
 
 
 def test_energy_count():
@@ -59,10 +58,7 @@ def test_new_cards_present_with_expected_counts():
     assert counts[1121] == 4  # Ultra Ball
     assert counts[1122] == 4  # Pokégear 3.0
     assert counts[1097] == 2  # Night Stretcher
-    assert counts[1213] == 2  # Judge
-    assert counts[1225] == 2  # Hilda
-    assert counts[1229] == 1  # Wally's Compassion
-    assert counts[1188] == 1  # Ciphermaniac's Codebreaking
+    assert counts[1213] == 3  # Judge（2026-07-25: 2→3、Alakazam対面のJudge資源枯渇対策）
 
 
 def test_ogerpon_ex_present_with_2_copies():
@@ -73,3 +69,19 @@ def test_ogerpon_ex_present_with_2_copies():
 def test_solrock_reduced_to_2():
     counts = dict(DECK)
     assert counts[676] == 2  # Solrock 3→2（オーガポンex増量のため1枚減）
+
+
+def test_hilda_wally_ciphermaniac_removed():
+    """2026-07-25: 資源制約に効果の薄い単発サポート3種を削り、
+    Judge増量・Switch・Air Balloonの採用枠に充てた"""
+    ids = {card_id for card_id, _ in DECK}
+    assert 1225 not in ids, "Hilda（トウコ）は今回の改修で削除されたはず"
+    assert 1229 not in ids, "Wally's Compassion（ミツルの思いやり）は今回の改修で削除されたはず"
+    assert 1188 not in ids, "Ciphermaniac's Codebreaking（暗号マニアの解読）は今回の改修で削除されたはず"
+
+
+def test_switch_and_air_balloon_newly_adopted():
+    """2026-07-25: 自発的な交代手段が無い構造的ギャップへの対応として新規採用"""
+    counts = dict(DECK)
+    assert counts[1123] == 1  # ポケモンいれかえ（Switch）
+    assert counts[1174] == 2  # ふうせん（Air Balloon）

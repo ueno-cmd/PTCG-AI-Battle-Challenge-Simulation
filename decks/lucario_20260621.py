@@ -1,5 +1,7 @@
-# ルカリオデッキ定義（20260703 軽量版リビルド）
-# 2026-07-02大会優勝デッキをベースに、マクノシタ・ハリテヤマ系統を撤去した軽量プラン
+# ルカリオデッキ定義（20260725 Judge増量・Switch/Air Balloon採用）
+# 2026-07-03軽量版リビルドをベースに、資源制約(Judge枯渇)と交代手段の
+# 欠如という2つの既知ギャップに対応。単発サポート3種(Hilda/Wally's
+# Compassion/Ciphermaniac's Codebreaking)を削り採用枠に充てた
 
 DECK = [
     (677, 4),    # Riolu
@@ -16,10 +18,9 @@ DECK = [
     (1159, 1),   # Hero's Cape (ACE SPEC)
     (1227, 4),   # Lillie's Determination
     (1182, 4),   # Boss's Orders
-    (1213, 2),   # Judge
-    (1225, 2),   # Hilda
-    (1229, 1),   # Wally's Compassion
-    (1188, 1),   # Ciphermaniac's Codebreaking
+    (1213, 3),   # Judge（2→3。Alakazam対面のJudge資源枯渇対策）
+    (1123, 1),   # Switch（ポケモンいれかえ。自発的な交代手段の欠如への対応、新規採用）
+    (1174, 2),   # Air Balloon（ふうせん。にげるコスト-2、新規採用）
     (1252, 1),   # Gravity Mountain
     (6, 7),      # Basic {F} Energy
     (20, 4),     # Rock {F} Energy（Alakazam「ハンドパワー」対策。闘エネルギー1個分＋相手の技の効果を無効化）
