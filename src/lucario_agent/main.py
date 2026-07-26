@@ -469,12 +469,11 @@ def _score_attach_option(obs, o, my_index, current_plan, attacker1, op_active_nu
     card = get_card(obs, AreaType.HAND, o.index, my_index)
     if card.id == Maximum_Belt:
         pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
-        score = 7000
+        if pokemon.id == Mega_Lucario_ex:
+            return 7200  # メガブレイブでのワンパンを狙う主目的のため最優先
         if pokemon.id == Riolu:
-            score += 100  # 進化後もツールは維持されるため次点で許容
-        elif pokemon.id == Mega_Lucario_ex:
-            score += 200  # メガブレイブでのワンパンを狙う主目的のため最優先
-        return score
+            return 7100  # 進化後もツールは維持されるため次点で許容
+        return -1  # アタッカー以外は価値がほぼ無いため温存（1枚しかないACE SPECの浪費を防ぐ）
     if card.id == Air_Balloon:
         pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
         # ベーススコアは優先ツール(Maximum Belt, 7000)より低い6900とし、同一ポケモン対象での

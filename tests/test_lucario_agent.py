@@ -1574,7 +1574,7 @@ class TestScoreCardOptionAttachFrom:
 class TestScoreAttachOptionAirBalloon:
     """_score_attach_optionのふうせん(Air Balloon)分岐：メガルカリオex最優先、
     次いでリオル（両者ともにげるコスト2で、-2の効果を最大限活かせるため）。
-    ベーススコアはHero's Capeとの同点回避のため6900（最終レビュー指摘対応）"""
+    ベーススコアは優先ツール(Maximum Belt, 7000)との同点回避のため6900（最終レビュー指摘対応）"""
 
     def _score(self, pokemon):
         obs = MagicMock()
@@ -1635,6 +1635,12 @@ class TestScoreAttachOptionMaximumBeltVsAirBalloon:
         maximum_belt_score = self._score(lm.Maximum_Belt, riolu)
         air_balloon_score  = self._score(lm.Air_Balloon, riolu)
         assert maximum_belt_score > air_balloon_score
+
+    def test_maximum_belt_deprioritized_for_non_attacker(self):
+        """アタッカーになり得ないポケモン（Solrock等）への装着は、1枚しかない
+        ACE SPECを浪費しないよう-1（温存）を返すことを確認する回帰テスト"""
+        solrock = make_pokemon(id=lm.Solrock)
+        assert self._score(lm.Maximum_Belt, solrock) == -1
 
 
 class TestScoreAttachOptionRockFightingEnergy:
