@@ -477,7 +477,7 @@ def _score_attach_option(obs, o, my_index, current_plan, attacker1, op_active_nu
         return score
     if card.id == Air_Balloon:
         pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
-        # ベーススコアはHero's Cape(7000)より低い6900とし、同一ポケモン対象での
+        # ベーススコアは優先ツール(Maximum Belt, 7000)より低い6900とし、同一ポケモン対象での
         # 同点（装着先が実質ランダムに決まる問題）を避ける（最終レビュー指摘）
         score = 6900
         if pokemon.id == Mega_Lucario_ex:
