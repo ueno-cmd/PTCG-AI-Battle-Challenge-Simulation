@@ -11,7 +11,7 @@ from cg.api import (
 
 from lucario_agent.constants import (
     Lunatone, Solrock, Riolu, Mega_Lucario_ex, Premium_Power_Pro, Fighting_Gong,
-    Poke_Pad, Hero_Cape, Boss_Orders, Lillie_Determination, Gravity_Mountain,
+    Poke_Pad, Maximum_Belt, Boss_Orders, Lillie_Determination, Gravity_Mountain,
     Nighttime_Mine, Basic_Fighting_Energy, Rock_Fighting_Energy, Ultra_Ball,
     Pokegear, Night_Stretcher, Judge, Hilda, Wally_Compassion,
     Ciphermaniac_Codebreaking, Ogerpon_ex, Crustle, Sylveon, EX_DAMAGE_NULLIFIER_IDS,
@@ -467,13 +467,13 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
 def _score_attach_option(obs, o, my_index, current_plan, attacker1, op_active_nullifies_ex: bool = False) -> int:
     """OptionType.ATTACH のスコアを返す"""
     card = get_card(obs, AreaType.HAND, o.index, my_index)
-    if card.id == Hero_Cape:
+    if card.id == Maximum_Belt:
         pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
         score = 7000
         if pokemon.id == Riolu:
-            score += 100
+            score += 100  # 進化後もツールは維持されるため次点で許容
         elif pokemon.id == Mega_Lucario_ex:
-            score += 200
+            score += 200  # メガブレイブでのワンパンを狙う主目的のため最優先
         return score
     if card.id == Air_Balloon:
         pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)

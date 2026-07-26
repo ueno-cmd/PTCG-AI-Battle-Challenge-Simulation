@@ -47,7 +47,7 @@ def mock_card_table(monkeypatch):
         lm.Boss_Orders:          _card(lm.Boss_Orders,          cardType=CardType.SUPPORTER),
         lm.Lillie_Determination: _card(lm.Lillie_Determination, cardType=CardType.SUPPORTER),
         lm.Gravity_Mountain:     _card(lm.Gravity_Mountain,     cardType=CardType.STADIUM),
-        lm.Hero_Cape:            _card(lm.Hero_Cape,            cardType=CardType.TOOL),
+        lm.Maximum_Belt:         _card(lm.Maximum_Belt,         cardType=CardType.TOOL),
         lm.Fighting_Gong:        _card(lm.Fighting_Gong,        cardType=CardType.ITEM),
         lm.Poke_Pad:             _card(lm.Poke_Pad,             cardType=CardType.ITEM),
         lm.Ultra_Ball:            _card(lm.Ultra_Ball,            cardType=CardType.ITEM),
@@ -1534,12 +1534,11 @@ class TestScoreAttachOptionAirBalloon:
         assert self._score(make_pokemon(id=lm.Mega_Lucario_ex)) > self._score(make_pokemon(id=lm.Riolu))
 
 
-class TestScoreAttachOptionHeroCapeVsAirBalloon:
-    """最終レビュー指摘1：Hero's Cape(ACE SPEC・装着ポケモンの最大HP+100の恒久バフ)は
+class TestScoreAttachOptionMaximumBeltVsAirBalloon:
+    """2026-07-26: Dragapult ex対策としてACE SPECをHero's CapeからMaximum Beltへ
+    差し替えた。Maximum Belt(ACE SPEC・相手のアクティブexへの技ダメージ+50の恒久バフ)は
     Air Balloon(にげるコスト-2)より長期的価値が高いため、同一ポケモンを対象とした場合
-    Hero's Capeのスコアが常にAir Balloonを上回ることを確認する回帰テスト
-    （修正前は両者ともメガルカリオex=7200、リオル=7100で同点になり、装着先が
-    エンジンの選択肢並び順で実質ランダムに決まっていた）"""
+    Maximum Beltのスコアが常にAir Balloonを上回ることを確認する回帰テスト"""
 
     def _score(self, card_id, pokemon):
         obs = MagicMock()
@@ -1554,17 +1553,17 @@ class TestScoreAttachOptionHeroCapeVsAirBalloon:
             obs, option, my_index=0, current_plan=lm.AttackPlan(), attacker1=False,
         )
 
-    def test_hero_cape_beats_air_balloon_for_mega_lucario_ex(self):
+    def test_maximum_belt_beats_air_balloon_for_mega_lucario_ex(self):
         lucario = make_pokemon(id=lm.Mega_Lucario_ex)
-        hero_cape_score   = self._score(lm.Hero_Cape, lucario)
-        air_balloon_score = self._score(lm.Air_Balloon, lucario)
-        assert hero_cape_score > air_balloon_score
+        maximum_belt_score = self._score(lm.Maximum_Belt, lucario)
+        air_balloon_score  = self._score(lm.Air_Balloon, lucario)
+        assert maximum_belt_score > air_balloon_score
 
-    def test_hero_cape_beats_air_balloon_for_riolu(self):
+    def test_maximum_belt_beats_air_balloon_for_riolu(self):
         riolu = make_pokemon(id=lm.Riolu)
-        hero_cape_score   = self._score(lm.Hero_Cape, riolu)
-        air_balloon_score = self._score(lm.Air_Balloon, riolu)
-        assert hero_cape_score > air_balloon_score
+        maximum_belt_score = self._score(lm.Maximum_Belt, riolu)
+        air_balloon_score  = self._score(lm.Air_Balloon, riolu)
+        assert maximum_belt_score > air_balloon_score
 
 
 class TestScoreAttachOptionRockFightingEnergy:
