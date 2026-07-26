@@ -351,6 +351,41 @@ class TestCalcAttackDamage:
         defender = MockCardData(cardId=lm.Crustle)
         assert lm._calc_attack_damage(337, 200, lm.Crustle, defender, card_table=lm.card_table) == 0  # Archaludon ex（ex=True）
 
+    def test_maximum_belt_adds_50_against_ex_defender(self):
+        """Maximum Belt装着で相手exへの技ダメージが+50される"""
+        defender = MockCardData(cardId=999, ex=True)
+        belt = Card(id=lm.Maximum_Belt, serial=1, playerIndex=0)
+        assert lm._calc_attack_damage(
+            lm.Mega_Lucario_ex, 270, 999, defender, card_table=lm.card_table,
+            attacker_tools=[belt],
+        ) == 320
+
+    def test_maximum_belt_no_bonus_against_non_ex_defender(self):
+        """相手が非exならMaximum Beltの+50は適用されない"""
+        defender = MockCardData(cardId=999, ex=False)
+        belt = Card(id=lm.Maximum_Belt, serial=1, playerIndex=0)
+        assert lm._calc_attack_damage(
+            lm.Mega_Lucario_ex, 270, 999, defender, card_table=lm.card_table,
+            attacker_tools=[belt],
+        ) == 270
+
+    def test_maximum_belt_applied_before_weakness_doubling(self):
+        """カード効果文「before applying Weakness and Resistance」の順序確認：
+        (130+50)*2=360になる（130*2+50=310ではない）"""
+        defender = MockCardData(cardId=999, ex=True, weakness=EnergyType.FIGHTING)
+        belt = Card(id=lm.Maximum_Belt, serial=1, playerIndex=0)
+        assert lm._calc_attack_damage(
+            lm.Mega_Lucario_ex, 130, 999, defender, card_table=lm.card_table,
+            attacker_tools=[belt],
+        ) == 360
+
+    def test_without_maximum_belt_no_bonus(self):
+        """attacker_tools省略時（既存呼び出し）は従来通りボーナス無し"""
+        defender = MockCardData(cardId=999, ex=True)
+        assert lm._calc_attack_damage(
+            lm.Mega_Lucario_ex, 270, 999, defender, card_table=lm.card_table,
+        ) == 270
+
 
 class TestCalcAttackPlan:
     def test_no_attackers_returns_default_plan(self):
@@ -611,6 +646,42 @@ class TestCalcAttackPlan:
         )
         assert result.attacker  == 0
         assert result.remain_hp == 150 - 140  # ダメージは通常通り140（無効化を貫通）
+
+    def test_without_maximum_belt_mega_brave_does_not_ko_320hp_ex(self):
+        """前提確認：Maximum Belt未装着だとメガブレイブ(270)のみではHP320・exを倒しきれない"""
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, hp=300, energies=[6, 6])
+        my_ps = make_player_state(active_pokemon=lucario, prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=337, hp=320), prize_count=6)  # Archaludon ex(ex=True)相当
+        obs = MagicMock()
+        obs.select.option = [Option(type=OptionType.ATTACK, attackId=983)]
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int), defaultdict(int),
+            can_switch=False, can_op_switch=False,
+            can_use_mega_brave=True, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
+        )
+        assert result.remain_hp > 0
+
+    def test_maximum_belt_enables_one_shot_ko_on_320hp_ex_active(self):
+        """Maximum Belt装着でメガブレイブ(270)+50=320により、
+        HP320・exの相手をちょうど1発でKOできることを確認する統合テスト"""
+        belt = Card(id=lm.Maximum_Belt, serial=1, playerIndex=0)
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, hp=300, energies=[6, 6], tools=[belt])
+        my_ps = make_player_state(active_pokemon=lucario, prize_count=6)
+        op_ps = make_player_state(active_pokemon=make_pokemon(id=337, hp=320), prize_count=6)  # Archaludon ex(ex=True)相当
+        obs = MagicMock()
+        obs.select.option = [Option(type=OptionType.ATTACK, attackId=983)]
+        result = lm.calc_attack_plan(
+            obs, my_ps, op_ps, _make_state(),
+            defaultdict(int), defaultdict(int), defaultdict(int),
+            can_switch=False, can_op_switch=False,
+            can_use_mega_brave=True, can_attack=True, my_prize=6,
+            card_table=lm.card_table,
+        )
+        assert result.attacker     == 0
+        assert result.attack_index == 1
+        assert result.remain_hp    == 0
 
 
 class TestCrustleAbilityInteraction:

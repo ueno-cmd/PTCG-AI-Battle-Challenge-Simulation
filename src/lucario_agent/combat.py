@@ -7,7 +7,7 @@ from cg.api import EnergyType, Pokemon
 from lucario_agent.constants import (
     Lunatone, Solrock, Riolu, Mega_Lucario_ex, Ogerpon_ex,
     Basic_Fighting_Energy, Rock_Fighting_Energy, Nighttime_Mine,
-    EX_DAMAGE_NULLIFIER_IDS,
+    EX_DAMAGE_NULLIFIER_IDS, Maximum_Belt,
 )
 
 EPSILON = 0.28  # 温存判断時に探索的先出しをする確率
@@ -95,9 +95,16 @@ def _tera_stadium_cost_bonus(pokemon_id: int, stadium_id: int, card_table: dict)
     return 0
 
 
-def _calc_attack_damage(attacker_id: int, base_damage: int, defender_id: int, defender_data, card_table: dict) -> int:
+def _calc_attack_damage(
+    attacker_id: int, base_damage: int, defender_id: int, defender_data, card_table: dict,
+    attacker_tools: tuple = (),
+) -> int:
     """弱点・抵抗力・ex技無効化ポケモンの特性を考慮した実ダメージを1箇所で計算する"""
     damage = base_damage
+    defender_is_ex = defender_data.ex or defender_data.megaEx
+    if defender_is_ex and any(t.id == Maximum_Belt for t in attacker_tools):
+        damage += 50  # Maximum Belt：相手のアクティブexへの技ダメージ+50（弱点・抵抗力の適用より前）
+
     attack_ignores_defender_effects = attacker_id == Ogerpon_ex  # ぶちやぶる：相手にかかっている効果を計算しない
     if not attack_ignores_defender_effects:
         if defender_data.weakness == EnergyType.FIGHTING:
@@ -208,7 +215,10 @@ def calc_attack_plan(
                 if j != 0 and not can_op_switch:
                     break
                 data   = card_table[op_pokemon.id]
-                damage = _calc_attack_damage(my_pokemon.id, base_damage, op_pokemon.id, data, card_table)
+                damage = _calc_attack_damage(
+                    my_pokemon.id, base_damage, op_pokemon.id, data, card_table,
+                    attacker_tools=my_pokemon.tools,
+                )
 
                 prize = 0
                 score = pokemon_score(op_pokemon, card_table)
@@ -220,7 +230,10 @@ def calc_attack_plan(
 
                 is_mega_brave_choice = my_pokemon.id == Mega_Lucario_ex and a == 1
                 if is_mega_brave_choice:
-                    base_dmg_normal = _calc_attack_damage(my_pokemon.id, 130, op_pokemon.id, data, card_table)
+                    base_dmg_normal = _calc_attack_damage(
+                        my_pokemon.id, 130, op_pokemon.id, data, card_table,
+                        attacker_tools=my_pokemon.tools,
+                    )
                     if op_pokemon.hp <= base_dmg_normal:
                         score -= 1000  # 通常攻撃で足りるならメガブレイブは温存
                     elif op_pokemon.hp > damage:
