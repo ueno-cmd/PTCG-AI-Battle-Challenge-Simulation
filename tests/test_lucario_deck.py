@@ -1,7 +1,7 @@
 from decks.lucario_20260621 import DECK
 
 ENERGY_IDS = {6}  # Basic {F} Energy
-ACE_SPEC_IDS = {1159}  # Hero's Cape
+ACE_SPEC_IDS = {1158}  # Maximum Belt
 
 
 def test_deck_has_60_cards():
@@ -85,3 +85,12 @@ def test_switch_and_air_balloon_newly_adopted():
     counts = dict(DECK)
     assert counts[1123] == 1  # ポケモンいれかえ（Switch）
     assert counts[1174] == 2  # ふうせん（Air Balloon）
+
+
+def test_maximum_belt_replaces_hero_cape():
+    """2026-07-26: Dragapult ex(HP320)へのワンパン対策として、ACE SPEC枠を
+    Hero's CapeからMaximum Beltへ差し替えた"""
+    ids = {card_id for card_id, _ in DECK}
+    assert 1159 not in ids, "Hero's Cape は今回の改修で削除されたはず"
+    counts = dict(DECK)
+    assert counts.get(1158) == 1, "Maximum Belt(ACE SPEC)が1枚採用されているはず"

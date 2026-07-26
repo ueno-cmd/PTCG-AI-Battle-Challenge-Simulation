@@ -7,6 +7,7 @@ Premium_Power_Pro     = 1141
 Fighting_Gong         = 1142
 Poke_Pad              = 1152
 Hero_Cape             = 1159
+Maximum_Belt          = 1158  # ACE SPEC：相手のアクティブexへの技ダメージ+50（弱点・抵抗力適用前）
 Boss_Orders           = 1182
 Lillie_Determination  = 1227
 Gravity_Mountain      = 1252

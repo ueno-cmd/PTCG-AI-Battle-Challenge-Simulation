@@ -15,7 +15,7 @@ DECK = [
     (1141, 4),   # Premium Power Pro
     (1097, 2),   # Night Stretcher
     (1122, 4),   # Pokégear 3.0
-    (1159, 1),   # Hero's Cape (ACE SPEC)
+    (1158, 1),   # Maximum Belt（ACE SPEC。Dragapult ex(HP320)対策、Hero's Capeから差し替え。2026-07-26）
     (1227, 4),   # Lillie's Determination
     (1182, 4),   # Boss's Orders
     (1213, 3),   # Judge（2→3。Alakazam対面のJudge資源枯渇対策）
