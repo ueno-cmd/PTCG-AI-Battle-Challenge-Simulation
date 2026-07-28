@@ -2268,3 +2268,58 @@ class TestSetupActivePokemonOgerponPriority:
 
     def test_solrock_still_takes_priority_over_ogerpon_ex(self):
         assert self._score(lm.Solrock) > self._score(lm.Ogerpon_ex)
+
+
+class TestEvolvePriorityOverJudge:
+    """EVOLVEとJudgeが同点にならないことの検証。
+    同点だと選択肢の提示順（エンジン依存で制御不能）次第でJudgeが先に選ばれ、
+    手札のMega Lucario exが山札に戻って進化機会を失う"""
+
+    def _evolve_score(self, energies):
+        from unittest.mock import MagicMock
+        from cg.api import Option, OptionType, SelectContext
+
+        riolu = make_pokemon(id=lm.Riolu, hp=80, energies=energies)
+        my_state = make_player_state(bench=[riolu], prize_count=6)
+        op_state = make_player_state(prize_count=6)
+        obs = MagicMock()
+        obs.current.players = [my_state, op_state]
+        option = Option(type=OptionType.EVOLVE, inPlayArea=lm.AreaType.BENCH, inPlayIndex=0)
+        return lm._score_option(
+            obs=obs, o=option, context=SelectContext.MAIN, my_index=0,
+            state=_make_state(), my_state=my_state, op_state=op_state,
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int),
+            attacker1=False, current_plan=lm.AttackPlan(), can_attack=True,
+            stadium_id=0, ability_used_flag=False,
+        )
+
+    def _judge_top_priority_score(self):
+        """相手の手札が閾値以上でJudgeが最優先になったときのスコア"""
+        from unittest.mock import MagicMock
+        from cg.api import Option, OptionType
+
+        obs = MagicMock()
+        my_state = make_player_state(prize_count=6)
+        ctx = lm.PlayScoringContext(
+            obs=obs, o=Option(type=OptionType.PLAY, index=0), my_index=0,
+            current_plan=lm.AttackPlan(), can_attack=True,
+            state=_make_state(), my_state=my_state,
+            hand_counts=defaultdict(int), field_counts=defaultdict(int),
+            stadium_id=0, attacker1=False, rng=None,
+            op_hand_count=lm.JudgePolicy.OPPONENT_HAND_THRESHOLD,
+        )
+        return lm.JudgePolicy().play_score(ctx)
+
+    def test_evolve_beats_judge_even_with_zero_energy(self):
+        """進化元のエネルギーが0個でもJudgeを上回る（旧実装ではここが完全同点だった）"""
+        assert self._evolve_score([]) > self._judge_top_priority_score()
+
+    def test_evolve_score_still_increases_with_energy(self):
+        """エネルギー数によって優先度が上がる既存の性質は維持する
+        （複数の進化元がいる時、投資済みの個体を優先する意図）"""
+        assert self._evolve_score([6, 6]) > self._evolve_score([6]) > self._evolve_score([])
+
+    def test_evolve_stays_below_pokemon_deployment(self):
+        """ポケモンの展開(20000)より下位である既存の順位は維持する"""
+        assert self._evolve_score([6, 6, 6]) < 20000

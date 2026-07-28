@@ -536,7 +536,13 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
             return _score_attach_option(obs, o, my_index, current_plan, attacker1, op_active_nullifies_ex)
         case OptionType.EVOLVE:
             pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
-            return 9000 + len(pokemon.energies)
+            # 9100始まり：Judge(9000、相手の手札が10枚以上で最優先)と同点にしないため。
+            # MAINは1ターンに複数回行動できるので、先に進化してからJudgeを撃てば両方成立する。
+            # 同点だと選択肢の提示順（エンジン依存で制御不能）次第でJudgeが先に選ばれ、
+            # 手札のMega Lucario exが山札に戻って進化機会を失う。
+            # 9000〜10000の間に他のスコアは存在しないため上位分岐への影響はない。
+            # （2026-07-28の静的監査で発見。実測40戦での実害は0件だが構造として実在）
+            return 9100 + len(pokemon.energies)
         case OptionType.ABILITY:
             card = get_card(obs, o.area, o.index, my_index)
             if card.id == 1267:
