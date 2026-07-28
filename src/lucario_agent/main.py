@@ -455,6 +455,14 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
         if card.id in (Lunatone, Solrock):
             return -1 if field_counts[card.id] >= 1 else 20000
         if card.id == Riolu:
+            # 場に進化元(Riolu)が1体もいない時は、Mega Lucario exが何体いても展開を許可する。
+            # 旧条件(Riolu+Mega>=2で一律-1)では、Mega Lucario exが2体並んだ時点で3体目以降の
+            # Rioluを永久に出せず、手札のMega Lucario exが腐っていた。
+            # 実測：ver22/ver23の40戦で、手札にMegaがあるのに場にRioluが0体のターンが25回。
+            # うちPLAY Rioluの選択肢が出ていたのに出さなかったのが2回
+            # （88166297 turn12 step102 / turn14 step117、いずれもベンチ4/5で空きあり）
+            if field_counts[Riolu] == 0:
+                return 20000
             return -1 if field_counts[Riolu] + field_counts[Mega_Lucario_ex] >= 2 else 20000
         return 20000
 

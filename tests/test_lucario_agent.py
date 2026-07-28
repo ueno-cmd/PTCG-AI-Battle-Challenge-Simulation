@@ -2323,3 +2323,42 @@ class TestEvolvePriorityOverJudge:
     def test_evolve_stays_below_pokemon_deployment(self):
         """ポケモンの展開(20000)より下位である既存の順位は維持する"""
         assert self._evolve_score([6, 6, 6]) < 20000
+
+
+class TestRiolusSupplyGate:
+    """Rioluの展開ガード。進化元が枯れると手札のMega Lucario exが腐るため、
+    場にRioluが0体の時は無条件に展開を許可する"""
+
+    def _score(self, field_riolu, field_mega):
+        card = Card(id=lm.Riolu, serial=1, playerIndex=0)
+        obs, my_state = _obs_with_hand([card], deck_count=30)
+        o = Option(type=OptionType.PLAY, index=0)
+        field_counts = defaultdict(int, {lm.Riolu: field_riolu, lm.Mega_Lucario_ex: field_mega})
+        return lm._score_play_option(
+            obs, o, my_index=0, current_plan=lm.AttackPlan(),
+            can_attack=False, state=_make_state(), my_state=my_state,
+            hand_counts=_hand_counts([card]), field_counts=field_counts,
+            stadium_id=0,
+        )
+
+    def test_allows_deployment_when_no_riolu_in_play(self):
+        """場にRioluが0体なら、Mega Lucario exが2体いても展開を許可する。
+        実測：88166297 turn12/turn14で、Mega 2体・ベンチ空きありの状況で
+        Rioluの選択肢が出ていたのに出さず、手札のMegaが腐っていた"""
+        assert self._score(field_riolu=0, field_mega=2) == 20000
+
+    def test_allows_deployment_when_no_riolu_and_three_mega(self):
+        """Mega Lucario exが3体（デッキ上の最大枚数）でも同様に許可する"""
+        assert self._score(field_riolu=0, field_mega=3) == 20000
+
+    def test_still_suppresses_when_riolu_already_in_play_at_capacity(self):
+        """Rioluが1体いてMegaが1体なら、従来通り抑制する（既存挙動の維持）"""
+        assert self._score(field_riolu=1, field_mega=1) == -1
+
+    def test_still_suppresses_with_two_riolu(self):
+        """Rioluが2体いれば従来通り抑制する（既存挙動の維持）"""
+        assert self._score(field_riolu=2, field_mega=0) == -1
+
+    def test_still_allows_second_riolu(self):
+        """Rioluが1体だけなら2体目は従来通り許可する（既存挙動の維持）"""
+        assert self._score(field_riolu=1, field_mega=0) == 20000
