@@ -164,6 +164,54 @@ if card.id == Riolu:
 `field_riolu=0` かつ `field_mega=0`（初回のRiolu展開）の境界ケースのテストが未追加。
 ロジック上は新旧どちらの分岐でも20000を返す等価なケースであり実害なし。
 
+**根拠数値の出所**: 「25回」「2回」「88166297 turn12 step102 / turn14 step117」は、
+2026-07-28の進化漏れ調査（サブエージェントによる実ログ40戦の網羅検出）で得た集計値。
+`docs/analyses/20260728-lucario-ver22-maximum-belt-20-games.md` および
+`docs/analyses/20260728-lucario-ver23-noise-verification.md` には**この集計は未記載**のため、
+再現手順が残っていない。次回この数値を使う際は再集計すること。
+
+---
+
+## 最終レビュー後の追加修正: TO_HAND（山札サーチ）側のRiolu優先度免除（2026-07-28）
+
+### 問題
+Task 3で修正した述語 `field_counts[Riolu] + field_counts[Mega_Lucario_ex] >= 2` が、
+山札サーチ（ハイパーボール／夜のタンカ等の候補選択）を担う `SelectContext.TO_HAND` 側では
+未修正のまま残っていた。
+
+実測スコア（場にRiolu 0体・Mega Lucario ex 2体のとき）:
+
+| サーチ候補 | 修正前TO_HANDスコア | 修正後TO_HANDスコア |
+|---|---|---|
+| Riolu | 50（最下位） | **240（最優先）** |
+| Mega Lucario ex | 185 | 185（変更なし） |
+
+進化元が枯れて最もRioluが必要な局面で、Rioluがサーチ候補の最下位になり、
+「進化元がいないので手札で腐っているMega Lucario ex」が3.7倍優先される事態が発生していた。
+
+実測の症状「手札にMega Lucario exがあるのに場にRioluが0体のターンが25回」のうち、
+PLAY選択肢が出ていたのは2回だけ。**残り23回はそもそもRioluが手札に来ていない**ので、
+それを支配しているのがこのTO_HAND側。**Task 3単体では症状の25回中2回＝約8%しか
+塞げていなかった。**
+
+### 修正内容
+`_riolu_supply_exhausted(field_counts)` / `_riolu_line_at_capacity(field_counts)` の
+2つのヘルパー関数を新設し、`_score_play_option`（Task 3の修正箇所）と
+`_score_card_option`（`case SelectContext.TO_HAND:` のRiolu分岐）の両方から
+同じ述語を参照するように一元化した。
+
+`_score_play_option` 側は挙動を完全に維持したまま述語をヘルパー呼び出しに置き換え、
+`_score_card_option` 側は進化元が枯れている（`_riolu_supply_exhausted`が真）ときに
+Mega Lucario exの体数によらず+40点を与えるよう修正した。Rioluが1体以上いる場合の
+挙動（-150 / -3）は変更していない。
+
+### テスト
+`tests/test_lucario_agent.py::TestRiolusSearchPriority` を新規追加（5件）。
+あわせて `TestRiolusSupplyGate` に境界ケース（Riolu 0体・Mega 0体）のテストを1件追加。
+
+### テスト件数
+748 → 754
+
 ---
 
 ## テスト結果サマリー
@@ -173,9 +221,10 @@ if card.id == Riolu:
 | 着手時ベースライン | 738 |
 | Task 1後 | 740 |
 | Task 2後 | 743 |
-| Task 3後（完了時） | 748 |
+| Task 3後 | 748 |
+| 最終レビュー後の追加修正後（完了時） | 754 |
 
-3タスクとも既存テストの失敗0件・期待値の後方修正なし。
+3タスク＋最終レビュー後の追加修正とも既存テストの失敗0件・期待値の後方修正なし。
 
 ---
 
@@ -237,6 +286,28 @@ uv run pytest tests/test_build_lucario_submission_main.py tests/test_build_lucar
 | 手札にMega Lucario exがあるのに場にRioluが0体のターン数 | 25回/40戦 | **減少すること** |
 | Maximum Beltの装着率 | ver22: 30% / ver23: 45% | **上昇すること** |
 
+**注意**: Task 1はスコアの順位付けによる温存であり、`main.py` の
+`return desc_indices[:select.maxCount]` は**スコアの正負に関わらず常に上位maxCount件を返す**。
+したがって手札がちょうど2枚（Maximum Belt＋他1枚）の状態でハイパーボールを撃つと、
+-150点でもMaximum Beltは捨てられる。**期待値は「0件、ただし手札が枯渇した局面を除く」**が正確で、
+次バッチで1件出ても即「修正失敗」と判断しないこと。恒久対策は `UltraBallPolicy` 側
+（コスト候補が全部高価値なら撃たない）で、これは 86197001 の事例で一度通った道である。
+
+---
+
+## 最終レビューで判明した副作用・2026-07-28
+
+旧条件では PLAY Riolu が「合計1体以下のときしか通らない」ため、ルカリオラインは盤面に**最大2体**までしか
+存在し得なかった（進化は体数を増やさないため）。本修正では「Rioluが0体なら無条件許可」なので、
+「進化してRiolu=0になる→補充が開く」のループにより **Mega 3体＋Riolu 1体＝4体**まで伸びる。
+計画書のTask 3節には「過剰展開を許してしまうため（頭数から外す案は）見送った」と書いたが、
+**採用した最小変更でも時間軸を通せば同等の展開量に到達する**。
+実害として現実的なのはベンチ枠（アクティブ1＋ベンチ5＝6枠）の圧迫で、
+ルカリオライン4体＋Solrock＋Lunatoneで6枠を使い切ると
+**Crustle/Sylveonのex技無効化に対する唯一の回答であるOgerpon exが出せなくなる**。
+ユーザー判断（2026-07-28）でコード修正は行わず記録に留め、
+**スコープ外1（Mega Lucario exの体数上限ガード）の優先度を引き上げる**こととした。
+
 ---
 
 ## スコープ外（意図的に今回は着手しない）
@@ -246,7 +317,9 @@ uv run pytest tests/test_build_lucario_submission_main.py tests/test_build_lucar
 1. **Mega Lucario exの体数上限ガードが無い** — ドラパルトexには「場に2体なら-1」があるが、
    ルカリオexには無く無制限に並ぶ。Mega Lucario exはKO時にサイドを**3枚**献上するため、
    非exデッキ（Alakazam軸等、1体倒しても1枚）相手のサイド枚数の非対称性に直結する。
-   ユーザー判断で今回は見送り（影響が大きく慎重な設計が必要）
+   ユーザー判断で今回は見送り（影響が大きく慎重な設計が必要）。
+   **【優先度引き上げ・2026-07-28】最終レビューで、Task 3の副作用により盤面上限が実質2→4体に
+   上がることが判明したため**
 2. **`UltraBallPolicy.already_found`の数え方** — 場と手札のRiolu＋Mega＋Ogerponの合計が3以上で
    スコアを100点に落とす（`main.py:358-367`）。**Mega Lucario exを1枚も持っていなくても**、
    Riolu 2体＋Ogerpon 1体がベンチにいるだけでハイパーボールが実質封印される。
