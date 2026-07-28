@@ -1529,6 +1529,40 @@ class TestDiscardContext:
         )
         assert score == -100
 
+    def test_protects_maximum_belt(self):
+        """Maximum BeltはACE SPEC（デッキに1枚のみ・トラッシュから回収不可）のため、
+        ハイパーボールのコスト等で捨てられないよう強く温存する。
+        実測：ver22/ver23の40戦で3件、手札に来たMaximum Beltを自己破棄していた"""
+        belt = Card(id=lm.Maximum_Belt, serial=1, playerIndex=0)
+        obs = self._obs(belt)
+        score = lm._score_card_option(
+            obs, Option(type=OptionType.CARD, area=lm.AreaType.HAND, index=0, playerIndex=0),
+            context=lm.SelectContext.DISCARD, my_index=0, state=_make_state(),
+            my_state=make_player_state(),
+            field_counts=defaultdict(int), hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), ability_used_flag=False,
+        )
+        assert score == -150
+
+    def test_maximum_belt_protected_more_strongly_than_key_pokemon(self):
+        """代替不可のACE SPECは、複数枚あるキーポケモン(Riolu×4等)より強く温存する。
+        値そのものではなく相対順位を検証する（値だけのテストは順位の逆転を検出できない）"""
+        def _score(card_id):
+            card = Card(id=card_id, serial=1, playerIndex=0)
+            return lm._score_card_option(
+                self._obs(card),
+                Option(type=OptionType.CARD, area=lm.AreaType.HAND, index=0, playerIndex=0),
+                context=lm.SelectContext.DISCARD, my_index=0, state=_make_state(),
+                my_state=make_player_state(),
+                field_counts=defaultdict(int), hand_counts=defaultdict(int),
+                discard_counts=defaultdict(int), attacker1=False,
+                current_plan=lm.AttackPlan(), ability_used_flag=False,
+            )
+
+        assert _score(lm.Maximum_Belt) < _score(lm.Riolu)
+        assert _score(lm.Maximum_Belt) < _score(lm.Mega_Lucario_ex)
+
     def test_default_trainer_is_low_priority_but_positive(self):
         stretcher = Card(id=1097, serial=1, playerIndex=0)  # Night Stretcher（まだ定数化前）
         obs = self._obs(stretcher)

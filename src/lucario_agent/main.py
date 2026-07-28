@@ -241,6 +241,12 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
             if card.id == Rock_Fighting_Energy:
                 # 夜のタンカで回収不可・デッキ内4枚のみのため、手札枚数によらず常時温存
                 return -20
+            if card.id == Maximum_Belt:
+                # ACE SPECのためデッキに1枚のみ・トラッシュからの回収手段も無く、
+                # 一度捨てると復帰不可。複数枚あるキーポケモン(-100)より強く温存する。
+                # 実測：ver22/ver23の40戦で3件、ハイパーボールのコスト等として
+                # 自己破棄していた（88184798 t1 / 88186950 t1 / 88168475 step10）
+                return -150
             if card.id in (Riolu, Mega_Lucario_ex, Solrock, Lunatone, Ogerpon_ex, Judge):
                 return -100
             if card.id in (Boss_Orders, Lillie_Determination):
