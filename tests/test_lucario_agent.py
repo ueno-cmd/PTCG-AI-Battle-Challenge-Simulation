@@ -2362,3 +2362,52 @@ class TestRiolusSupplyGate:
     def test_still_allows_second_riolu(self):
         """Rioluが1体だけなら2体目は従来通り許可する（既存挙動の維持）"""
         assert self._score(field_riolu=1, field_mega=0) == 20000
+
+    def test_allows_first_riolu_deployment(self):
+        """場にRiolu・Megaとも0体（ターン序盤の最頻状態）でも展開を許可する。
+        新旧どちらの分岐でも20000で等価だが、将来ゲートを触った際の回帰検知点として置く"""
+        assert self._score(field_riolu=0, field_mega=0) == 20000
+
+
+class TestRiolusSearchPriority:
+    """TO_HAND（山札サーチの候補選択）でのRiolu優先度。
+    進化元が枯れている局面ではMega Lucario exの体数によらず最優先でサーチする"""
+
+    def _score(self, card_id, field_riolu, field_mega):
+        card = Card(id=card_id, serial=1, playerIndex=0)
+        obs = MagicMock()
+        my_ps = make_player_state(hand=[card])
+        obs.current.players = [my_ps, make_player_state()]
+        field_counts = defaultdict(int, {lm.Riolu: field_riolu, lm.Mega_Lucario_ex: field_mega})
+        return lm._score_card_option(
+            obs, Option(type=OptionType.CARD, area=lm.AreaType.HAND, index=0, playerIndex=0),
+            context=lm.SelectContext.TO_HAND, my_index=0, state=_make_state(),
+            my_state=my_ps,
+            field_counts=field_counts, hand_counts=defaultdict(int),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), ability_used_flag=False,
+        )
+
+    def test_riolu_prioritized_when_supply_exhausted_despite_two_mega(self):
+        """場にRiolu 0体・Mega 2体なら、Rioluは最優先(+40)でサーチされる。
+        修正前はここが-150で、Rioluがサーチ候補の最下位に落ちていた"""
+        assert self._score(lm.Riolu, field_riolu=0, field_mega=2) == 240
+
+    def test_riolu_beats_mega_when_supply_exhausted(self):
+        """進化元が枯れている局面では、手札で腐るMega Lucario exよりRioluを優先する。
+        値そのものではなく相対順位を検証する"""
+        riolu = self._score(lm.Riolu, field_riolu=0, field_mega=2)
+        mega  = self._score(lm.Mega_Lucario_ex, field_riolu=0, field_mega=2)
+        assert riolu > mega
+
+    def test_riolu_suppressed_when_line_at_capacity(self):
+        """Rioluが1体いてMegaも1体なら、従来通り強く抑制する（既存挙動の維持）"""
+        assert self._score(lm.Riolu, field_riolu=1, field_mega=1) == 50
+
+    def test_riolu_slightly_suppressed_when_one_in_play(self):
+        """Rioluが1体だけなら従来通り軽い抑制にとどまる（既存挙動の維持）"""
+        assert self._score(lm.Riolu, field_riolu=1, field_mega=0) == 197
+
+    def test_riolu_prioritized_on_empty_field(self):
+        """場にRiolu・Megaとも0体（序盤）でも最優先。これは修正前後で等価"""
+        assert self._score(lm.Riolu, field_riolu=0, field_mega=0) == 240

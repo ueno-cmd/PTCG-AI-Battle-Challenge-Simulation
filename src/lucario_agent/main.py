@@ -166,6 +166,25 @@ def _analyze_main_options(obs: Observation, select, my_index: int) -> tuple[bool
 
 
 # ==================== スコアリング ====================
+def _riolu_supply_exhausted(field_counts) -> bool:
+    """場に進化元(Riolu)が1体もいない＝進化先(Mega Lucario ex)が手札で腐る状態か。
+
+    この状態のときはMega Lucario exが何体並んでいてもRioluの展開・サーチを
+    最優先する。実測(ver22/ver23の40戦)で、手札にMega Lucario exがあるのに
+    場にRioluが0体のターンが25回発生していた。
+    """
+    return field_counts[Riolu] == 0
+
+
+def _riolu_line_at_capacity(field_counts) -> bool:
+    """ルカリオライン(Riolu＋Mega Lucario ex)が展開上限に達しているか。
+
+    ベンチをRioluで埋め尽くさないための既存のガード。
+    _riolu_supply_exhausted() が False のときだけ意味を持つ。
+    """
+    return field_counts[Riolu] + field_counts[Mega_Lucario_ex] >= 2
+
+
 def _score_card_option(obs, o, context, my_index, state, my_state,
                        field_counts, hand_counts, discard_counts,
                        attacker1, current_plan, ability_used_flag,
@@ -219,8 +238,14 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
             elif card.id == Solrock:
                 score += -250 if field_counts[card.id] >= 1 else 50
             elif card.id == Riolu:
-                total = field_counts[Riolu] + field_counts[Mega_Lucario_ex]
-                score += -150 if total >= 2 else (-3 if total >= 1 else 40)
+                # 進化元が枯れている時は、Mega Lucario exが何体いてもRioluを最優先でサーチする
+                # （_score_play_option側の同じ免除と述語を共有）。旧条件(Riolu+Mega>=2で-150)では、
+                # 進化元が枯れて最もRioluが必要な局面でRioluがサーチ候補の最下位(50点)に落ち、
+                # 手札で腐っているMega Lucario ex(185点)に負けていた
+                if _riolu_supply_exhausted(field_counts):
+                    score += 40
+                else:
+                    score += -150 if _riolu_line_at_capacity(field_counts) else -3
             elif card.id == Mega_Lucario_ex:
                 score += 40 if field_counts[Riolu] >= 1 else -15
             elif card.id == Ogerpon_ex:
@@ -461,9 +486,9 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
             # 実測：ver22/ver23の40戦で、手札にMegaがあるのに場にRioluが0体のターンが25回。
             # うちPLAY Rioluの選択肢が出ていたのに出さなかったのが2回
             # （88166297 turn12 step102 / turn14 step117、いずれもベンチ4/5で空きあり）
-            if field_counts[Riolu] == 0:
+            if _riolu_supply_exhausted(field_counts):
                 return 20000
-            return -1 if field_counts[Riolu] + field_counts[Mega_Lucario_ex] >= 2 else 20000
+            return -1 if _riolu_line_at_capacity(field_counts) else 20000
         return 20000
 
     policy = TRAINER_CARD_POLICIES.get(card.id)
@@ -490,7 +515,7 @@ def _score_attach_option(obs, o, my_index, current_plan, attacker1, op_active_nu
         return -1  # アタッカー以外は価値がほぼ無いため温存（1枚しかないACE SPECの浪費を防ぐ）
     if card.id == Air_Balloon:
         pokemon = get_card(obs, o.inPlayArea, o.inPlayIndex, my_index)
-        # ベーススコアは優先ツール(Maximum Belt, 7000)より低い6900とし、同一ポケモン対象での
+        # ベーススコアは優先ツール(Maximum Belt, 7200/7100)より低い6900とし、同一ポケモン対象での
         # 同点（装着先が実質ランダムに決まる問題）を避ける（最終レビュー指摘）
         score = 6900
         if pokemon.id == Mega_Lucario_ex:
