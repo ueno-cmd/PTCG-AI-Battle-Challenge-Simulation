@@ -284,7 +284,27 @@ git commit -m "fix(lucario): DISCARD時に闘エネルギーを温存する
 - `current_plan.energy == True` のとき → 今ターン攻撃が成立するプランがある。**そちらを最優先する**（既存の +200 ボーナスがそのまま働く）。救済ボーナスは付けない。
 - `current_plan.energy == False` のとき → 追加装着で今ターン攻撃できるプランは存在しない。このときバトル場が0エネなら、そこに付けるのが最善（**攻撃も退却もできないデッドロックを解消できる唯一の手段**）。
 
-`current_plan.energy == False` のときはベンチ側の +200 も発動しないため、救済ボーナスは素の `energy_score` 値（7900〜8101）とだけ競合する。したがって **+500** で十分な余裕を持って勝てる。既存スコアと同点にもならない。
+**【2026-07-29最終レビューで修正】** ベンチ側の +200 は発動しないが、`Rock_Fighting_Energy` の
+アクティブ優先 +500（本ファイル 537-543行目、`_score_attach_option` 冒頭部分）とは**排他ではなく
+加算される**（同一の装着先で両方の条件を満たしうるため）。したがって救済ボーナスは素の
+`energy_score` 値（7900〜8101）とだけ競合するわけではない。加算後の実際の最大値は
+「バトル場0エネの Ogerpon_ex + ロック闘エネルギー + attacker1=True」の
+`8000+10+80+40+500(アクティブ優先)+300(救済) = 8930` であり、これが全組み合わせの中の最大値
+（総当たり検証済み）。
+
+したがって救済ボーナスは **+300** とする。
+
+- **下限**：ベンチのメガルカリオex(1エネ)の `energy_score = 8101` に確実に勝つ必要がある。
+  救済込みの最小値（Lunatone、またはRiolu/Mega_Lucario_exでattacker1・op_active_nullifies_ex
+  両方が効いた場合の `7910`）+300 = `8210` で上回る。
+- **上限**：ロック闘エネルギーのアクティブ優先 +500 と重なっても 9000 を超えないこと
+  （EVOLVE の `9100 + len(pokemon.energies)` の帯域を侵さないこと）。上記の最大値 `8930` は
+  この条件を満たす。
+
+**旧版（+500）の誤り：** 当初は「ベンチ側+200が発動しないため素のenergy_scoreとだけ競合し、
++500で十分」としていたが、アクティブ優先+500との加算を見落としていた。+500のままだと
+最大値が `9130` となり EVOLVE の帯域に食い込むため、最終レビューで +300 に修正した
+（総当たり検証で同点自体は未発生と確認済み。詳細は `docs/reviews/` のレビュー記録を参照）。
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -333,11 +353,34 @@ class TestScoreAttachOptionStuckActive:
 
     def test_zero_energy_lunatone_active_also_rescued(self):
         """88609232 step6 の再現：バトル場がルナトーン(0エネ・非アタッカー)でも救済する。
-        にげるコスト1なので、1個付ければ次のターンに逃げて本来のアタッカーを出せる"""
+        救済の目的は「攻撃または退却の可能性を開くこと」。ルナトーンは逃げるコストが1のため、
+        1個付ければ次のターンに退却して本来のアタッカーを出せる（リオル・メガルカリオexは
+        逃げるコストが2のため1個では退却できず、この効果は限定的。最終レビュー指摘2で修正）"""
         no_plan = lm.AttackPlan()
         active_score = self._score(make_pokemon(id=lm.Lunatone), True, no_plan)
         bench_score  = self._score(make_pokemon(id=lm.Riolu), False, no_plan)
         assert active_score > bench_score
+
+    def test_rock_fighting_energy_rescue_stacks_with_active_priority_and_stays_below_evolve(self):
+        """【最終レビュー指摘1の回帰】ロック闘エネルギーのアクティブ優先+500と
+        本救済+300は排他ではなく加算される。合計値がEVOLVE(9100+len(energies))の
+        帯域を侵さない(9000未満)ことを固定する"""
+        no_plan = lm.AttackPlan()
+        obs = MagicMock()
+        rock_energy = Card(id=lm.Rock_Fighting_Energy, serial=1, playerIndex=0)
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex)
+        my_state = make_player_state(active_pokemon=ogerpon, hand=[rock_energy])
+        obs.current.players = [my_state, make_player_state()]
+        option = Option(
+            type=OptionType.ATTACH, area=lm.AreaType.HAND, index=0,
+            inPlayArea=lm.AreaType.ACTIVE, inPlayIndex=0,
+        )
+        baseline = lm.energy_score(ogerpon, True, True, op_active_nullifies_ex=False)
+        score = lm._score_attach_option(
+            obs, option, my_index=0, current_plan=no_plan, attacker1=True,
+        )
+        assert score == baseline + 500 + 300
+        assert score < 9000
 
     def test_rescue_bonus_not_applied_when_attack_plan_needs_energy(self):
         """今ターン攻撃が成立するプランがあるときは救済しない（攻撃を優先する）。
@@ -373,16 +416,28 @@ uv run pytest tests/test_lucario_agent.py::TestScoreAttachOptionStuckActive -v
         if current_plan.attacker == 0 and current_plan.energy:
             score += 200
         elif not current_plan.energy and not pokemon.energies:
-            # 【2026-07-29追加】バトル場が0エネだと「技を撃てない」だけでなく
-            # 「にげるコストを払えない」ため、自力では絶対に場を離れられないデッドロックになる。
-            # 実測ver24+ver25の40戦で、バトル場0エネなのにベンチへ装着したケースが30件あり
-            # （30件すべてバトル場への装着も提示されていた）、オーガポンexはバトル場に
-            # 95ターン居座って73%が0エネ・攻撃はわずか18回だった。
-            # current_plan.energy が False = 「あと1個の装着で今ターン攻撃できるプラン」が
-            # 無い、という条件なので、成立している攻撃プランを横取りすることはない。
-            # このときベンチ側の +200 も発動しないため、素のenergy_score(7900〜8101)と
-            # だけ競合する。+500 は既存スコアと同点にならない十分な差である。
-            score += 500
+            # 【2026-07-29追加、2026-07-29最終レビューで+500→+300に修正】
+            # バトル場が0エネだと「技を撃てない」だけでなく「にげるコストを払えない」ため、
+            # 自力では絶対に場を離れられないデッドロックになる。実測ver24+ver25の40戦で、
+            # バトル場0エネなのにベンチへ装着したケースが30件あり（30件すべてバトル場への
+            # 装着も提示されていた）、オーガポンexはバトル場に95ターン居座って73%が0エネ・
+            # 攻撃はわずか18回だった。current_plan.energy が False = 「あと1個の装着で今ターン
+            # 攻撃できるプラン」が無い、という条件なので、成立している攻撃プランを横取りする
+            # ことはない。
+            #
+            # 【注意】この救済ボーナスは、数行上のロック闘エネルギーのアクティブ優先+500と
+            # 排他ではなく加算される（同一の装着先で両方の条件を満たしうるため）。したがって
+            # 素のenergy_score(7900〜8101)とだけ競合するわけではない。加算後の実際の最大値は
+            # 「バトル場0エネのOgerpon_ex + ロック闘エネルギー + attacker1=True」の
+            # 8000+10+80+40+500(アクティブ優先)+300(本救済)=8930。
+            # +300 という値の根拠：
+            #   下限：ベンチのメガルカリオex(1エネ)のenergy_score=8101に確実に勝つ必要がある
+            #   （救済込みの最小値は7910+300=8210で上回る）。
+            #   上限：ロック闘エネルギーのアクティブ優先+500と重なっても9000を超えないこと
+            #   （最大値8930はEVOLVE(9100始まり)の帯域を侵さない）。
+            # +500のままだと最大値が9130となりEVOLVE(9100+len(energies))の帯域に食い込むため、
+            # 最終レビューの指摘で+300に引き下げた（同点自体は総当たり検証で未発生と確認済み）。
+            score += 300
     else:
         if current_plan.attacker == 1 + o.inPlayIndex and current_plan.energy:
             score += 200
@@ -395,7 +450,7 @@ uv run pytest tests/test_lucario_agent.py::TestScoreAttachOptionStuckActive -v
 uv run pytest tests/test_lucario_agent.py::TestScoreAttachOptionStuckActive -v
 ```
 
-期待：全5件 PASS。
+期待：全6件 PASS（最終レビュー指摘1の回帰テスト `test_rock_fighting_energy_rescue_stacks_with_active_priority_and_stays_below_evolve` を含む）。
 
 - [ ] **Step 5: 全テストを実行**
 
@@ -869,6 +924,21 @@ ls -la notebooks/submissions/lucario_agent_submission.ipynb
 **注意：** 指標1は「0件」を期待するが、選択肢がエネルギーしか無い場面（ルナサイクルのコスト支払い等）は `avoidable=False` として除外済みなので、この分は 0 件のカウントに含まれない。1件でも出た場合は、その場面の代替候補を確認してから「修正失敗」と判断すること。
 
 **参考として同時に見る（判定には使わない）:** 自分のターンでバトル場のエネルギーが2個未満だった割合（修正前：負け試合で94.2%、勝ち試合で68.5%）。
+
+**【2026-07-29最終レビュー指摘5】副作用側の指標（次バッチで併せて数える）：**
+
+現在のプロセス指標は「狙った挙動が消えたか」しか見ていない。しかし今回の修正は、DISCARD時に
+捨てる対象をエネルギーから Boss's Orders / Lillie's Determination（-50）へ、装着先をベンチの
+アタッカーから退却時にそのエネルギーを失うバトル場へ、それぞれ**付け替える**ものでもある。
+現状の指標だけでは、これが改善なのか単に問題を移動させただけなのかを区別できない。
+次バッチで以下も併せて数えること：
+
+- **サポート系カード（Boss's Orders / Lillie's Determination）をコストで自己破棄した回数**
+  （今回の修正でエネルギーの代わりに捨てられるようになっていないか。増えていた場合、
+  Task 1のDISCARD序列変更が別の問題を作っただけの可能性がある）
+- **バトル場に装着した次のターンに、退却でそのエネルギーを失った回数**
+  （Task 2の救済ボーナスが無駄撃ちになっていないか。バトル場へ救済したエネルギーが
+  技を撃つ前に退却で失われているなら、救済の効果が薄い可能性がある）
 
 ## 本計画で扱わない事項（次回以降の判断材料）
 
