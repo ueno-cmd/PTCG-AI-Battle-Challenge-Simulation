@@ -544,6 +544,17 @@ def _score_attach_option(obs, o, my_index, current_plan, attacker1, op_active_nu
     if o.inPlayArea == AreaType.ACTIVE:
         if current_plan.attacker == 0 and current_plan.energy:
             score += 200
+        elif not current_plan.energy and not pokemon.energies:
+            # 【2026-07-29追加】バトル場が0エネだと「技を撃てない」だけでなく
+            # 「にげるコストを払えない」ため、自力では絶対に場を離れられないデッドロックになる。
+            # 実測ver24+ver25の40戦で、バトル場0エネなのにベンチへ装着したケースが30件あり
+            # （30件すべてバトル場への装着も提示されていた）、オーガポンexはバトル場に
+            # 95ターン居座って73%が0エネ・攻撃はわずか18回だった。
+            # current_plan.energy が False = 「あと1個の装着で今ターン攻撃できるプラン」が
+            # 無い、という条件なので、成立している攻撃プランを横取りすることはない。
+            # このときベンチ側の +200 も発動しないため、素のenergy_score(7900〜8101)と
+            # だけ競合する。+500 は既存スコアと同点にならない十分な差である。
+            score += 500
     else:
         if current_plan.attacker == 1 + o.inPlayIndex and current_plan.energy:
             score += 200

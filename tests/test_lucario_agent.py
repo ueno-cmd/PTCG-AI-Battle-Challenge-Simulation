@@ -1731,6 +1731,70 @@ class TestScoreAttachOptionMaximumBeltVsAirBalloon:
         assert self._score(lm.Maximum_Belt, solrock) == -1
 
 
+class TestScoreAttachOptionStuckActive:
+    """【2026-07-29】バトル場が0エネだと技を撃てず、逃げるコストも払えないため盤面が停止する。
+    実測ver24+ver25の40戦で、バトル場0エネなのにベンチへ装着していたケースが30件あった
+    （30件すべてバトル場に付ける選択肢も提示されていた）。攻撃プランを妨げない範囲で
+    バトル場への装着を優先する"""
+
+    def _score(self, target_pokemon, is_active, current_plan, bench=None):
+        obs = MagicMock()
+        energy = Card(id=lm.Basic_Fighting_Energy, serial=1, playerIndex=0)
+        my_state = make_player_state(
+            active_pokemon=target_pokemon if is_active else make_pokemon(id=lm.Lunatone),
+            bench=bench if bench is not None else ([] if is_active else [target_pokemon]),
+            hand=[energy],
+        )
+        obs.current.players = [my_state, make_player_state()]
+        option = Option(
+            type=OptionType.ATTACH, area=lm.AreaType.HAND, index=0,
+            inPlayArea=lm.AreaType.ACTIVE if is_active else lm.AreaType.BENCH,
+            inPlayIndex=0,
+        )
+        return lm._score_attach_option(
+            obs, option, my_index=0, current_plan=current_plan, attacker1=False,
+        )
+
+    def test_zero_energy_active_beats_bench_riolu(self):
+        """88607286 step15 の再現：バトル場オーガポンex(0エネ)が
+        ベンチのリオル(0エネ)に勝つこと。修正前は 8090 対 8100 で負けていた"""
+        no_plan = lm.AttackPlan()
+        active_score = self._score(make_pokemon(id=lm.Ogerpon_ex), True, no_plan)
+        bench_score  = self._score(make_pokemon(id=lm.Riolu), False, no_plan)
+        assert active_score > bench_score
+
+    def test_zero_energy_active_beats_bench_mega_lucario(self):
+        """88607286 step95 の再現：バトル場オーガポンex(0エネ)が
+        ベンチのメガルカリオex(1エネ)に勝つこと。修正前は 8090 対 8101 で負けていた"""
+        no_plan = lm.AttackPlan()
+        active_score = self._score(make_pokemon(id=lm.Ogerpon_ex), True, no_plan)
+        bench_score  = self._score(make_pokemon(id=lm.Mega_Lucario_ex, energies=[6]), False, no_plan)
+        assert active_score > bench_score
+
+    def test_zero_energy_lunatone_active_also_rescued(self):
+        """88609232 step6 の再現：バトル場がルナトーン(0エネ・非アタッカー)でも救済する。
+        にげるコスト1なので、1個付ければ次のターンに逃げて本来のアタッカーを出せる"""
+        no_plan = lm.AttackPlan()
+        active_score = self._score(make_pokemon(id=lm.Lunatone), True, no_plan)
+        bench_score  = self._score(make_pokemon(id=lm.Riolu), False, no_plan)
+        assert active_score > bench_score
+
+    def test_rescue_bonus_not_applied_when_attack_plan_needs_energy(self):
+        """今ターン攻撃が成立するプランがあるときは救済しない（攻撃を優先する）。
+        current_plan.energy=True はベンチのアタッカーがあと1個で攻撃できる状態を表す"""
+        plan = lm.AttackPlan(attacker=1, energy=True)
+        active_score = self._score(make_pokemon(id=lm.Ogerpon_ex), True, plan)
+        bench_score  = self._score(make_pokemon(id=lm.Mega_Lucario_ex, energies=[6]), False, plan)
+        assert bench_score > active_score
+
+    def test_rescue_bonus_not_applied_when_active_already_has_energy(self):
+        """バトル場に既にエネルギーがあるならデッドロックではないので救済ボーナスは付かない"""
+        no_plan = lm.AttackPlan()
+        charged = self._score(make_pokemon(id=lm.Ogerpon_ex, energies=[6]), True, no_plan)
+        empty   = self._score(make_pokemon(id=lm.Ogerpon_ex), True, no_plan)
+        assert empty > charged
+
+
 class TestScoreAttachOptionRockFightingEnergy:
     """_score_attach_optionのRock_Fighting_Energy「アクティブ優先+500」ボーナスが、
     相手がex無効化持ち・対象がexのときは抑制されることを確認するテスト"""
@@ -1751,27 +1815,27 @@ class TestScoreAttachOptionRockFightingEnergy:
 
     def test_bonus_suppressed_for_ex_attacker_when_op_active_nullifies_ex(self):
         """相手がex無効化持ちのとき、ex系アタッカー(メガルカリオex)への
-        +500ボーナスが抑制される（実バグの回帰テスト）"""
+        +500ボーナスが抑制される（実バグの回帰テスト）。バトル場0エネの救済ボーナス+500は付与される"""
         lucario = make_pokemon(id=lm.Mega_Lucario_ex, energies=[])
         baseline = lm.energy_score(lucario, True, False, op_active_nullifies_ex=True)
         attach_score = self._score(lucario, op_active_nullifies_ex=True)
-        assert attach_score == baseline
+        assert attach_score == baseline + 500
 
     def test_bonus_still_applies_when_op_active_nullifies_ex_is_false(self):
         """相手がex無効化持ちでなければ、ex系アタッカーにも+500ボーナスが
-        従来通り付与される（回帰確認）"""
+        従来通り付与される（回帰確認）。さらにバトル場0エネの救済ボーナス+500も付与される"""
         lucario = make_pokemon(id=lm.Mega_Lucario_ex, energies=[])
         baseline = lm.energy_score(lucario, True, False, op_active_nullifies_ex=False)
         attach_score = self._score(lucario, op_active_nullifies_ex=False)
-        assert attach_score == baseline + 500
+        assert attach_score == baseline + 1000
 
     def test_bonus_still_applies_for_non_ex_attacker_even_when_nullifier_present(self):
         """対象が非ex(ソルロック)なら、相手がex無効化持ちでも+500ボーナスは
-        維持される（回帰確認）"""
+        維持される（回帰確認）。さらにバトル場0エネの救済ボーナス+500も付与される"""
         solrock = make_pokemon(id=lm.Solrock, energies=[])
         baseline = lm.energy_score(solrock, True, False, op_active_nullifies_ex=True)
         attach_score = self._score(solrock, op_active_nullifies_ex=True)
-        assert attach_score == baseline + 500
+        assert attach_score == baseline + 1000
 
 
 class TestLunaCycleAbilityScore:
