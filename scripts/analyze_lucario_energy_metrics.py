@@ -158,12 +158,31 @@ def measure_attach_targets(data: dict, my_name: str = "Kagura_UT") -> dict:
 
 
 def main(paths: list) -> None:
+    """40件前後をまとめて流す運用が前提のため、1ファイルの欠損や対象外ログで
+    バッチ全体を落とさない。読み込み失敗(FileNotFoundError等)と、自分が参加して
+    いないログを渡した場合のfind_player_indexのValueErrorはスキップ扱いにし、
+    件数を警告として出したうえでサマリーにも反映する
+    （2026-07-29最終レビュー指摘4：レビュアーが実際にFileNotFoundErrorを踏んだ）"""
     total_discard = 0
     avoidable_discard = 0
     attach = defaultdict(int)
+    skipped = 0
+    processed = 0
     for path in paths:
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            find_player_index(data)  # 自分が参加していないログを早期に弾く
+        except (FileNotFoundError, OSError) as e:
+            skipped += 1
+            print(f"警告: {path} を読み込めずスキップしました（{e}）")
+            continue
+        except ValueError as e:
+            skipped += 1
+            print(f"警告: {path} は対象外のログのためスキップしました（{e}）")
+            continue
+
+        processed += 1
         events = measure_energy_discards(data)
         for event in events:
             total_discard += len(event["discarded"])
@@ -174,7 +193,8 @@ def main(paths: list) -> None:
                       f"代替候補={event['alternatives']}")
         for key, value in measure_attach_targets(data).items():
             attach[key] += value
-    print(f"\n対象: {len(paths)} 試合")
+
+    print(f"\n対象: {len(paths)} 件中 {processed} 件を集計（スキップ {skipped} 件）")
     print(f"エネルギー破棄: 計{total_discard}枚 / うち回避可能な場面 {avoidable_discard} 件")
     print(f"エネルギー装着: バトル場 {attach['to_active']} 回 / ベンチ {attach['to_bench']} 回")
     print(f"  うちバトル場が0エネなのにベンチへ: {attach['to_bench_while_active_zero']} 回")

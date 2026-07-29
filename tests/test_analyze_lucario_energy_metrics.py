@@ -1,5 +1,6 @@
 """scripts/analyze_lucario_energy_metrics.py のユニットテスト"""
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -103,3 +104,34 @@ def test_counts_active_attach(my_index):
     stat = alem.measure_attach_targets(data)
     assert stat["to_active"] == 1
     assert stat["to_bench_while_active_zero"] == 0
+
+
+def test_find_player_index_raises_value_error_when_not_participating():
+    """【2026-07-29最終レビュー指摘4】自分が参加していないログを誤って渡した場合、
+    find_player_indexがValueErrorを送出することを確認する。main()側はこれを
+    スキップ扱いにしてバッチ全体を落とさないようにする"""
+    data = {"info": {"Agents": [{"Name": "opponent_a"}, {"Name": "opponent_b"}]}}
+    with pytest.raises(ValueError):
+        alem.find_player_index(data)
+
+
+def test_main_skips_missing_file_and_reports_skip_count(tmp_path, capsys):
+    """【2026-07-29最終レビュー指摘4】ファイルが1つ欠けているだけでmain()全体が
+    FileNotFoundErrorで停止しないこと。スキップ件数が警告とサマリーの両方に出ること"""
+    missing = tmp_path / "does_not_exist.json"
+    alem.main([str(missing)])
+    out = capsys.readouterr().out
+    assert "スキップ" in out
+    assert "1" in out.split("スキップ")[-1]  # スキップ件数がサマリーに出ている
+
+
+def test_main_skips_log_where_self_did_not_participate(tmp_path, capsys):
+    """自分が参加していないログ（find_player_indexのValueError）もスキップ扱いにする"""
+    path = tmp_path / "not_mine.json"
+    path.write_text(json.dumps({
+        "info": {"Agents": [{"Name": "opponent_a"}, {"Name": "opponent_b"}]},
+        "steps": [],
+    }), encoding="utf-8")
+    alem.main([str(path)])
+    out = capsys.readouterr().out
+    assert "対象外のログ" in out
