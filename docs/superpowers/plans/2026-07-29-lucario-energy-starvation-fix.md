@@ -586,7 +586,13 @@ AREA_BENCH = 5
 OPTION_CARD = 3
 OPTION_ATTACH = 8
 SELECT_TYPE_MAIN = 0
-DISCARD_CONTEXTS = frozenset({8, 29})  # DISCARD / DISCARD_CARD_OR_ATTACHED_CARD
+# context=8 (DISCARD、手札からの破棄) のみを計測対象にする。
+# context=29 (DISCARD_CARD_OR_ATTACHED_CARD) は場に装着済みのカードの破棄も含むため、
+# 「手札のエネルギーをコストとして自分で捨てた回数」とは意味が異なる指標になる。
+# なお_hand_card()はarea!=AREA_HANDのoptionを問答無用でNone扱いするため、29を含めても
+# 装着済み破棄は捕捉できずdiscarded=[]のまま握りつぶされてしまう（黙って取りこぼす）。
+# 意図的に29を除外することで、この取りこぼしを構造的に無くす。
+DISCARD_CONTEXTS = frozenset({8})
 
 
 def find_player_index(data: dict, my_name: str = "Kagura_UT") -> int:
