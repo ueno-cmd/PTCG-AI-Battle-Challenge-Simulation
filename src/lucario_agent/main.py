@@ -262,10 +262,19 @@ def _score_card_option(obs, o, context, my_index, state, my_state,
             if o.playerIndex != my_index:
                 return 0
             if card.id == Basic_Fighting_Energy:
-                return 50 if hand_counts[Basic_Fighting_Energy] >= 2 else -20
+                # 【2026-07-29修正】旧実装は「手札2枚以上なら余剰」とみなして +50（汎用トレーナーズの
+                # 既定値10より高い）を返しており、ハイパーボール等のコストで真っ先に捨てられていた。
+                # 2枚はメガブレイブ(闘闘)にちょうど必要な枚数であり余剰ではない。デッキ内の
+                # エネルギーは11枚のみ。実測ver24+ver25の40戦で、他に捨てられる札があるのに
+                # エネルギーを選んだケースが16件（計23枚）あった（88607286 step18 ほか）。
+                # ただしキーポケモン(-100)より下げてはいけない：下げると、コスト候補が全部
+                # 高価値なときにリオル等を捨ててしまう（ハイパーボールはポケモンをサーチする
+                # 札なので、ポケモンを捨ててポケモンを取るのは本末転倒になる）。
+                return -60 if hand_counts[Basic_Fighting_Energy] >= 3 else -90
             if card.id == Rock_Fighting_Energy:
-                # 夜のタンカで回収不可・デッキ内4枚のみのため、手札枚数によらず常時温存
-                return -20
+                # 夜のタンカで回収不可・デッキ内4枚のみのため、基本闘エネルギーより強く温存する。
+                # 旧値 -20 では Boss's Orders(-50) より先に捨てられていた（88591718 step19で実測）。
+                return -95
             if card.id == Maximum_Belt:
                 # ACE SPECのためデッキに1枚のみ・トラッシュからの回収手段も無く、
                 # 一度捨てると復帰不可。複数枚あるキーポケモン(-100)より強く温存する。

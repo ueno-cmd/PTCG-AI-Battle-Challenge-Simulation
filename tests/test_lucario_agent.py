@@ -1443,7 +1443,9 @@ class TestDiscardContext:
         obs.current.players = [my_ps, make_player_state()]
         return obs
 
-    def test_prefers_spare_fighting_energy(self):
+    def test_basic_fighting_energy_protected_when_exactly_two(self):
+        """手札2枚はメガブレイブ(闘闘)にちょうど必要な枚数なので「余剰」ではない。
+        2026-07-29の実測40戦で、他に捨てられる札があるのにエネルギーを選んだケースが16件あった"""
         energy = Card(id=lm.Basic_Fighting_Energy, serial=1, playerIndex=0)
         obs = self._obs(energy)
         score = lm._score_card_option(
@@ -1455,11 +1457,26 @@ class TestDiscardContext:
             discard_counts=defaultdict(int), attacker1=False,
             current_plan=lm.AttackPlan(), ability_used_flag=False,
         )
-        assert score == 50
+        assert score == -90
 
-    def test_protects_rock_fighting_energy_regardless_of_count(self):
+    def test_basic_fighting_energy_slightly_less_protected_when_three_or_more(self):
+        """3枚目以降は余剰なので、2枚以下のときより捨てやすくする（ただしトレーナーズよりは温存）"""
+        energy = Card(id=lm.Basic_Fighting_Energy, serial=1, playerIndex=0)
+        obs = self._obs(energy)
+        score = lm._score_card_option(
+            obs, Option(type=OptionType.CARD, area=lm.AreaType.HAND, index=0, playerIndex=0),
+            context=lm.SelectContext.DISCARD, my_index=0, state=_make_state(),
+            my_state=make_player_state(),
+            field_counts=defaultdict(int),
+            hand_counts=defaultdict(int, {lm.Basic_Fighting_Energy: 3}),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), ability_used_flag=False,
+        )
+        assert score == -60
+
+    def test_protects_rock_fighting_energy_more_than_basic(self):
         """ロック闘エネルギーは夜のタンカで回収不可・デッキ内4枚のみのため、
-        手札枚数によらず常に温存する（基本闘エネルギーは2枚以上あれば捨てて良いのと対照的）"""
+        基本闘エネルギーより強く温存する（88591718 step19でBoss's Ordersより先に捨てていた）"""
         energy = Card(id=lm.Rock_Fighting_Energy, serial=1, playerIndex=0)
         obs = self._obs(energy)
         score = lm._score_card_option(
@@ -1471,7 +1488,7 @@ class TestDiscardContext:
             discard_counts=defaultdict(int), attacker1=False,
             current_plan=lm.AttackPlan(), ability_used_flag=False,
         )
-        assert score == -20
+        assert score == -95
 
     def test_protects_key_pokemon(self):
         riolu = Card(id=lm.Riolu, serial=1, playerIndex=0)
@@ -1575,6 +1592,43 @@ class TestDiscardContext:
             current_plan=lm.AttackPlan(), ability_used_flag=False,
         )
         assert score == 10
+
+    def _discard_score(self, card_id, hand_counts=None):
+        card = Card(id=card_id, serial=1, playerIndex=0)
+        obs = self._obs(card)
+        return lm._score_card_option(
+            obs, Option(type=OptionType.CARD, area=lm.AreaType.HAND, index=0, playerIndex=0),
+            context=lm.SelectContext.DISCARD, my_index=0, state=_make_state(),
+            my_state=make_player_state(),
+            field_counts=defaultdict(int),
+            hand_counts=defaultdict(int, hand_counts or {}),
+            discard_counts=defaultdict(int), attacker1=False,
+            current_plan=lm.AttackPlan(), ability_used_flag=False,
+        )
+
+    def test_discard_priority_order(self):
+        """トレーナーズ > Boss's Orders > 基本闘エネ > ロック闘エネ > キーポケモン > Maximum Belt
+        の順に「捨てやすさ」が下がることを固定する（同点が無いことも同時に保証）"""
+        generic = self._discard_score(lm.Pokegear)
+        boss    = self._discard_score(lm.Boss_Orders)
+        basic2  = self._discard_score(lm.Basic_Fighting_Energy, {lm.Basic_Fighting_Energy: 2})
+        basic3  = self._discard_score(lm.Basic_Fighting_Energy, {lm.Basic_Fighting_Energy: 3})
+        rock    = self._discard_score(lm.Rock_Fighting_Energy, {lm.Rock_Fighting_Energy: 3})
+        riolu   = self._discard_score(lm.Riolu)
+        belt    = self._discard_score(lm.Maximum_Belt)
+        assert generic > boss > basic3 > basic2 > rock > riolu > belt
+
+    def test_energy_never_discarded_before_generic_trainer(self):
+        """回帰テスト本体：88607286 step18 の再現。
+        Pokégear 3.0 が手札にあるとき、基本闘エネルギーより先に Pokégear が捨てられること"""
+        assert self._discard_score(lm.Pokegear) > \
+               self._discard_score(lm.Basic_Fighting_Energy, {lm.Basic_Fighting_Energy: 2})
+
+    def test_energy_still_discarded_before_key_pokemon(self):
+        """過剰保護の防止：コスト候補が全部高価値なとき、リオルより先にエネルギーを捨てること
+        （ハイパーボールはポケモンをサーチする札なので、ポケモンを捨てるのは本末転倒）"""
+        assert self._discard_score(lm.Basic_Fighting_Energy, {lm.Basic_Fighting_Energy: 2}) > \
+               self._discard_score(lm.Riolu)
 
 
 class TestScoreCardOptionAttachFrom:
