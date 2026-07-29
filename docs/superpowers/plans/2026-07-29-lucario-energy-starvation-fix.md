@@ -802,7 +802,8 @@ git commit -m "feat(scripts): ルカリオexのエネルギー運用プロセス
 ## Task 4: 提出用ノートブックを再生成する
 
 **Files:**
-- Modify: `notebooks/submissions/lucario_agent_submission.ipynb`（`scripts/build_lucario_submission_notebook.py` が生成する。出力先は同スクリプト20行目の `DST` 定数）
+- Generate: `notebooks/submissions/lucario_agent_submission.ipynb`（`scripts/build_lucario_submission_notebook.py` が生成する。出力先は同スクリプト20行目の `DST` 定数）
+  - **注意：このファイルは `.gitignore` の `*.ipynb` により意図的に git 追跡対象外です。コミットしないこと。生成後はローカルからユーザーが Kaggle へアップロードします。**
 
 **Interfaces:**
 - Consumes: Task 1・Task 2 で修正した `src/lucario_agent/main.py`
@@ -843,12 +844,15 @@ uv run pytest
 
 期待：全件 PASS。
 
-- [ ] **Step 6: コミット**
+- [ ] **Step 6: ノートブックファイルの確認**
+
+ノートブックは `.gitignore` により自動的に git 追跡対象外です。コミットは不要。生成されたファイルをローカルで確認し、Kaggle へのアップロードに備えます。
 
 ```bash
-git add notebooks/submissions/
-git commit -m "chore(lucario): エネルギー事故修正を反映した提出用notebookを再生成"
+ls -la notebooks/submissions/lucario_agent_submission.ipynb
 ```
+
+期待：生成したファイルがローカルに存在すること。
 
 ---
 
