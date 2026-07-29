@@ -1773,11 +1773,36 @@ class TestScoreAttachOptionStuckActive:
 
     def test_zero_energy_lunatone_active_also_rescued(self):
         """88609232 step6 の再現：バトル場がルナトーン(0エネ・非アタッカー)でも救済する。
-        にげるコスト1なので、1個付ければ次のターンに逃げて本来のアタッカーを出せる"""
+        救済の目的は「攻撃または退却の可能性を開くこと」。ルナトーンは逃げるコストが1のため、
+        1個付ければ次のターンに退却して本来のアタッカーを出せる（リオル・メガルカリオexは
+        逃げるコストが2のため1個では退却できず、この効果は限定的。最終レビュー指摘2で修正）"""
         no_plan = lm.AttackPlan()
         active_score = self._score(make_pokemon(id=lm.Lunatone), True, no_plan)
         bench_score  = self._score(make_pokemon(id=lm.Riolu), False, no_plan)
         assert active_score > bench_score
+
+    def test_rock_fighting_energy_rescue_stacks_with_active_priority_and_stays_below_evolve(self):
+        """【最終レビュー指摘1の回帰】ロック闘エネルギーのアクティブ優先+500と
+        本救済+300は排他ではなく加算される。合計値がEVOLVE(9100+len(energies))の
+        帯域を侵さない(9000未満)ことを固定する"""
+        no_plan = lm.AttackPlan()
+        obs = MagicMock()
+        rock_energy = Card(id=lm.Rock_Fighting_Energy, serial=1, playerIndex=0)
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex)
+        my_state = make_player_state(active_pokemon=ogerpon, hand=[rock_energy])
+        obs.current.players = [my_state, make_player_state()]
+        option = Option(
+            type=OptionType.ATTACH, area=lm.AreaType.HAND, index=0,
+            inPlayArea=lm.AreaType.ACTIVE, inPlayIndex=0,
+        )
+        baseline = lm.energy_score(ogerpon, True, True, op_active_nullifies_ex=False)
+        score = lm._score_attach_option(
+            obs, option, my_index=0, current_plan=no_plan, attacker1=True,
+        )
+        # アクティブ優先(+500)と救済(+300)の両方が乗って加算されていること
+        assert score == baseline + 500 + 300
+        # 加算されてもEVOLVEの帯域(9100〜)を侵さないこと
+        assert score < 9000
 
     def test_rescue_bonus_not_applied_when_attack_plan_needs_energy(self):
         """今ターン攻撃が成立するプランがあるときは救済しない（攻撃を優先する）。
@@ -1815,27 +1840,32 @@ class TestScoreAttachOptionRockFightingEnergy:
 
     def test_bonus_suppressed_for_ex_attacker_when_op_active_nullifies_ex(self):
         """相手がex無効化持ちのとき、ex系アタッカー(メガルカリオex)への
-        +500ボーナスが抑制される（実バグの回帰テスト）。バトル場0エネの救済ボーナス+500は付与される"""
-        lucario = make_pokemon(id=lm.Mega_Lucario_ex, energies=[])
+        +500ボーナスが抑制される（実バグの回帰テスト）。
+        エネルギー1個(energies=[6])を持たせてバトル場0エネの救済ボーナスの対象から
+        外し、このテストが検証したい「アクティブ優先+500の抑制」だけを純粋に見る
+        （最終レビュー指摘3：救済ボーナスと実バグの回帰を分離）"""
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, energies=[6])
         baseline = lm.energy_score(lucario, True, False, op_active_nullifies_ex=True)
         attach_score = self._score(lucario, op_active_nullifies_ex=True)
-        assert attach_score == baseline + 500
+        assert attach_score == baseline
 
     def test_bonus_still_applies_when_op_active_nullifies_ex_is_false(self):
         """相手がex無効化持ちでなければ、ex系アタッカーにも+500ボーナスが
-        従来通り付与される（回帰確認）。さらにバトル場0エネの救済ボーナス+500も付与される"""
-        lucario = make_pokemon(id=lm.Mega_Lucario_ex, energies=[])
+        従来通り付与される（回帰確認）。エネルギー1個(energies=[6])を持たせて
+        救済ボーナスの対象から外し、アクティブ優先+500だけを見る"""
+        lucario = make_pokemon(id=lm.Mega_Lucario_ex, energies=[6])
         baseline = lm.energy_score(lucario, True, False, op_active_nullifies_ex=False)
         attach_score = self._score(lucario, op_active_nullifies_ex=False)
-        assert attach_score == baseline + 1000
+        assert attach_score == baseline + 500
 
     def test_bonus_still_applies_for_non_ex_attacker_even_when_nullifier_present(self):
         """対象が非ex(ソルロック)なら、相手がex無効化持ちでも+500ボーナスは
-        維持される（回帰確認）。さらにバトル場0エネの救済ボーナス+500も付与される"""
-        solrock = make_pokemon(id=lm.Solrock, energies=[])
+        維持される（回帰確認）。エネルギー1個(energies=[6])を持たせて
+        救済ボーナスの対象から外し、アクティブ優先+500だけを見る"""
+        solrock = make_pokemon(id=lm.Solrock, energies=[6])
         baseline = lm.energy_score(solrock, True, False, op_active_nullifies_ex=True)
         attach_score = self._score(solrock, op_active_nullifies_ex=True)
-        assert attach_score == baseline + 1000
+        assert attach_score == baseline + 500
 
 
 class TestLunaCycleAbilityScore:
