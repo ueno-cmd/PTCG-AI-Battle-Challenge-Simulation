@@ -12,12 +12,12 @@
 
 ## Global Constraints
 
-- **作業種別の明示（CLAUDE.md ルール7）**：Task 1〜3 と Task 5 は **①提出物が変わる作業**。Task 4 は **②提出物が変わらない作業**（計測ツール）。混ぜないこと。
+- **作業種別の明示（CLAUDE.md ルール7）**：Task 1〜2 と Task 4 は **①提出物が変わる作業**。Task 3 は **②提出物が変わらない作業**（計測ツール）。混ぜないこと。
 - **コメント・ドキュメントは日本語**（変数名・関数名は英語でよい）。
 - **スコア帯の不変条件を破らないこと**：9000〜10000 の帯域は Judge(9000) と EVOLVE(9100+エネ数) のみ。本計画で触るのはどうぐ装着の 7000 番台だけ。
 - **既存の呼び出し互換を維持すること**：`_score_retreat_option` は `my_active` / `card_table` を省略した呼び出しが既存テストにある（`tests/test_lucario_agent.py:823-824`）。新規引数もすべてデフォルト値付きで追加する。
 - **テスト実行コマンド**：`uv run pytest -q`（全体）、`uv run pytest tests/test_lucario_agent.py::クラス名::メソッド名 -v`（個別）。
-- **着手時のテスト件数は 785 件**。Task 5 でこれを下回らないことを確認する。
+- **着手時のテスト件数は 785 件**。Task 4 でこれを下回らないことを確認する。
 - **コミットは main 直下で行う**（本リポジトリの既存運用）。push はユーザーが判断する。
 
 ---
@@ -27,25 +27,34 @@
 | ファイル | 責務 | 本計画での扱い |
 |---|---|---|
 | `src/lucario_agent/combat.py` | 攻撃プラン計算・エネルギー配分スコア・退却スコア | `_score_retreat_option` を修正し、判定ヘルパー `_should_preserve_active` を新設（Task 1） |
-| `src/lucario_agent/main.py` | 観測の読み取り・全オプションのスコアリング・`agent()` | RETREAT/PLAY の配線、`PlayScoringContext`、ふうせん装着スコア（Task 1〜3） |
-| `tests/test_lucario_agent.py` | ルカリオexエージェントの単体テスト | 既存4件の更新＋新規テスト追加（Task 1〜3） |
-| `scripts/analyze_lucario_energy_metrics.py` | 実バトルログからプロセス指標を計測（②） | 効果測定用の指標3つを追加（Task 4） |
-| `tests/test_analyze_lucario_energy_metrics.py` | 上記の単体テスト | Task 4 で追加 |
+| `src/lucario_agent/main.py` | 観測の読み取り・全オプションのスコアリング・`agent()` | RETREAT/PLAY の配線、`PlayScoringContext`、ふうせん装着スコア（Task 1〜2） |
+| `tests/test_lucario_agent.py` | ルカリオexエージェントの単体テスト | 既存4件の更新＋新規テスト追加（Task 1〜2） |
+| `scripts/analyze_lucario_energy_metrics.py` | 実バトルログからプロセス指標を計測（②） | 効果測定用の指標3つを追加（Task 3） |
+| `tests/test_analyze_lucario_energy_metrics.py` | 上記の単体テスト | Task 3 で追加 |
 
 ---
 
-## Task 1: 温存退却をex無効化対面限定にする（①提出物が変わる）
+
+## Task 1: 温存退却をex無効化対面限定にし、SwitchPolicyを追従させる（①提出物が変わる）
 
 **Files:**
 - Modify: `src/lucario_agent/combat.py:266-274`（`_score_retreat_option`）
 - Modify: `src/lucario_agent/main.py:624-629`（`_score_option` の `case OptionType.RETREAT`）
-- Test: `tests/test_lucario_agent.py`（`TestScoreRetreatOption` / `TestScoreOptionRetreatWiring`）
+- Modify: `src/lucario_agent/main.py:320-335`（`PlayScoringContext`）
+- Modify: `src/lucario_agent/main.py:426-441`（`SwitchPolicy.play_score`）
+- Modify: `src/lucario_agent/main.py:477-512`（`_score_play_option`）
+- Modify: `src/lucario_agent/main.py:594-599`（`_score_option` の `case OptionType.PLAY`）
+- Test: `tests/test_lucario_agent.py`（`TestScoreRetreatOption` / `TestScoreOptionRetreatWiring` / `TestSwitchPolicy` / `TestSwitchPolicyAirBalloon`）
 
 **Interfaces:**
 - Produces: `_score_retreat_option(current_plan, my_active=None, card_table=None, op_active_nullifies_ex=False) -> int`（第4引数を新設。位置引数・キーワード引数どちらでも渡せる）
-- Produces: `_should_preserve_active(current_plan, my_active, card_table, op_active_nullifies_ex) -> bool`（`combat.py` のモジュール関数。Task 2 では使わない）
+- Produces: `_should_preserve_active(current_plan, my_active, card_table, op_active_nullifies_ex) -> bool`（`combat.py` のモジュール関数。Task 1 の内部でのみ使う）
+- Produces: `PlayScoringContext` に `op_active_nullifies_ex: bool = False` フィールドを追加
+- Produces: `_score_play_option(..., op_active_nullifies_ex: bool = False)` キーワード引数を追加
 - Consumes: `EX_DAMAGE_NULLIFIER_IDS = frozenset({Crustle(345), Sylveon(330)})`（`constants.py:29`、既存）
 - Consumes: `_op_active_nullifies_ex(op_state) -> bool`（`main.py:138`、既存。`_score_option` の引数 `op_active_nullifies_ex` として既に届いている）
+
+**なぜ必要か：** `SwitchPolicy.play_score` は `_score_retreat_option` の戻り値をそのまま発火条件に使う構造（`main.py:434`）。退却側だけ直すと Switch 側が旧条件のまま残り、「0エネのオーガポンexから0エネのメガルカリオexへ逃げるために、デッキに1枚しかないSwitchを切る」という同じ問題が Switch 経由で残る。**片側だけ直す事故を構造的に防ぐため、同一タスクで一緒に行う。**
 
 - [ ] **Step 1: 既存テスト2件を新しい仕様に合わせて書き換える（まだ実装は変えない）**
 
@@ -193,47 +202,7 @@ Run: `uv run pytest tests/test_lucario_agent.py::TestScoreRetreatOption tests/te
 
 Expected: 全て PASS。
 
-- [ ] **Step 7: リポジトリ全体の回帰を確認する**
-
-Run: `uv run pytest -q`
-
-Expected: `TestSwitchPolicy::test_positive_when_ineffective_attack_and_high_value_active` が **FAIL する**（`assert -1 == 2100`）。これは想定内で Task 2 で直す。**それ以外に失敗が無いこと**を確認する。失敗が他にもある場合は先に原因を調べること。
-
-- [ ] **Step 8: コミット**
-
-```bash
-git add src/lucario_agent/combat.py src/lucario_agent/main.py tests/test_lucario_agent.py
-git commit -m "fix(lucario): 温存退却をex無効化対面限定にしてエネ浪費ループを断つ
-
-damage<=0が「無効化されている」と「エネルギーが足りないだけ」を区別
-できておらず、闘エネ3個要求のオーガポンexでほぼ常時発火していた。
-実測31戦で19回の「同ターン装着→退却で破棄」を引き起こし、
-うち15回はそのターン1回も攻撃できていなかった(88778720 step62-66)。
-
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
-```
-
-**注意：この時点では `uv run pytest -q` は1件失敗した状態。Task 2 とセットで完結する。**
-
----
-
-## Task 2: SwitchPolicy を同じ条件に追従させる（①提出物が変わる）
-
-**Files:**
-- Modify: `src/lucario_agent/main.py:320-335`（`PlayScoringContext`）
-- Modify: `src/lucario_agent/main.py:426-441`（`SwitchPolicy.play_score`）
-- Modify: `src/lucario_agent/main.py:477-512`（`_score_play_option`）
-- Modify: `src/lucario_agent/main.py:594-599`（`_score_option` の `case OptionType.PLAY`）
-- Test: `tests/test_lucario_agent.py`（`TestSwitchPolicy` / `TestSwitchPolicyAirBalloon`）
-
-**Interfaces:**
-- Consumes: `_score_retreat_option(..., op_active_nullifies_ex=False)`（Task 1 で新設）
-- Produces: `PlayScoringContext` に `op_active_nullifies_ex: bool = False` フィールドを追加
-- Produces: `_score_play_option(..., op_active_nullifies_ex: bool = False)` キーワード引数を追加
-
-**なぜ必要か：** `SwitchPolicy.play_score` は `_score_retreat_option` の戻り値をそのまま発火条件に使う構造（`main.py:434`）。Task 1 だけだと Switch 側が旧条件のまま残り、「0エネのオーガポンexから0エネのメガルカリオexへ逃げるために、デッキに1枚しかないSwitchを切る」という同じ問題が Switch 経由で残る。**片側だけ直す事故を構造的に防ぐため、Task 1 と必ずセットで行う。**
-
-- [ ] **Step 1: 既存テストを新仕様に合わせて書き換え、失敗テストを追加する**
+- [ ] **Step 7: 既存テストを新仕様に合わせて書き換え、失敗テストを追加する**
 
 `tests/test_lucario_agent.py` の `TestSwitchPolicy._ctx`（現在 907-913行）に、フラグを渡せるよう引数を追加する。
 
@@ -300,13 +269,13 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
         assert score_against(lm.Riolu) == -1
 ```
 
-- [ ] **Step 2: テストを実行して失敗を確認する**
+- [ ] **Step 8: テストを実行して失敗を確認する**
 
 Run: `uv run pytest tests/test_lucario_agent.py::TestSwitchPolicy -v`
 
-Expected: `test_positive_when_nullified_and_high_value_active` と `test_score_option_play_switch_passes_nullifier_flag` が `PlayScoringContext.__init__() got an unexpected keyword argument 'op_active_nullifies_ex'` で **FAIL**。`test_negative_when_only_short_on_energy` は Task 1 の修正により既に PASS するはず。
+Expected: `test_positive_when_nullified_and_high_value_active` と `test_score_option_play_switch_passes_nullifier_flag` が `PlayScoringContext.__init__() got an unexpected keyword argument 'op_active_nullifies_ex'` で **FAIL**。`test_negative_when_only_short_on_energy` は Step 4 の `_score_retreat_option` 修正により既に PASS するはず。
 
-- [ ] **Step 3: `PlayScoringContext` にフィールドを追加する**
+- [ ] **Step 9: `PlayScoringContext` にフィールドを追加する**
 
 `src/lucario_agent/main.py:333-335` の3行を次の内容で置き換える。
 
@@ -317,7 +286,7 @@ Expected: `test_positive_when_nullified_and_high_value_active` と `test_score_o
     op_active_nullifies_ex: bool = False
 ```
 
-- [ ] **Step 4: `SwitchPolicy.play_score` を追従させる**
+- [ ] **Step 10: `SwitchPolicy.play_score` を追従させる**
 
 `src/lucario_agent/main.py:434` の1行を次の内容で置き換える。
 
@@ -327,7 +296,7 @@ Expected: `test_positive_when_nullified_and_high_value_active` と `test_score_o
         )
 ```
 
-- [ ] **Step 5: `_score_play_option` に引数を追加して ctx へ渡す**
+- [ ] **Step 11: `_score_play_option` に引数を追加して ctx へ渡す**
 
 `src/lucario_agent/main.py:477-481` のシグネチャを次の内容で置き換える。
 
@@ -351,7 +320,7 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
     )
 ```
 
-- [ ] **Step 6: `_score_option` の PLAY ケースを配線する**
+- [ ] **Step 12: `_score_option` の PLAY ケースを配線する**
 
 `src/lucario_agent/main.py:594-599` を次の内容で置き換える。
 
@@ -365,34 +334,39 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
             )
 ```
 
-- [ ] **Step 7: テストを実行して通ることを確認する**
+- [ ] **Step 13: テストを実行して通ることを確認する**
 
 Run: `uv run pytest tests/test_lucario_agent.py::TestSwitchPolicy tests/test_lucario_agent.py::TestSwitchPolicyAirBalloon tests/test_lucario_agent.py::TestScoreOptionPlaySwitchWiring -v`
 
 Expected: 全て PASS。
 
-- [ ] **Step 8: リポジトリ全体の回帰を確認する**
+- [ ] **Step 14: リポジトリ全体の回帰を確認する**
 
 Run: `uv run pytest -q`
 
-Expected: **全件 PASS**（Task 1 で意図的に残していた1件の失敗がここで解消する）。件数は 785 件 + 本タスクまでの追加分。
+Expected: **全件 PASS**。件数は着手時の 785 件 + 本タスクで追加した分。**1件でも失敗が残っている状態でコミットしないこと**（退却側の変更と SwitchPolicy の追従は同時に成立して初めて整合するため、本タスクは全件PASSを満たすまで完了ではない）。
 
-- [ ] **Step 9: コミット**
+- [ ] **Step 15: コミット**
 
 ```bash
-git add src/lucario_agent/main.py tests/test_lucario_agent.py
-git commit -m "fix(lucario): SwitchPolicyを温存退却の新条件に追従させる
+git add src/lucario_agent/combat.py src/lucario_agent/main.py tests/test_lucario_agent.py
+git commit -m "fix(lucario): 温存退却をex無効化対面限定にしてエネ浪費ループを断つ
 
-Switchカードは_score_retreat_optionの戻り値をそのまま発火条件に
-使う構造のため、退却側だけ直すと同じ問題がSwitch経由で残っていた。
-PlayScoringContextにop_active_nullifies_exを追加して配線する。
+damage<=0が「無効化されている」と「エネルギーが足りないだけ」を区別
+できておらず、闘エネ3個要求のオーガポンexでほぼ常時発火していた。
+実測31戦で19回の「同ターン装着→退却で破棄」を引き起こし、
+うち15回はそのターン1回も攻撃できていなかった(88778720 step62-66)。
+
+Switchカードは_score_retreat_optionの戻り値をそのまま発火条件に使う
+構造のため、退却側だけ直すと同じ問題がSwitch経由で残る。
+PlayScoringContextにop_active_nullifies_exを追加して同時に追従させる。
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
 
-## Task 3: ふうせんをオーガポンexへ優先装着する（①提出物が変わる）
+## Task 2: ふうせんをオーガポンexへ優先装着する（①提出物が変わる）
 
 **Files:**
 - Modify: `src/lucario_agent/main.py:525-534`（`_score_attach_option` のふうせん分岐）
@@ -526,7 +500,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ---
 
-## Task 4: 効果測定用の指標を計測スクリプトに追加する（②提出物は変わらない）
+## Task 3: 効果測定用の指標を計測スクリプトに追加する（②提出物は変わらない）
 
 **Files:**
 - Modify: `scripts/analyze_lucario_energy_metrics.py`
@@ -541,7 +515,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Produces: `measure_ogerpon_active_entries(data, my_name="Kagura_UT") -> dict`
   戻り値のキー：`entries` / `entries_zero_energy` / `entries_with_air_balloon`
 
-**これは②です。エージェント本体は変更しません。** 次のバッチ（20戦×2＝40戦）で Task 1〜3 の効果を判定するために必要な指標を用意する。
+**これは②です。エージェント本体は変更しません。** 次のバッチ（20戦×2＝40戦）で Task 1〜2 の効果を判定するために必要な指標を用意する。
 
 **注意（設計書の再現手順に記載済み）：** 解析時は**相手の事故勝ち（勝ち試合のうち終局時の自分のサイド残が6のもの）を必ず除外**すること。除外を怠ると分母（自分のターン数）だけが縮み、1ターンあたり指標が一律2割ほど水増しされる（罠8）。
 
@@ -674,7 +648,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 ---
 
-## Task 5: 全体検証・提出用notebook再生成・実装サマリー（①提出物が変わる）
+## Task 4: 全体検証・提出用notebook再生成・実装サマリー（①提出物が変わる）
 
 **Files:**
 - Create: `docs/implementations/20260804-lucario-ogerpon-retreat-loop.md`
@@ -692,7 +666,7 @@ Expected: 全件 PASS。**着手時の 785 件を下回らないこと**。実�
 
 Run: `uv run pytest tests/test_lucario_agent.py -k "score" -q`
 
-加えて、Task 3 で変更したどうぐ装着スコアの最大値が **7200** であり、エネルギー装着の実測最大 **8930**・Judge **9000**・EVOLVE **9100+エネ数** の帯域に触れていないことを目視で確認する。Task 1・2 は退却スコア（2000/2100）のみを扱っており帯域に影響しない。
+加えて、Task 2 で変更したどうぐ装着スコアの最大値が **7200** であり、エネルギー装着の実測最大 **8930**・Judge **9000**・EVOLVE **9100+エネ数** の帯域に触れていないことを目視で確認する。Task 1 は退却スコア（2000/2100）のみを扱っており帯域に影響しない。
 
 - [ ] **Step 3: 提出用notebookを再生成する**
 
@@ -739,19 +713,19 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 | 設計書の項目 | 対応タスク |
 |---|---|
 | 変更1：温存退却をex無効化対面限定にする | Task 1 |
-| 変更2：ふうせんをオーガポンexへ優先装着 | Task 3 |
+| 変更2：ふうせんをオーガポンexへ優先装着 | Task 2 |
 | 変更3：呼び出し側の追従（`_score_option` RETREAT） | Task 1 Step 5 |
-| 変更3：呼び出し側の追従（`SwitchPolicy`） | Task 2 |
+| 変更3：呼び出し側の追従（`SwitchPolicy`） | Task 1 Step 10 |
 | テスト方針1（実ログ88778720の再現） | Task 1 Step 2 `test_negative_when_only_short_on_energy` |
 | テスト方針2（Crustle/Sylveonの退行防止） | Task 1 Step 2 `test_positive_when_nullified_and_*` |
 | テスト方針3（`attacker >= 1` が無影響） | Task 1 Step 2 `test_switch_attacker_branch_unaffected_by_nullifier_flag` |
-| テスト方針4（SwitchPolicyの追従） | Task 2 Step 1 |
-| テスト方針5（どうぐ装着スコア7通り・同点なし） | Task 3 Step 1 |
-| テスト方針6（全体回帰785件） | Task 1 Step 7 / Task 2 Step 8 / Task 3 Step 5 / Task 5 Step 1 |
-| 効果測定：新規計測3つ | Task 4（②として分離） |
+| テスト方針4（SwitchPolicyの追従） | Task 1 Step 7 |
+| テスト方針5（どうぐ装着スコア7通り・同点なし） | Task 2 Step 1 |
+| テスト方針6（全体回帰785件） | Task 1 Step 14 / Task 2 Step 5 / Task 4 Step 1 |
+| 効果測定：新規計測3つ | Task 3（②として分離） |
 
 **2. プレースホルダ確認**：「TBD」「適切に」「同様に」等は使用していない。全コードブロックに実際の内容を記載済み。
 
-**3. 型・名前の一貫性**：`op_active_nullifies_ex`（全箇所で同一）、`_should_preserve_active`（Task 1 でのみ定義・使用）、`measure_turn_activity` / `measure_ogerpon_active_entries`（Task 4 で定義、Task 5 の検証で参照）。`PlayScoringContext.op_active_nullifies_ex` は Task 2 Step 3 で定義し Step 4 で使用。
+**3. 型・名前の一貫性**：`op_active_nullifies_ex`（全箇所で同一）、`_should_preserve_active`（Task 1 でのみ定義・使用）、`measure_turn_activity` / `measure_ogerpon_active_entries`（Task 3 で定義、Task 4 の検証で参照）。`PlayScoringContext.op_active_nullifies_ex` は Task 1 Step 9 で定義し Step 10 で使用。
 
-**4. 既知の一時的な失敗**：Task 1 完了時点で `TestSwitchPolicy::test_positive_when_ineffective_attack_and_high_value_active` が1件失敗する。これは Task 2 で解消する設計であり、各タスクの Expected に明記済み。
+**4. 壊れた中間コミットの排除**：当初は退却側とSwitchPolicyの追従を別タスクに分けており、前者のみのコミットでテストが1件失敗する構造になっていた。両者は同時に成立して初めて整合するため1タスクに統合し、全件PASSを満たしてから1コミットする形に改めた。
