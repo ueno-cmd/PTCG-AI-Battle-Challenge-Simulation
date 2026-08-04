@@ -406,9 +406,27 @@ class TestScoreAttachOptionAirBalloon:
         assert self._score(lucario) == 7050
 ```
 
-`test_mega_lucario_ex_scores_higher_than_riolu`（現在 1692-1693行）の直後に、順位を固定するパラメタライズドテストを追加する。
+`test_mega_lucario_ex_scores_higher_than_riolu`（現在 1692-1693行）の直後に、共通ヘルパーと、順位を固定するテスト2件を追加する。
+
+**共通ヘルパーを先に足すこと**（`_score` はふうせん固定なので、カードIDも変えられる版が要る）。
 
 ```python
+    # 上の _score はふうせん固定なので、カードIDも指定できる版を用意する
+    TOOL_ATTACH_TARGETS = (lm.Mega_Lucario_ex, lm.Riolu, lm.Ogerpon_ex, lm.Solrock)
+
+    def _score_tool(self, card_id, pokemon_id):
+        obs = MagicMock()
+        card = Card(id=card_id, serial=1, playerIndex=0)
+        my_state = make_player_state(active_pokemon=make_pokemon(id=pokemon_id), hand=[card])
+        obs.current.players = [my_state, make_player_state()]
+        option = Option(
+            type=OptionType.ATTACH, area=lm.AreaType.HAND, index=0,
+            inPlayArea=lm.AreaType.ACTIVE, inPlayIndex=0,
+        )
+        return lm._score_attach_option(
+            obs, option, my_index=0, current_plan=lm.AttackPlan(), attacker1=False,
+        )
+
     @pytest.mark.parametrize("card_id, pokemon_id, expected", [
         (lm.Maximum_Belt, lm.Mega_Lucario_ex, 7200),
         (lm.Air_Balloon,  lm.Ogerpon_ex,      7150),
@@ -419,32 +437,33 @@ class TestScoreAttachOptionAirBalloon:
         (lm.Maximum_Belt, lm.Solrock,           -1),
     ])
     def test_tool_attach_score_ordering(self, card_id, pokemon_id, expected):
-        """どうぐ装着スコアの順位を固定する。同点が1つも無いことが重要
-        （同点だと装着先がエンジン依存の選択肢提示順で決まってしまう）"""
-        obs = MagicMock()
-        card = Card(id=card_id, serial=1, playerIndex=0)
-        my_state = make_player_state(active_pokemon=make_pokemon(id=pokemon_id), hand=[card])
-        obs.current.players = [my_state, make_player_state()]
-        option = Option(
-            type=OptionType.ATTACH, area=lm.AreaType.HAND, index=0,
-            inPlayArea=lm.AreaType.ACTIVE, inPlayIndex=0,
-        )
-        score = lm._score_attach_option(
-            obs, option, my_index=0, current_plan=lm.AttackPlan(), attacker1=False,
-        )
-        assert score == expected
+        """どうぐ装着スコアの順位を固定する"""
+        assert self._score_tool(card_id, pokemon_id) == expected
 
     def test_no_ties_among_tool_attach_scores(self):
-        """上のパラメタライズドで挙げた実スコア(-1を除く)に重複が無いことを明示的に確認する"""
-        scores = [7200, 7150, 7100, 7050, 7000, 6900]
-        assert len(scores) == len(set(scores))
+        """どうぐ装着スコアに同点が無いことを、実際に_score_attach_optionを呼んで確認する。
+        同点だと装着先がエンジン依存の選択肢提示順で決まってしまうため、
+        将来スコアをいじって同点が生まれたらこのテストが落ちる必要がある。
+        -1は「温存」を表すセンチネル値なので、複数の組合せが-1になるのは正常"""
+        combinations = [
+            (card_id, pokemon_id)
+            for card_id in (lm.Maximum_Belt, lm.Air_Balloon)
+            for pokemon_id in self.TOOL_ATTACH_TARGETS
+        ]
+        scored = [(combo, self._score_tool(*combo)) for combo in combinations]
+        real_scores = [score for _combo, score in scored if score != -1]
+        assert len(real_scores) == len(set(real_scores)), f"同点がある: {scored}"
 ```
+
+**注意：** この2件目は上のパラメタライズドの期待値をコピーするのではなく、**必ず `_score_tool` 経由で実コードからスコアを集めること**。ベタ書きのリストに重複が無いことを確認するだけのテストはコードを一切検証しないので不可。
 
 - [ ] **Step 2: テストを実行して失敗を確認する**
 
 Run: `uv run pytest tests/test_lucario_agent.py::TestScoreAttachOptionAirBalloon -v`
 
-Expected: `test_ogerpon_ex_highest_priority` が **FAIL**（`assert 6900 == 7150`）、`test_mega_lucario_ex_second_priority` が **FAIL**（`assert 7100 == 7050`）、`test_tool_attach_score_ordering` のうち Ogerpon/Air_Balloon と Mega_Lucario_ex/Air_Balloon の2ケースが **FAIL**。
+Expected: `test_ogerpon_ex_highest_priority` が **FAIL**（`assert 6900 == 7150`）、`test_mega_lucario_ex_second_priority` が **FAIL**（`assert 7100 == 7050`）、`test_tool_attach_score_ordering` のうち Ogerpon/Air_Balloon と Mega_Lucario_ex/Air_Balloon の2ケースが **FAIL**、`test_no_ties_among_tool_attach_scores` が **FAIL**。
+
+最後の1件は修正前のスコアに実際に同点が2組あるため落ちる（ふうせん→メガルカリオex 7100 と Maximum Belt→リオル 7100、ふうせん→オーガポンex 6900 と ふうせん→ソルロック 6900）。**ここが FAIL しない場合はテストが実コードを呼べていない**ので、`_score_tool` の配線を疑うこと。
 
 - [ ] **Step 3: ふうせん分岐を実装する**
 
