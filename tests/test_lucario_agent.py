@@ -1760,9 +1760,13 @@ class TestScoreCardOptionAttachFrom:
 
 
 class TestScoreAttachOptionAirBalloon:
-    """_score_attach_optionのふうせん(Air Balloon)分岐：メガルカリオex最優先、
-    次いでリオル（両者ともにげるコスト2で、-2の効果を最大限活かせるため）。
-    ベーススコアは優先ツール(Maximum Belt, 7000)との同点回避のため6900（最終レビュー指摘対応）"""
+    """_score_attach_optionのふうせん(Air Balloon)分岐のスコア順位。
+
+    2026-08-04: オーガポンex(にげるコスト1)を最優先にした。ふうせん-2で実効0になり、
+    KO後の強制交代で前に出てもエネルギーを払わずに下がれるようになる。
+    併せて、ふうせん→メガルカリオex(旧7100)がMaximum Belt→リオル(7100)と
+    同点だったのを7050へ下げて解消した（同点だと装着先が選択肢の提示順で決まる）。
+    ベーススコアは6900のまま"""
 
     def _score(self, pokemon):
         obs = MagicMock()
@@ -1777,9 +1781,14 @@ class TestScoreAttachOptionAirBalloon:
             obs, option, my_index=0, current_plan=lm.AttackPlan(), attacker1=False,
         )
 
-    def test_mega_lucario_ex_highest_priority(self):
+    def test_ogerpon_ex_highest_priority(self):
+        """にげるコスト1がふうせん-2で0になり、出入りが完全に無償になるため最優先"""
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex)
+        assert self._score(ogerpon) == 7150
+
+    def test_mega_lucario_ex_second_priority(self):
         lucario = make_pokemon(id=lm.Mega_Lucario_ex)
-        assert self._score(lucario) == 7100
+        assert self._score(lucario) == 7050
 
     def test_riolu_second_priority(self):
         riolu = make_pokemon(id=lm.Riolu)
@@ -1791,6 +1800,49 @@ class TestScoreAttachOptionAirBalloon:
 
     def test_mega_lucario_ex_scores_higher_than_riolu(self):
         assert self._score(make_pokemon(id=lm.Mega_Lucario_ex)) > self._score(make_pokemon(id=lm.Riolu))
+
+    # 上の _score はふうせん固定なので、カードIDも指定できる版を用意する
+    TOOL_ATTACH_TARGETS = (lm.Mega_Lucario_ex, lm.Riolu, lm.Ogerpon_ex, lm.Solrock)
+
+    def _score_tool(self, card_id, pokemon_id):
+        obs = MagicMock()
+        card = Card(id=card_id, serial=1, playerIndex=0)
+        my_state = make_player_state(active_pokemon=make_pokemon(id=pokemon_id), hand=[card])
+        obs.current.players = [my_state, make_player_state()]
+        option = Option(
+            type=OptionType.ATTACH, area=lm.AreaType.HAND, index=0,
+            inPlayArea=lm.AreaType.ACTIVE, inPlayIndex=0,
+        )
+        return lm._score_attach_option(
+            obs, option, my_index=0, current_plan=lm.AttackPlan(), attacker1=False,
+        )
+
+    @pytest.mark.parametrize("card_id, pokemon_id, expected", [
+        (lm.Maximum_Belt, lm.Mega_Lucario_ex, 7200),
+        (lm.Air_Balloon,  lm.Ogerpon_ex,      7150),
+        (lm.Maximum_Belt, lm.Riolu,           7100),
+        (lm.Air_Balloon,  lm.Mega_Lucario_ex, 7050),
+        (lm.Air_Balloon,  lm.Riolu,           7000),
+        (lm.Air_Balloon,  lm.Solrock,         6900),
+        (lm.Maximum_Belt, lm.Solrock,           -1),
+    ])
+    def test_tool_attach_score_ordering(self, card_id, pokemon_id, expected):
+        """どうぐ装着スコアの順位を固定する"""
+        assert self._score_tool(card_id, pokemon_id) == expected
+
+    def test_no_ties_among_tool_attach_scores(self):
+        """どうぐ装着スコアに同点が無いことを、実際に_score_attach_optionを呼んで確認する。
+        同点だと装着先がエンジン依存の選択肢提示順で決まってしまうため、
+        将来スコアをいじって同点が生まれたらこのテストが落ちる必要がある。
+        -1は「温存」を表すセンチネル値なので、複数の組合せが-1になるのは正常"""
+        combinations = [
+            (card_id, pokemon_id)
+            for card_id in (lm.Maximum_Belt, lm.Air_Balloon)
+            for pokemon_id in self.TOOL_ATTACH_TARGETS
+        ]
+        scored = [(combo, self._score_tool(*combo)) for combo in combinations]
+        real_scores = [score for _combo, score in scored if score != -1]
+        assert len(real_scores) == len(set(real_scores)), f"同点がある: {scored}"
 
 
 class TestScoreAttachOptionMaximumBeltVsAirBalloon:

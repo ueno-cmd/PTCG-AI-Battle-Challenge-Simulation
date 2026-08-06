@@ -532,8 +532,17 @@ def _score_attach_option(obs, o, my_index, current_plan, attacker1, op_active_nu
         # ベーススコアは優先ツール(Maximum Belt, 7200/7100)より低い6900とし、同一ポケモン対象での
         # 同点（装着先が実質ランダムに決まる問題）を避ける（最終レビュー指摘）
         score = 6900
-        if pokemon.id == Mega_Lucario_ex:
-            score += 200
+        if pokemon.id == Ogerpon_ex:
+            # 【2026-08-04追加】オーガポンexのにげるコストは1なので、ふうせん(-2)1枚で
+            # 実効0になり、エネルギーを一切払わずに出入りできる。オーガポンexは技に
+            # 闘エネ3個を要求するためバトル場で手詰まりになりやすく、実測ver26+ver27の
+            # 有効31戦では33回バトル場に入って27回が0エネ、ふうせん装着は2回だけだった。
+            # 7150 は Maximum Belt→メガルカリオex(7200)の次、Maximum Belt→リオル(7100)より上。
+            score += 250
+        elif pokemon.id == Mega_Lucario_ex:
+            # 旧値7100は Maximum Belt→リオル(7100)と同点で、装着先が選択肢の
+            # 提示順（エンジン依存で制御不能）で決まっていたため7050へ下げた
+            score += 150
         elif pokemon.id == Riolu:
             score += 100
         return score
