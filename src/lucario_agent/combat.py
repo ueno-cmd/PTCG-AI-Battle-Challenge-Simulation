@@ -263,14 +263,37 @@ def calc_attack_plan(
     return new_plan
 
 
-def _score_retreat_option(current_plan: AttackPlan, my_active=None, card_table: dict | None = None) -> int:
+def _should_preserve_active(
+    current_plan: AttackPlan, my_active, card_table: dict | None, op_active_nullifies_ex: bool,
+) -> bool:
+    """攻撃が「無効化されていて無意味」なので高価値ポケモンを温存退却すべきかを判定する。
+
+    【2026-08-04修正】旧実装は current_plan.damage <= 0 だけを見ていたため、
+    「相手の特性で無効化されている」と「まだエネルギーが足りない」を区別できなかった。
+    calc_attack_plan はエネルギー不足のアタッカーを continue で読み飛ばすので、
+    damage<=0 は両方の意味を持ってしまう。技に闘エネ3個を要求するオーガポンexでは
+    後者がほぼ常時成立し、「退却のために1エネ装着 → 同じターンにそれを退却コストで破棄」
+    を引き起こしていた（実測ver26+ver27の有効31戦で19回、うち15回はそのターン
+    1回も攻撃できていない。実ログ88778720 step62-66 が典型）。
+    エネルギー不足は「準備中」であって「詰み」ではない。
+    """
+    if not op_active_nullifies_ex:
+        return False
+    if current_plan.damage > 0 or my_active is None or card_table is None:
+        return False
+    data = card_table[my_active.id]
+    return bool(data.megaEx or data.ex)
+
+
+def _score_retreat_option(
+    current_plan: AttackPlan, my_active=None, card_table: dict | None = None,
+    op_active_nullifies_ex: bool = False,
+) -> int:
     """OptionType.RETREAT のスコアを返す"""
     if current_plan.attacker >= 1:
         return 2000  # より良いアタッカーへ切り替える
-    if current_plan.damage <= 0 and my_active is not None and card_table is not None:
-        data = card_table[my_active.id]
-        if data.megaEx or data.ex:
-            return 2000  # 無効化等で攻撃が無意味な高価値ポケモンを温存退却する
+    if _should_preserve_active(current_plan, my_active, card_table, op_active_nullifies_ex):
+        return 2000  # 無効化されていて攻撃が無意味な高価値ポケモンを温存退却する
     return -1
 
 

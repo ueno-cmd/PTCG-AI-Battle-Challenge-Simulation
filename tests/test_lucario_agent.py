@@ -33,7 +33,9 @@ def mock_card_table(monkeypatch):
         lm.Solrock:               _card(lm.Solrock),
         lm.Riolu:                 _card(lm.Riolu, retreatCost=2),
         lm.Mega_Lucario_ex:       _card(lm.Mega_Lucario_ex, megaEx=True, retreatCost=2),
-        lm.Ogerpon_ex:            _card(lm.Ogerpon_ex, ex=True, tera=True),  # Cornerstone Mask Ogerpon ex
+        # Cornerstone Mask Ogerpon ex。にげるコスト1は実データ(EN_Card_Data.csv id=117)準拠。
+        # ここが0のままだと「1エネ装着→同ターンに退却コストで破棄」を再現できない
+        lm.Ogerpon_ex:            _card(lm.Ogerpon_ex, ex=True, tera=True, retreatCost=1),
         144:  _card(144,  ex=True),   # Squawkabilly ex
         322:  _card(322),             # Noctowl
         323:  _card(323),             # Fan Rotom
@@ -800,11 +802,13 @@ class TestScoreRetreatOption:
         """plan未計算時のデフォルト(attacker=-1)でも退却は選ばれない"""
         assert lm._score_retreat_option(lm.AttackPlan()) == -1
 
-    def test_positive_when_ineffective_attack_and_high_value_active(self):
-        """居座り攻撃が無意味(damage<=0)で、現在のアクティブがex/megaExなら温存退却を推奨する"""
+    def test_positive_when_nullified_and_high_value_active(self):
+        """相手のバトル場がex無効化持ち(Crustle等)で攻撃が本当に無意味なときは温存退却する"""
         plan = lm.AttackPlan(attacker=0, damage=0)
         megaex = make_pokemon(id=lm.Mega_Lucario_ex, hp=50)
-        assert lm._score_retreat_option(plan, megaex, lm.card_table) == 2000
+        assert lm._score_retreat_option(
+            plan, megaex, lm.card_table, op_active_nullifies_ex=True,
+        ) == 2000
 
     def test_negative_when_ineffective_attack_but_regular_pokemon(self):
         """無意味な攻撃でも、現在のアクティブが無印(非ex)なら温存退却は推奨しない"""
@@ -823,30 +827,86 @@ class TestScoreRetreatOption:
         assert lm._score_retreat_option(lm.AttackPlan(attacker=0)) == -1
         assert lm._score_retreat_option(lm.AttackPlan(attacker=1)) == 2000
 
+    def test_negative_when_only_short_on_energy(self):
+        """【本命の回帰テスト】実ログ88778720 ターン7の再現。
+        0エネのオーガポンexがバトル場にいて相手はex無効化持ちではない場合、
+        damage<=0 は「無効化されている」ではなく「まだエネルギーが足りない」なので
+        温存退却してはいけない。旧実装はここで2000を返し、
+        「退却のために1エネ装着 → 同ターンにそれを退却コストで破棄」を引き起こしていた
+        （実測31戦で19回、うち15回はそのターン1回も攻撃できていない）"""
+        plan = lm.AttackPlan(attacker=0, damage=0)
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, hp=210)
+        assert lm._score_retreat_option(
+            plan, ogerpon, lm.card_table, op_active_nullifies_ex=False,
+        ) == -1
+
+    def test_negative_when_mega_lucario_short_on_energy(self):
+        """メガルカリオexでも同じ。エネルギー不足による damage<=0 では温存退却しない"""
+        plan = lm.AttackPlan(attacker=0, damage=0)
+        megaex = make_pokemon(id=lm.Mega_Lucario_ex, hp=340)
+        assert lm._score_retreat_option(
+            plan, megaex, lm.card_table, op_active_nullifies_ex=False,
+        ) == -1
+
+    def test_positive_when_nullified_and_ogerpon_active(self):
+        """ニンフィア(Sylveon)等でも、無効化対面なら従来どおり温存退却する（退行防止）"""
+        plan = lm.AttackPlan(attacker=0, damage=0)
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, hp=210)
+        assert lm._score_retreat_option(
+            plan, ogerpon, lm.card_table, op_active_nullifies_ex=True,
+        ) == 2000
+
+    def test_switch_attacker_branch_unaffected_by_nullifier_flag(self):
+        """ベンチに攻撃できるアタッカーがいる場合の退却は、無効化フラグに関係なく2000のまま"""
+        plan = lm.AttackPlan(attacker=1)
+        ogerpon = make_pokemon(id=lm.Ogerpon_ex, hp=210)
+        assert lm._score_retreat_option(
+            plan, ogerpon, lm.card_table, op_active_nullifies_ex=False,
+        ) == 2000
+        assert lm._score_retreat_option(
+            plan, ogerpon, lm.card_table, op_active_nullifies_ex=True,
+        ) == 2000
+
+    def test_negative_when_nullified_but_regular_pokemon(self):
+        """無効化対面でも、アクティブが無印(非ex)なら温存退却しない（既存挙動の維持）"""
+        plan = lm.AttackPlan(attacker=0, damage=0)
+        regular = make_pokemon(id=lm.Riolu, hp=50)
+        assert lm._score_retreat_option(
+            plan, regular, lm.card_table, op_active_nullifies_ex=True,
+        ) == -1
+
 
 class TestScoreOptionRetreatWiring:
     """main.py側でRETREATケースがmy_state.active[0]とcard_tableを正しく渡すことの統合テスト"""
 
     def test_score_option_retreat_uses_current_active_and_card_table(self):
-        """_score_optionがRETREATケースで現在のアクティブとcard_tableを_score_retreat_optionに渡す"""
+        """_score_optionがRETREATケースでアクティブ・card_table・ex無効化判定を渡す"""
         from unittest.mock import MagicMock
         from cg.api import Option, OptionType, SelectContext
         from collections import defaultdict
 
         megaex = make_pokemon(id=lm.Mega_Lucario_ex, hp=50)
         my_state = make_player_state(active_pokemon=megaex, prize_count=6)
-        op_state = make_player_state(active_pokemon=make_pokemon(id=lm.Riolu, hp=100), prize_count=6)
         plan = lm.AttackPlan(attacker=0, damage=0)
-        obs = MagicMock()
-        option = Option(type=OptionType.RETREAT)
-        score = lm._score_option(
-            obs=obs, o=option, context=SelectContext.MAIN, my_index=0,
-            state=_make_state(), my_state=my_state, op_state=op_state,
-            field_counts=defaultdict(int), hand_counts=defaultdict(int), discard_counts=defaultdict(int),
-            attacker1=False, current_plan=plan, can_attack=True,
-            stadium_id=0, ability_used_flag=False,
-        )
-        assert score == 2000
+
+        def score_against(op_active_id):
+            op_state = make_player_state(
+                active_pokemon=make_pokemon(id=op_active_id, hp=100), prize_count=6,
+            )
+            return lm._score_option(
+                obs=MagicMock(), o=Option(type=OptionType.RETREAT),
+                context=SelectContext.MAIN, my_index=0,
+                state=_make_state(), my_state=my_state, op_state=op_state,
+                field_counts=defaultdict(int), hand_counts=defaultdict(int),
+                discard_counts=defaultdict(int),
+                attacker1=False, current_plan=plan, can_attack=True,
+                stadium_id=0, ability_used_flag=False,
+                op_active_nullifies_ex=(op_active_id in lm.EX_DAMAGE_NULLIFIER_IDS),
+            )
+
+        # 相手がex無効化持ちなら温存退却、そうでなければ（エネ不足なだけなので）退却しない
+        assert score_against(lm.Crustle) == 2000
+        assert score_against(lm.Riolu) == -1
 
 
 class TestScoreAttackOptionChoice:
@@ -904,12 +964,13 @@ class TestSwitchPolicy:
     _score_retreat_optionと同条件で発火するが、にげるコスト(エネルギー破棄)を
     伴わないぶんRETREATより優先されるよう+100して返す"""
 
-    def _ctx(self, current_plan, my_state):
+    def _ctx(self, current_plan, my_state, op_active_nullifies_ex=False):
         return lm.PlayScoringContext(
             obs=MagicMock(), o=Option(type=OptionType.PLAY, index=0), my_index=0,
             current_plan=current_plan, can_attack=False,
             state=_make_state(), my_state=my_state,
             hand_counts=defaultdict(int), field_counts=defaultdict(int), stadium_id=0,
+            op_active_nullifies_ex=op_active_nullifies_ex,
         )
 
     def test_negative_when_plan_keeps_current_attacker_and_active_is_effective(self):
@@ -922,10 +983,22 @@ class TestSwitchPolicy:
         my_state = make_player_state(active_pokemon=make_pokemon(id=lm.Mega_Lucario_ex, hp=50))
         assert lm.SwitchPolicy().play_score(self._ctx(plan, my_state)) == 2100
 
-    def test_positive_when_ineffective_attack_and_high_value_active(self):
+    def test_positive_when_nullified_and_high_value_active(self):
+        """無効化対面(Crustle等)で攻撃が本当に無意味なときは従来どおり発火する"""
         plan = lm.AttackPlan(attacker=0, damage=0)
         my_state = make_player_state(active_pokemon=make_pokemon(id=lm.Mega_Lucario_ex, hp=50))
-        assert lm.SwitchPolicy().play_score(self._ctx(plan, my_state)) == 2100
+        assert lm.SwitchPolicy().play_score(
+            self._ctx(plan, my_state, op_active_nullifies_ex=True),
+        ) == 2100
+
+    def test_negative_when_only_short_on_energy(self):
+        """0エネのオーガポンexから逃げるためだけに、1枚しかないSwitchを切ってはいけない。
+        交代先も0エネで攻撃できないため、カードを失うだけで状況は変わらない"""
+        plan = lm.AttackPlan(attacker=0, damage=0)
+        my_state = make_player_state(active_pokemon=make_pokemon(id=lm.Ogerpon_ex, hp=210))
+        assert lm.SwitchPolicy().play_score(
+            self._ctx(plan, my_state, op_active_nullifies_ex=False),
+        ) == -1
 
     def test_negative_when_ineffective_attack_but_regular_pokemon(self):
         plan = lm.AttackPlan(attacker=0, damage=0)
@@ -938,6 +1011,33 @@ class TestSwitchPolicy:
         my_state = make_player_state(active_pokemon=make_pokemon(id=lm.Mega_Lucario_ex, hp=50))
         retreat_score = lm._score_retreat_option(plan, my_state.active[0], lm.card_table)
         assert lm.SwitchPolicy().play_score(self._ctx(plan, my_state)) == retreat_score + 100
+
+    def test_score_option_play_switch_passes_nullifier_flag(self):
+        """_score_optionのPLAYケースがop_active_nullifies_exをSwitchPolicyまで届ける。
+        相手のバトル場がCrustleなら発火し、そうでなければ発火しないこと"""
+        switch_card = Card(id=lm.Switch, serial=1, playerIndex=0)
+        my_state = make_player_state(
+            active_pokemon=make_pokemon(id=lm.Ogerpon_ex, hp=210), hand=[switch_card],
+        )
+        plan = lm.AttackPlan(attacker=0, damage=0)
+
+        def score_against(op_active_id):
+            op_state = make_player_state(active_pokemon=make_pokemon(id=op_active_id, hp=100))
+            obs = MagicMock()
+            obs.current.players = [my_state, op_state]
+            return lm._score_option(
+                obs=obs, o=Option(type=OptionType.PLAY, index=0),
+                context=lm.SelectContext.MAIN, my_index=0,
+                state=_make_state(), my_state=my_state, op_state=op_state,
+                field_counts=defaultdict(int), hand_counts=defaultdict(int),
+                discard_counts=defaultdict(int),
+                attacker1=False, current_plan=plan, can_attack=True,
+                stadium_id=0, ability_used_flag=False,
+                op_active_nullifies_ex=(op_active_id in lm.EX_DAMAGE_NULLIFIER_IDS),
+            )
+
+        assert score_against(lm.Crustle) == 2100
+        assert score_against(lm.Riolu) == -1
 
 
 class TestSwitchPolicyAirBalloon:

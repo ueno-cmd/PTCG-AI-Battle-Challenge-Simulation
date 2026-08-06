@@ -333,6 +333,7 @@ class PlayScoringContext:
     attacker1: bool = False
     rng: "random.Random | None" = None
     op_hand_count: int = 0
+    op_active_nullifies_ex: bool = False
 
 
 class TrainerCardPolicy(ABC):
@@ -431,7 +432,9 @@ class SwitchPolicy(TrainerCardPolicy):
     RETREATを優先させる(base-100)。条件不成立時(-1)はそのまま-1を返す"""
     def play_score(self, ctx: PlayScoringContext) -> int:
         my_active = ctx.my_state.active[0] if ctx.my_state.active else None
-        base = _score_retreat_option(ctx.current_plan, my_active, card_table)
+        base = _score_retreat_option(
+            ctx.current_plan, my_active, card_table, ctx.op_active_nullifies_ex,
+        )
         if base <= 0:
             return -1
         if my_active is None:
@@ -478,7 +481,8 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
                        state, my_state, hand_counts, field_counts, stadium_id,
                        attacker1: bool = False,
                        rng: "random.Random | None" = None,
-                       op_hand_count: int = 0) -> int:
+                       op_hand_count: int = 0,
+                       op_active_nullifies_ex: bool = False) -> int:
     """OptionType.PLAY のスコアを返す"""
     card = get_card(obs, AreaType.HAND, o.index, my_index)
     data = card_table[card.id]
@@ -508,6 +512,7 @@ def _score_play_option(obs, o, my_index, current_plan, can_attack,
         obs=obs, o=o, my_index=my_index, current_plan=current_plan, can_attack=can_attack,
         state=state, my_state=my_state, hand_counts=hand_counts, field_counts=field_counts,
         stadium_id=stadium_id, attacker1=attacker1, rng=rng, op_hand_count=op_hand_count,
+        op_active_nullifies_ex=op_active_nullifies_ex,
     )
     return policy.play_score(ctx)
 
@@ -596,6 +601,7 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
                 obs, o, my_index, current_plan, can_attack,
                 state, my_state, hand_counts, field_counts, stadium_id,
                 attacker1, op_hand_count=op_state.handCount,
+                op_active_nullifies_ex=op_active_nullifies_ex,
             )
         case OptionType.ATTACH:
             return _score_attach_option(obs, o, my_index, current_plan, attacker1, op_active_nullifies_ex)
@@ -626,6 +632,7 @@ def _score_option(obs, o, context, my_index, state, my_state, op_state,
                 current_plan,
                 my_state.active[0] if my_state.active else None,
                 card_table,
+                op_active_nullifies_ex,
             )
         case OptionType.ATTACK:
             return _score_attack_option_choice(o, current_plan)
